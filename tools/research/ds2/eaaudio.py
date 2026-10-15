@@ -13,9 +13,10 @@ then codec data.
   codec 4 XAS v1 (PC): per 128 samples, 0x4C bytes per channel
     (4 group headers u32 LE + 15 rows of 4 bytes).
 """
-import struct, subprocess
+import os, struct, subprocess
 
 CODEC_EAXMA, CODEC_XAS1 = 3, 4
+FFMPEG = os.environ.get('DS2_FFMPEG', 'ffmpeg')    # needs the xma2 decoder
 
 
 def parse_header(b, o=0):
@@ -84,8 +85,9 @@ def eaxma_layers(blk_iter, channels):
     return layers
 
 
-def decode_eaxma(blk_iter, channels, rate, samples, ffmpeg='ffmpeg'):
+def decode_eaxma(blk_iter, channels, rate, samples, ffmpeg=None):
     """interleaved int16 PCM bytes"""
+    ffmpeg = ffmpeg or FFMPEG
     import array
     layers = eaxma_layers(blk_iter, channels)
     pcm_layers = []
@@ -167,7 +169,8 @@ def _lib():
     global _LIB
     if _LIB is None:
         import ctypes, os
-        _LIB = ctypes.CDLL(os.path.join(os.path.dirname(__file__), '..', 'native', 'libxasenc.so'))
+        name = 'xasenc.dll' if os.name == 'nt' else 'libxasenc.so'   # dll: prebuilt, 64-bit
+        _LIB = ctypes.CDLL(os.path.join(os.path.dirname(__file__), '..', 'native', name))
     return _LIB
 
 

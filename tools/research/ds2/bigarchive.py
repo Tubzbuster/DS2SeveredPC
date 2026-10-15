@@ -35,9 +35,11 @@ def read_index(f):
     return idx, f.read(hsz - 16 - 12 * count)
 
 
-def write(path, files, trailer=bytes(8)):
-    """files: [(archive name, source path or bytes)]"""
-    ents = sorted(((name_hash(n), n, src) for n, src in files), key=lambda e: e[0])
+def write(path, files, trailer=bytes(8), raw=None):
+    """files: [(archive name, source path or bytes)]; raw: {name: hash} for
+    entries known only by their hash"""
+    raw = raw or {}
+    ents = sorted(((raw[n] if n in raw else name_hash(n), n, src) for n, src in files), key=lambda e: e[0])
     hashes = [e[0] for e in ents]
     if len(set(hashes)) != len(hashes):
         raise ValueError('duplicate names')

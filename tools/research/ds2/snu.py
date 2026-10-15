@@ -8,7 +8,7 @@ import struct
 from . import eaaudio as A
 
 
-def convert(x, ffmpeg='ffmpeg'):
+def convert(x, ffmpeg=None):
     if len(x) < 0x20 or x[0] != 3:
         return None
     unk, data = struct.unpack_from('>II', x, 4)

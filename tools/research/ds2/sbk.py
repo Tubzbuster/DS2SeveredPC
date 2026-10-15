@@ -93,7 +93,7 @@ def build_data(smp):
     return head + ents + body
 
 
-def convert_sample(s, ffmpeg='ffmpeg'):
+def convert_sample(s, ffmpeg=None):
     h = A.parse_header(s)
     if h['codec'] != A.CODEC_EAXMA:
         raise ValueError('codec %d' % h['codec'])
@@ -113,7 +113,7 @@ def assemble(meta, data_off, data):
     return bytes(out)
 
 
-def convert(x, ffmpeg='ffmpeg'):
+def convert(x, ffmpeg=None):
     if x[:4] != b'knbs':  # 'sbnk' as a big-endian word
         return None
     data_off = struct.unpack_from('>I', x, 0x10)[0]

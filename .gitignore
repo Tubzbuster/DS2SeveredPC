@@ -36,3 +36,8 @@ __pycache__/
 
 # Native build output
 *.so
+
+# Learned conversion models (byte-order rules only, no game data) and the
+# prebuilt XAS encoder (our own code, built by tools/research/native/build.sh)
+!/tools/research/ds2/*.pkl
+!/tools/research/native/xasenc.dll
