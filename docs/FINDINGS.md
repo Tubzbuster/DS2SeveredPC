@@ -301,3 +301,37 @@ When a file exists in several archives, the lowest-numbered archive wins.
 So Severed can ship as `DS2DAT2.DAT`: its new files are found, and its
 replacement `global_assets_global.str` takes precedence over the base
 game's. No exe changes are needed to install the content.
+
+## 19. How much of Severed the PC game already has
+
+From the asset index (`tools/index`, `tools/research/reuse.py`): the PC
+archives hold 290,383 asset rows (97,587 distinct); Severed's 162 streams
+hold 60,828 rows, **20,169 distinct assets, 888 MB**.
+
+| | Assets | Data |
+|-|-------:|-----:|
+| Identical asset already in the PC game: take it from the user's files | 13,286 | 473 MB (53%) |
+| Same name as a PC asset, different content (Severed's own edit) | 3,291 | 313 MB (35%) |
+| New in Severed | 3,592 | 102 MB (12%) |
+
+Asset IDs are platform-independent for every type except APX (checked on
+base-game pairs: e.g. Material 80/80, Mesh 78/78, HKX 31/31 share IDs). So
+"same name, different IDs" really is a different version, and those assets
+need converting too. **Converter workload: about 6,900 assets, 414 MB**:
+
+| Type | To convert | Notes |
+|------|-----------:|-------|
+| Material | 4,327 | often a different size on PC: needs format work |
+| SBK (sound banks) | 518 | XMA audio; PC packages most banks differently |
+| VFX | 444 | ~92% plain 32-bit swap |
+| tg4h + tg4d (textures) | 242 each | data: 16-bit swap; header: format work |
+| Mesh / MeshVolatile | 215 / 180 | vertex data |
+| MetaModel | 170 | |
+| SimGroup | 159 | |
+| HKX (Havok) | 140 | |
+| NAV (navigation mesh) | 101 | new type, no PC/360 pair in samples |
+| BNK, SMB, TOB, Graph, RCB, LUA, PNG, LH2, ISM, ANIM | ~200 | TOB is a plain 32-bit swap, LUA is copied |
+
+Stream layout rules (both platforms): chunks are 4-byte aligned, never cross
+a 128 KB boundary, `FILL` chunks pad to the next boundary, files are a
+multiple of 128 KB.
