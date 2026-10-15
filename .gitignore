@@ -1,0 +1,16 @@
+# Never commit EA's game files - only the text scans and our own tools.
+*.exe
+*.dll
+*.xex
+*.str
+*.viv
+*.big
+*.toc
+*.sb
+*.bik
+*.dds
+*.bin
+*.dat
+*.pak
+/GameFiles/
+/Severed/
