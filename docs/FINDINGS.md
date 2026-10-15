@@ -440,3 +440,19 @@ format (e.g. 0x11 string, 0x0C asset reference). LuaAudioScript: flags at
 in the Severed records. Flag sets and enums have their own descriptors
 (vtables `01AA6C80`, `01AA6C68`). Probe v5 (F11) dumps the complete field
 lists.
+
+### Descriptor dump result (probe v5)
+
+All 14,265 Severed records name a class whose version equals the PC
+engine's. A record is the class's own fields at the engine's offsets
+(base classes add none here), followed by string data. Validated: all
+17,665 non-empty message fields (type 0x11) point at a string whose
+sdbm(lower-case) equals the stored hash. Field encodings by type code:
+0 float, 1 int / enum / flag set (4 bytes), 2 int, 3 and 4 16-bit, 5 byte
+(also 1-byte flag sets), 7 bool (byte), 8 colour (4 bytes), 0x0A hash,
+0x0B interface reference, 0x0C asset reference (4 x u32), 0x0D vec3,
+0x0E vec4, 0x0F matrix (16 floats), 0x10 string offset (u32 relative to
+the field), 0x11 message (hash, 0, offset relative to the offset word),
+0x13 fixed inline array (type info: count, element type). Flag-set
+descriptors give their storage type at word 6. v5 lost parts of .data and
+cut long field lists; 305 classes decode, 66 Severed classes need v6.

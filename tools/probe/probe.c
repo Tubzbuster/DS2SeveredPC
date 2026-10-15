@@ -841,16 +841,27 @@ static int seen_add(DWORD va)
 static void chunk(DWORD va, DWORD len)
 {
     static BYTE buf[65536];
-    DWORD w, hdr[2], end, t;
+    DWORD w, hdr[2], end, t, n;
     if (len > sizeof buf) len = sizeof buf;
-    if (g_dumped_bytes > DUMP_LIMIT || !readable(va, &end, &t)) return;
-    if (va + len > end) len = end - va;
-    if (len == 0 || !copy_mem(va, buf, len)) return;
-    hdr[0] = va;
-    hdr[1] = len;
-    WriteFile(g_dout, hdr, 8, &w, NULL);
-    WriteFile(g_dout, buf, len, &w, NULL);
-    g_dumped_bytes += len + 8;
+    while (len > 0 && g_dumped_bytes <= DUMP_LIMIT) {
+        /* a range can span memory regions: copy each readable part */
+        if (!readable(va, &end, &t)) {
+            if (end <= va) return;
+            n = end - va;
+        } else {
+            n = end - va < len ? end - va : len;
+            if (copy_mem(va, buf, n)) {
+                hdr[0] = va;
+                hdr[1] = n;
+                WriteFile(g_dout, hdr, 8, &w, NULL);
+                WriteFile(g_dout, buf, n, &w, NULL);
+                g_dumped_bytes += n + 8;
+            }
+        }
+        if (n >= len) return;
+        va += n;
+        len -= n;
+    }
 }
 
 /* dumps a heap block and, one level down, the heap blocks it points to */
@@ -890,7 +901,7 @@ static void desc_dump(void)
     g_dout = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (g_dout == INVALID_HANDLE_VALUE) return;
     log_line("descriptor dump started");
-    WriteFile(g_dout, "SVDESC5\0", 8, &w, NULL);
+    WriteFile(g_dout, "SVDESC6\0", 8, &w, NULL);
     memset(g_seen, 0, sizeof g_seen);
     g_dumped_bytes = 0;
     for (a = data; a < data + data_size; a += 65536) chunk(a, data + data_size - a < 65536 ? data + data_size - a : 65536);
@@ -906,6 +917,8 @@ static void desc_dump(void)
             if (!copy_mem(a + 4 * j, d, sizeof d)) continue;
             count++;
             if (kind == 0 && d[8] > d[7] && d[8] - d[7] <= 65536) heap_block(d[7], d[8] - d[7] + 64, 1);
+            /* field list: (d[17] & 0xFFFF) entries of 16 bytes at d[10] */
+            if (kind == 0) heap_block(d[10], 16 * (d[17] & 0xFFFF) + 16, 1);
             for (k = 2; k < 24; k++) heap_block(d[k], kind == 0 ? 1024 : 2048, 1);
         }
     }
@@ -947,7 +960,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 5 - process %s", path);
+    log_line("severed probe 6 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

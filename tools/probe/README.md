@@ -56,12 +56,13 @@ names in `reflect_names.h` with the bytes around them, how often two
 SimGroup format markers occur in the loaded exe, and a copy of the exe's
 `.data` section as it is in memory (its static data, not code).
 
-## Descriptor dump (version 5)
+## Descriptor dump (version 5, fixed in 6)
 
 Same as the scan, but press **F11** at the main menu instead of F10, wait for
 the sound, quit, and send `severed_desc.bin` (about 10-50 MB; zip it). It
 holds the exe's `.data` section and the heap blocks of the engine's class
-descriptors (field lists: offsets and types of every field).
+descriptors (field lists: offsets and types of every field). Version 6
+fixes memory lost at region edges and long field lists cut short.
 
 ## Building
 
