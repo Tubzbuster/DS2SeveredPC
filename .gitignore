@@ -28,3 +28,4 @@
 # .NET build output
 bin/
 obj/
+*.pkl
