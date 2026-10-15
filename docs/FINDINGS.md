@@ -352,7 +352,9 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | VFX | 8,807 | 99.4% exact (97.4% held-out); misses are float rounding | all 1,580 |
 | Mesh | 4,746 | 90.5% within rounding of the 2,793 pairs with identical structure (rest: PC re-exported differently) | all 1,065 distinct Severed meshes |
 | MeshVolatile | 3,412 | 84% exact or within rounding of 2,780 matched pairs | all 851 |
-| MetaModel, SimGroup, HKX, NAV, SBK, BNK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
+| MetaModel | 1,978 | 100% exact | all 584 |
+| SimGroup | 1,291 | base-game format worked out (below); Severed uses a newer format with no PC example | needs the PC field layouts (probe v4) |
+| HKX, NAV, SBK, BNK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
@@ -383,3 +385,43 @@ UBYTE4N; index buffers u16 swap. PC values were packed from the source
 data separately, so re-packed normals match within rounding, not exactly.
 Some meshes have several stream tables (LODs); the full table layout is
 not worked out yet.
+
+## 21. MetaModel
+
+`MMdl` v14: 8 table pointers at 0x34 and 8 u16 counts at 0x58. Fixed
+records: table 0 (32 bytes), 1 (48), 2 (12), 3 (24), 4 (12), 5 and 6
+(36); each table is followed by u32 pointer lists; the string table (raw)
+starts at the lowest name referenced by tables 1, 5 and 6; table 7 is the
+trailing float data. All fields are 32-bit except (count, kind) u16 pairs
+at fixed record positions, and bools: a table 3 value of type 1, and a
+table 4 value whose table 2 entry has kind 1, are bytes kept as stored.
+`ds2/metamodel.py`; 100% exact on all pairs.
+
+## 22. SimGroup: two formats
+
+A SimGroup (level objects: triggers, scripts, props, lights, ...) has a
+header (Gibbed.Visceral `SimGroup/FileHeader`), a hash list, 0x44-byte
+object records and, 16-aligned after the header, a data block.
+
+Base game (PC and 360), block `91C8773C`: a self-describing property tree.
+Type-name table of (hash, count); 12-byte node records (hash, u16 type-name
+index, u16 child count, offset to a u16 child list); 12-byte properties
+(name hash, u16 count, u8 type, u8 index, value). Values are inline
+(float 0, ints 1/2/22, hashes 8/10/11, bools 5/7 as bytes) or offsets
+relative to the value field (strings 1/3/5/16/17, 16-byte asset
+references 12, vectors 13/14/15). Node hashes of the groups are sdbm over
+the member type-name hashes in native byte order, so they differ between
+PC and 360 and can be recomputed. The hashes of nodes holding a type-12
+reference also differ per platform; their formula is not found yet.
+
+Severed (all 160 SimGroups), block `011795D9`: never used by the base game
+on either platform. Type-name table of (name hash, class version); per
+object a packed record of the class's fields, e.g. LuaAudioScript =
+{u32, string, string, asset ref, string data}, a string being (sdbm hash,
+0, offset relative to that field) and an asset reference 16 bytes of
+hashes. The 346 class and type names all exist as strings in the PC exe
+(so the PC engine has these classes), but which fields are bytes, u16 or
+u32 is not in the data itself: about 5,000 record words are byte-packed
+bools and about 10,000 are ambiguous. The probe's reflection scan (v4,
+F10) reads the PC engine's class layouts from memory to settle this, and
+also shows whether the PC exe knows the `011795D9` marker.

@@ -21,6 +21,8 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
 
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_cs;
@@ -532,6 +534,297 @@ static void install(const char *name, void *hook, void **orig)
     }
 }
 
+/* ---- reflection scan (version 4) --------------------------------------
+ *
+ * Severed's level objects are stored as packed per-class records, so
+ * converting them needs the field layout of each class (which fields are
+ * 32-bit values, which are bytes or strings). The game builds that
+ * information in memory at startup. Pressing F10 makes the probe look,
+ * read-only, for it:
+ *
+ *   - places in memory that point at one of the class names in
+ *     reflect_names.h (plain strings in the exe), up to 8 per name, with
+ *     the 128 bytes around each and 32 bytes from each nearby pointer;
+ *   - a copy of the exe's .data section as it is in memory
+ *     (severed_data.bin);
+ *   - how often two SimGroup format markers occur in the loaded exe.
+ *
+ * Memory is read with ReadProcessMemory on the game's own process, so
+ * memory that goes away during the scan is skipped instead of crashing.
+ */
+#include "reflect_names.h"
+#define NNAMES ((int)(sizeof g_reflect_names / sizeof g_reflect_names[0]))
+
+typedef struct { DWORD addr; int name; } target_t;
+static target_t g_targets[4096];
+static int g_ntargets;
+static int g_hits_per_name[NNAMES];
+static HANDLE g_out = INVALID_HANDLE_VALUE;
+
+static void out_text(const char *fmt, ...)
+{
+    char buf[2048];
+    va_list ap;
+    int n;
+    DWORD w;
+    va_start(ap, fmt);
+    n = _vsnprintf(buf, sizeof buf - 2, fmt, ap);
+    va_end(ap);
+    if (n < 0) n = (int)sizeof buf - 3;
+    buf[n++] = '\r';
+    buf[n++] = '\n';
+    WriteFile(g_out, buf, n, &w, NULL);
+}
+
+static int readable(DWORD addr, DWORD *region_end, DWORD *type)
+{
+    MEMORY_BASIC_INFORMATION mi;
+    DWORD p;
+    if (region_end) *region_end = 0;
+    if (!VirtualQuery((void *)addr, &mi, sizeof mi)) return 0;
+    if (region_end) *region_end = (DWORD)mi.BaseAddress + mi.RegionSize;
+    if (type) *type = mi.Type;
+    if (mi.State != MEM_COMMIT) return 0;
+    p = mi.Protect;
+    if (p & (PAGE_GUARD | PAGE_NOACCESS)) return 0;
+    return (p & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
+                 PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) != 0;
+}
+
+static int copy_mem(DWORD addr, void *buf, DWORD len)
+{
+    SIZE_T got = 0;
+    return ReadProcessMemory(GetCurrentProcess(), (void *)addr, buf, len, &got) && got == len;
+}
+
+static int cmp_target(const void *a, const void *b)
+{
+    DWORD x = ((const target_t *)a)->addr, y = ((const target_t *)b)->addr;
+    return x < y ? -1 : x > y;
+}
+
+static int find_target(DWORD v)
+{
+    int lo = 0, hi = g_ntargets - 1;
+    if (g_ntargets == 0 || v < g_targets[0].addr || v > g_targets[g_ntargets - 1].addr) return -1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (g_targets[mid].addr == v) return mid;
+        if (g_targets[mid].addr < v) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+}
+
+static void hexline(const char *tag, DWORD addr, const BYTE *b, int n)
+{
+    char s[3 * 64 + 1];
+    int i;
+    for (i = 0; i < n && i < 64; i++) wsprintfA(s + 3 * i, "%02X ", b[i]);
+    s[3 * i] = 0;
+    out_text("%s %08lX %s", tag, addr, s);
+}
+
+/* a short printable NUL-terminated string at addr, or 0 */
+static int string_at(DWORD addr, char *out, int len)
+{
+    BYTE b[64];
+    int i;
+    if (!readable(addr, NULL, NULL) || !copy_mem(addr, b, sizeof b)) return 0;
+    for (i = 0; i < len - 1 && i < (int)sizeof b; i++) {
+        if (b[i] == 0) break;
+        if (b[i] < 32 || b[i] > 126) return 0;
+        out[i] = (char)b[i];
+    }
+    out[i] = 0;
+    return i >= 3 && i < (int)sizeof b && b[i] == 0;
+}
+
+static void dump_hit(DWORD at, int name)
+{
+    BYTE win[128];
+    DWORD start = at - 32, i;
+    char s[64];
+    if (!copy_mem(start, win, sizeof win)) {
+        start = at;
+        if (!copy_mem(start, win, 96)) return;
+        memset(win + 96, 0, 32);
+    }
+    out_text("HIT %s at %08lX", g_reflect_names[name], at);
+    for (i = 0; i < sizeof win; i += 32) hexline("  W", start + i, win + i, 32);
+    for (i = 0; i + 4 <= sizeof win; i += 4) {
+        DWORD v = *(DWORD *)(win + i), t;
+        BYTE pb[128];
+        int n, j;
+        if (v < 0x10000 || v == at) continue;
+        if (string_at(v, s, sizeof s)) { out_text("  S %08lX -> %08lX \"%s\"", start + i, v, s); continue; }
+        if (!readable(v, NULL, &t)) continue;
+        n = t == MEM_PRIVATE ? 128 : 32;   /* heap blocks may hold field lists */
+        if (!copy_mem(v, pb, n)) continue;
+        out_text("  P %08lX -> %08lX (%s)", start + i, v, t == MEM_IMAGE ? "image" : t == MEM_PRIVATE ? "private" : "mapped");
+        for (j = 0; j < n; j += 32) hexline("   ", v + j, pb + j, 32);
+    }
+}
+
+static void find_names(BYTE *img, DWORD size)
+{
+    BYTE *buf = (BYTE *)VirtualAlloc(NULL, 1 << 20, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    DWORD off;
+    int k;
+    if (!buf) return;
+    for (off = 0; off < size; off += (1 << 20) - 128) {
+        DWORD n = size - off < (1 << 20) ? size - off : (1 << 20);
+        DWORD i;
+        if (!readable((DWORD)img + off, NULL, NULL) || !copy_mem((DWORD)img + off, buf, n)) continue;
+        for (i = 1; i + 2 < n; i++) {
+            if (buf[i - 1] != 0) continue;   /* names start after a NUL */
+            for (k = 0; k < NNAMES; k++) {
+                const char *nm = g_reflect_names[k];
+                int L = lstrlenA(nm);
+                if (buf[i] != (BYTE)nm[0] || i + L >= n) continue;
+                if (memcmp(buf + i, nm, L) == 0 && buf[i + L] == 0 && g_ntargets < (int)(sizeof g_targets / sizeof g_targets[0])) {
+                    DWORD a = (DWORD)img + off + i;
+                    int j, dup = 0;
+                    for (j = 0; j < g_ntargets; j++) if (g_targets[j].addr == a) dup = 1;
+                    if (!dup) { g_targets[g_ntargets].addr = a; g_targets[g_ntargets].name = k; g_ntargets++; }
+                }
+            }
+        }
+    }
+    VirtualFree(buf, 0, MEM_RELEASE);
+    qsort(g_targets, g_ntargets, sizeof g_targets[0], cmp_target);
+}
+
+static void count_constants(BYTE *img, DWORD size)
+{
+    static const DWORD consts[] = { 0x011795D9, 0x91C8773C, 0xCCB51828, 0x07B6C269, 0xACBDFE47 };
+    BYTE *buf = (BYTE *)VirtualAlloc(NULL, 1 << 20, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    int c, counts[5] = { 0 };
+    DWORD off;
+    if (!buf) return;
+    for (off = 0; off < size; off += (1 << 20) - 4) {
+        DWORD n = size - off < (1 << 20) ? size - off : (1 << 20), i;
+        if (!readable((DWORD)img + off, NULL, NULL) || !copy_mem((DWORD)img + off, buf, n)) continue;
+        for (i = 0; i + 4 <= n; i++)
+            for (c = 0; c < 5; c++)
+                if (*(DWORD *)(buf + i) == consts[c]) {
+                    if (counts[c] < 40) out_text("CONST %08lX at %08lX", consts[c], (DWORD)img + off + i);
+                    counts[c]++;
+                }
+    }
+    for (c = 0; c < 5; c++) out_text("CONST %08lX total %d", consts[c], counts[c]);
+    VirtualFree(buf, 0, MEM_RELEASE);
+}
+
+static void dump_data_section(BYTE *img, const char *dir)
+{
+    IMAGE_DOS_HEADER dos;
+    IMAGE_NT_HEADERS32 nt;
+    IMAGE_SECTION_HEADER sh;
+    char path[MAX_PATH];
+    int i;
+    if (!copy_mem((DWORD)img, &dos, sizeof dos) || !copy_mem((DWORD)img + dos.e_lfanew, &nt, sizeof nt)) return;
+    for (i = 0; i < nt.FileHeader.NumberOfSections; i++) {
+        DWORD shoff = (DWORD)img + dos.e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt.FileHeader.SizeOfOptionalHeader + i * sizeof sh;
+        if (!copy_mem(shoff, &sh, sizeof sh)) return;
+        out_text("SECTION %.8s va %08lX size %08lX", sh.Name, (DWORD)img + sh.VirtualAddress, sh.Misc.VirtualSize);
+        if (memcmp(sh.Name, ".data\0", 6) == 0) {
+            HANDLE f;
+            DWORD a = (DWORD)img + sh.VirtualAddress, end = a + sh.Misc.VirtualSize, w;
+            BYTE page[4096];
+            lstrcpyA(path, dir);
+            lstrcatA(path, "severed_data.bin");
+            f = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (f == INVALID_HANDLE_VALUE) continue;
+            for (; a < end; a += sizeof page) {
+                if (!copy_mem(a, page, sizeof page)) memset(page, 0xCC, sizeof page);
+                WriteFile(f, page, sizeof page, &w, NULL);
+            }
+            CloseHandle(f);
+        }
+    }
+}
+
+static void reflect_scan(void)
+{
+    char dir[MAX_PATH], path[MAX_PATH], *slash;
+    BYTE *img = (BYTE *)GetModuleHandleA(NULL);
+    IMAGE_DOS_HEADER dos;
+    IMAGE_NT_HEADERS32 nt;
+    DWORD addr, end, type, size, hits = 0;
+    BYTE *buf;
+
+    GetModuleFileNameA(NULL, dir, sizeof dir);
+    slash = strrchr(dir, '\\');
+    if (slash) slash[1] = 0;
+    lstrcpyA(path, dir);
+    lstrcatA(path, "severed_reflect.log");
+    g_out = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (g_out == INVALID_HANDLE_VALUE) return;
+    log_line("reflection scan started");
+    out_text("severed reflect scan 4, module %08lX", (DWORD)img);
+    if (!copy_mem((DWORD)img, &dos, sizeof dos) || !copy_mem((DWORD)img + dos.e_lfanew, &nt, sizeof nt)) {
+        out_text("cannot read module header");
+        CloseHandle(g_out);
+        return;
+    }
+    size = nt.OptionalHeader.SizeOfImage;
+    dump_data_section(img, dir);
+    count_constants(img, size);
+    g_ntargets = 0;
+    memset(g_hits_per_name, 0, sizeof g_hits_per_name);
+    {
+        /* the names are plain strings in .rdata */
+        IMAGE_SECTION_HEADER sh;
+        int i;
+        for (i = 0; i < nt.FileHeader.NumberOfSections; i++) {
+            DWORD shoff = (DWORD)img + dos.e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt.FileHeader.SizeOfOptionalHeader + i * sizeof sh;
+            if (copy_mem(shoff, &sh, sizeof sh) && memcmp(sh.Name, ".rdata\0", 7) == 0)
+                find_names(img + sh.VirtualAddress, sh.Misc.VirtualSize);
+        }
+    }
+    out_text("TARGETS %d strings for %d names", g_ntargets, NNAMES);
+    for (addr = 0; addr < (DWORD)g_ntargets; addr++)
+        out_text("NAME %s at %08lX", g_reflect_names[g_targets[addr].name], g_targets[addr].addr);
+
+    buf = (BYTE *)VirtualAlloc(NULL, 1 << 20, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    for (addr = 0x10000; buf && addr < 0x7FFF0000; addr = end) {
+        int ok = readable(addr, &end, &type);
+        DWORD a;
+        if (end <= addr) break;
+        if (!ok || (DWORD)buf == addr) continue;
+        for (a = addr; a < end; a += 1 << 20) {
+            DWORD n = end - a < (1 << 20) ? end - a : (1 << 20), i;
+            if (!copy_mem(a, buf, n)) continue;
+            for (i = 0; i + 4 <= n; i += 4) {
+                int t = find_target(*(DWORD *)(buf + i));
+                if (t < 0) continue;
+                if (g_hits_per_name[g_targets[t].name]++ >= 8) continue;
+                if (hits++ > 30000) break;
+                dump_hit(a + i, g_targets[t].name);
+            }
+        }
+    }
+    if (buf) VirtualFree(buf, 0, MEM_RELEASE);
+    out_text("DONE %lu hits", hits);
+    CloseHandle(g_out);
+    g_out = INVALID_HANDLE_VALUE;
+    log_line("reflection scan finished: %lu hits", hits);
+    MessageBeep(MB_ICONASTERISK);
+}
+
+static DWORD WINAPI hotkey_thread(LPVOID p)
+{
+    (void)p;
+    for (;;) {
+        Sleep(200);
+        if (GetAsyncKeyState(VK_F10) & 0x8000) {
+            reflect_scan();
+            while (GetAsyncKeyState(VK_F10) & 0x8000) Sleep(100);
+        }
+    }
+    return 0;
+}
+
 static void start(HMODULE self)
 {
     char path[MAX_PATH], *slash;
@@ -547,7 +840,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 3 - process %s", path);
+    log_line("severed probe 4 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -567,6 +860,8 @@ static void start(HMODULE self)
     install("CloseHandle", (void *)h_CloseHandle, (void **)&o_CloseHandle);
     install("ReadFile", (void *)h_ReadFile, (void **)&o_ReadFile);
     log_line("--- hooks installed ---");
+    CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL);
+    log_line("press F10 in game for the reflection scan");
 }
 
 /* ---- dinput8 forwarding ----------------------------------------------- */

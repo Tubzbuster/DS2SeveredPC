@@ -38,6 +38,24 @@ too.
 Antivirus software may flag it, because it is unsigned and intercepts file
 functions. The full source is `probe.c`.
 
+## Reflection scan (version 4)
+
+Severed's level objects (SimGroups) are stored in a newer, packed format
+that the base game never uses, so their conversion needs each class's field
+layout, which the game only builds in memory. With the probe installed:
+
+1. Start the game and wait at the main menu.
+2. Press **F10** once. After a few seconds Windows plays its "asterisk"
+   sound: the scan is done.
+3. Quit the game.
+4. Zip and send `severed_reflect.log` and `severed_data.bin` from the game
+   folder (and `severed_probe.log`).
+
+The scan only reads memory. It writes the places that point at the class
+names in `reflect_names.h` with the bytes around them, how often two
+SimGroup format markers occur in the loaded exe, and a copy of the exe's
+`.data` section as it is in memory (its static data, not code).
+
 ## Building
 
 `build.sh` cross-compiles it with Zig (`pip install ziglang==0.13.0`).
