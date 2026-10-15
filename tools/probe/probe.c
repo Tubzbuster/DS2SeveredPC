@@ -812,6 +812,109 @@ static void reflect_scan(void)
     MessageBeep(MB_ICONASTERISK);
 }
 
+/* ---- descriptor dump (version 5) --------------------------------------
+ *
+ * The scan above showed that the engine describes each class with a
+ * static descriptor in .data (vtable 01B1E648; flag sets 01AA6C80, enums
+ * 01AA6C68), whose field list lives on the heap. Pressing F11 writes
+ * severed_desc.bin: the .data section, every descriptor's heap blocks,
+ * and one more level of heap blocks they point to, as chunks of
+ * (u32 address, u32 length, bytes). Read-only, like the scan.
+ */
+static const DWORD g_desc_vt[] = { 0x01B1E648, 0x01AA6C80, 0x01AA6C68 };
+static HANDLE g_dout = INVALID_HANDLE_VALUE;
+static DWORD g_seen[1 << 16];
+static DWORD g_dumped_bytes;
+#define DUMP_LIMIT (48u << 20)
+
+static int seen_add(DWORD va)
+{
+    DWORD h = (va * 2654435761u) >> 16, i;
+    for (i = 0; i < (1 << 16); i++) {
+        DWORD *s = &g_seen[(h + i) & 0xFFFF];
+        if (*s == va) return 0;
+        if (*s == 0) { *s = va; return 1; }
+    }
+    return 0;
+}
+
+static void chunk(DWORD va, DWORD len)
+{
+    static BYTE buf[65536];
+    DWORD w, hdr[2], end, t;
+    if (len > sizeof buf) len = sizeof buf;
+    if (g_dumped_bytes > DUMP_LIMIT || !readable(va, &end, &t)) return;
+    if (va + len > end) len = end - va;
+    if (len == 0 || !copy_mem(va, buf, len)) return;
+    hdr[0] = va;
+    hdr[1] = len;
+    WriteFile(g_dout, hdr, 8, &w, NULL);
+    WriteFile(g_dout, buf, len, &w, NULL);
+    g_dumped_bytes += len + 8;
+}
+
+/* dumps a heap block and, one level down, the heap blocks it points to */
+static void heap_block(DWORD va, DWORD len, int depth)
+{
+    BYTE b[4096];
+    DWORD t, i, n;
+    if (va < 0x10000 || !readable(va, NULL, &t) || t != MEM_PRIVATE || !seen_add(va)) return;
+    chunk(va, len);
+    if (depth == 0) return;
+    n = len < sizeof b ? len : sizeof b;
+    if (!copy_mem(va, b, n)) return;
+    for (i = 0; i + 4 <= n; i += 4) heap_block(*(DWORD *)(b + i), 256, depth - 1);
+}
+
+static void desc_dump(void)
+{
+    char path[MAX_PATH], *slash;
+    BYTE *img = (BYTE *)GetModuleHandleA(NULL);
+    IMAGE_DOS_HEADER dos;
+    IMAGE_NT_HEADERS32 nt;
+    IMAGE_SECTION_HEADER sh;
+    DWORD data = 0, data_size = 0, rdata = 0, rdata_size = 0, a, w, count = 0;
+    int i;
+
+    GetModuleFileNameA(NULL, path, sizeof path);
+    slash = strrchr(path, '\\');
+    if (slash) lstrcpyA(slash + 1, "severed_desc.bin");
+    if (!copy_mem((DWORD)img, &dos, sizeof dos) || !copy_mem((DWORD)img + dos.e_lfanew, &nt, sizeof nt)) return;
+    for (i = 0; i < nt.FileHeader.NumberOfSections; i++) {
+        DWORD shoff = (DWORD)img + dos.e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt.FileHeader.SizeOfOptionalHeader + i * sizeof sh;
+        if (!copy_mem(shoff, &sh, sizeof sh)) return;
+        if (memcmp(sh.Name, ".data\0", 6) == 0) { data = (DWORD)img + sh.VirtualAddress; data_size = sh.Misc.VirtualSize; }
+        if (memcmp(sh.Name, ".rdata\0", 7) == 0) { rdata = (DWORD)img + sh.VirtualAddress; rdata_size = sh.Misc.VirtualSize; }
+    }
+    if (!data || !rdata) return;
+    g_dout = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (g_dout == INVALID_HANDLE_VALUE) return;
+    log_line("descriptor dump started");
+    WriteFile(g_dout, "SVDESC5\0", 8, &w, NULL);
+    memset(g_seen, 0, sizeof g_seen);
+    g_dumped_bytes = 0;
+    for (a = data; a < data + data_size; a += 65536) chunk(a, data + data_size - a < 65536 ? data + data_size - a : 65536);
+    for (a = data; a < data + data_size; a += 65536) {
+        static DWORD blk[16384];
+        DWORD n = data + data_size - a < 65536 ? data + data_size - a : 65536, j;
+        if (!copy_mem(a, blk, n)) continue;
+        for (j = 0; j + 2 <= n / 4; j++) {
+            DWORD d[24];
+            int k, kind = -1;
+            for (k = 0; k < 3; k++) if (blk[j] == g_desc_vt[k]) kind = k;
+            if (kind < 0 || blk[j + 1] < rdata || blk[j + 1] >= rdata + rdata_size) continue;
+            if (!copy_mem(a + 4 * j, d, sizeof d)) continue;
+            count++;
+            if (kind == 0 && d[8] > d[7] && d[8] - d[7] <= 65536) heap_block(d[7], d[8] - d[7] + 64, 1);
+            for (k = 2; k < 24; k++) heap_block(d[k], kind == 0 ? 1024 : 2048, 1);
+        }
+    }
+    CloseHandle(g_dout);
+    g_dout = INVALID_HANDLE_VALUE;
+    log_line("descriptor dump finished: %lu descriptors, %lu bytes", count, g_dumped_bytes);
+    MessageBeep(MB_ICONASTERISK);
+}
+
 static DWORD WINAPI hotkey_thread(LPVOID p)
 {
     (void)p;
@@ -820,6 +923,10 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         if (GetAsyncKeyState(VK_F10) & 0x8000) {
             reflect_scan();
             while (GetAsyncKeyState(VK_F10) & 0x8000) Sleep(100);
+        }
+        if (GetAsyncKeyState(VK_F11) & 0x8000) {
+            desc_dump();
+            while (GetAsyncKeyState(VK_F11) & 0x8000) Sleep(100);
         }
     }
     return 0;
@@ -840,7 +947,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 4 - process %s", path);
+    log_line("severed probe 5 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -861,7 +968,7 @@ static void start(HMODULE self)
     install("ReadFile", (void *)h_ReadFile, (void **)&o_ReadFile);
     log_line("--- hooks installed ---");
     CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL);
-    log_line("press F10 in game for the reflection scan");
+    log_line("press F10 for the reflection scan, F11 for the descriptor dump");
 }
 
 /* ---- dinput8 forwarding ----------------------------------------------- */

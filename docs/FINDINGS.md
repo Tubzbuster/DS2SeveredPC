@@ -425,3 +425,18 @@ u32 is not in the data itself: about 5,000 record words are byte-packed
 bools and about 10,000 are ambiguous. The probe's reflection scan (v4,
 F10) reads the PC engine's class layouts from memory to settle this, and
 also shows whether the PC exe knows the `011795D9` marker.
+
+### Reflection scan result
+
+The PC exe's code contains the `011795D9` marker 17 bytes after
+`91C8773C` (one occurrence each): the PC engine reads both SimGroup
+formats. Class descriptors are static objects in `.data`: vtable
+`01B1E648`, name pointer, sdbm(lower-case name), version, ..., field list
+on the heap (a parent-class pointer, then 16-byte entries {type info,
+field descriptor, u16 offset, u16 index, u16, u16}). Field descriptors
+(`.data`, 20 bytes) hold name, hash and the same type codes as the base
+format (e.g. 0x11 string, 0x0C asset reference). LuaAudioScript: flags at
+0, strings at 4 and 0x10, asset reference at 0x1C, size 0x2C, exactly as
+in the Severed records. Flag sets and enums have their own descriptors
+(vtables `01AA6C80`, `01AA6C68`). Probe v5 (F11) dumps the complete field
+lists.
