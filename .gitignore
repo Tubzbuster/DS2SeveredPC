@@ -20,3 +20,6 @@
 
 # Prebuilt probe DLL (our own code, built by tools/probe/build.sh)
 !/tools/probe/bin/dinput8.dll
+
+# Sample files exported from the games (EA data)
+/tools/samples/out/
