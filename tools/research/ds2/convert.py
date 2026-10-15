@@ -130,4 +130,10 @@ def material(x):
     return out
 
 
-CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material}
+def metamodel(x):
+    from . import metamodel as M
+    return M.convert(x)
+
+
+CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
+              'MetaModel': metamodel}
