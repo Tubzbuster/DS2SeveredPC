@@ -472,3 +472,26 @@ e.g. an upgrade-node equip script, an end-of-game UI message) do not exist
 in the PC exe; they are converted heuristically (32-bit words up to their
 strings) and may have to be dropped if the PC game rejects them.
 Colours (type 8) are kept as 4 bytes; unverified.
+
+### Severed-only classes
+
+8 class names in Severed's SimGroups are not in the PC exe (27 objects).
+Fitting every PC layout to their records (all message strings resolve, no
+non-zero byte outside a field) identifies five as DLC copies of PC
+classes, never used themselves by Severed, so the converter re-labels
+them (`REMAP` in `ds2/simgroup.py`):
+
+| Severed class (hash) | Objects | PC layout | Notes |
+|---|---:|---|---|
+| AC69505E | 5 | ShipStore v11 | store kiosks; the PC class already has the DLC item fields (PDLC item, upgrade node, `m_enablePDLCScanning` = 1) |
+| 8F69BA55 | 9 | SaveKiosk v2 | save stations ("Save Menu") |
+| AA6A826D | 4 | SimplePressAndHoldSwitch v8 | quarry / mining camp door switches |
+| 9F75D02A | 1 | RigAnnouncementSystem v3 | RIG message VFX setup |
+| A1C89AA7 | 1 | UIEndOfGameData v2 | end of the DLC: fade, credits after 18 s; 20 extra bytes, all zero |
+
+Left: 2B747EB6 (3 objects, on message `equip_player_upgrade_nodes`: weapon
+`PulseRifle`, nodes Capacity, Capacity2, Damage, Damage3, Reload2,
+AltDamage, AltDamage2, PR12, PR21, PR23; Gabe's pre-upgraded rifle; no PC
+class does this), 8F917978 (3 objects, two hashes) and 742ECD09 (1 object,
+one u32). Behaviour of the re-labelled objects (e.g. whether the store
+lists Severed's items) needs the in-game test.

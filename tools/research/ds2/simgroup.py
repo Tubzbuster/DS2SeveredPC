@@ -29,6 +29,18 @@ TYPES = {
 M = 0xFFFFFFFF
 _SCHEMA = None
 
+# Severed-only classes (absent from the PC exe) whose records have exactly the
+# layout of a PC class: the object is re-labelled as that class. Matched by
+# fitting every PC layout to the records (all message strings resolve, no
+# data outside the fields; see docs/FINDINGS.md).
+REMAP = {
+    0xAC69505E: 'ShipStore',                 # store kiosks (5), DLC item fields set
+    0x8F69BA55: 'SaveKiosk',                 # save stations (9), "Save Menu"
+    0xAA6A826D: 'SimplePressAndHoldSwitch',  # quarry / mining camp switches (4)
+    0x9F75D02A: 'RigAnnouncementSystem',     # RIG announcement setup (1)
+    0xA1C89AA7: 'UIEndOfGameData',           # end of DLC (1); 20 extra zero bytes
+}
+
 
 def schema():
     global _SCHEMA
@@ -132,12 +144,19 @@ def convert(x, stats=None):
     _swap(out, x, B, 0x0C, 4)
     _swap(out, x, B + 0x0C, 4, 2)
     _swap(out, x, B + 0x10, 8, 4)
-    names = []
+    sch = schema()
+    by_name = {c['name']: (k, c) for k, c in sch.items()}
+    names, orig = [], []
     for i in range((toff - hs) // 8):
         h, ver = struct.unpack_from('>II', x, B + hs + 8 * i)
+        orig.append(h)
+        if h not in sch and h in REMAP:
+            nh, c = by_name[REMAP[h]]
+            stats['remapped'] = stats.get('remapped', {})
+            stats['remapped'][REMAP[h]] = stats['remapped'].get(REMAP[h], 0) + 1
+            h, ver = nh, c['version']
         names.append((h, ver))
-        _swap(out, x, B + hs + 8 * i, 8, 4)
-    sch = schema()
+        out[B + hs + 8 * i:B + hs + 8 * i + 8] = struct.pack('<II', h, ver)
     by_obj = {}
     for i in range(cnt):
         e = B + toff + 16 * i
@@ -145,7 +164,7 @@ def convert(x, stats=None):
         _swap(out, x, e, 12, 4)
         _swap(out, x, e + 12, 4, 2)
         h, ver = names[b] if b < len(names) else (None, None)
-        by_obj[oh] = h
+        by_obj[oh] = (orig[b], h) if b < len(names) else (0, 0)
         if ln == 0:
             continue
         cls = sch.get(h)
@@ -158,9 +177,9 @@ def convert(x, stats=None):
             e = struct.unpack_from('>I', x, o10 + 4 * i)[0]
             gcount = struct.unpack_from('>I', x, e + 4)[0]
             offs = struct.unpack_from('>%dI' % gcount, x, e + 8)
-            members = [by_obj.get(struct.unpack_from('>I', x, q)[0]) or 0 for q in offs]
-            if sdbm(struct.pack('>%dI' % gcount, *members)) == struct.unpack_from('>I', x, e)[0]:
-                out[e:e + 4] = struct.pack('<I', sdbm(struct.pack('<%dI' % gcount, *members)))
+            members = [by_obj.get(struct.unpack_from('>I', x, q)[0], (0, 0)) for q in offs]
+            if sdbm(struct.pack('>%dI' % gcount, *[m[0] for m in members])) == struct.unpack_from('>I', x, e)[0]:
+                out[e:e + 4] = struct.pack('<I', sdbm(struct.pack('<%dI' % gcount, *[m[1] for m in members])))
             else:
                 stats['group_hash_unverified'] = stats.get('group_hash_unverified', 0) + 1
     return bytes(out)
