@@ -356,7 +356,9 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | SimGroup | (no PC example of the Severed format) | converted with the PC engine's own class layouts; output re-validated (all 21,712 message strings, all 1,435 group hashes) | all 160; 27 records of 8 classes the PC exe lacks |
 | BNK (animation banks) | 147 | 99.99% of words right on held-out files (38/73 files exact); remaining misses are rare node layouts | all 100 |
 | NAV (navigation) | 770 (paired by name: .xen/.win) | exact except one per-collection hash the PC computes from data we lack (kept; referenced nowhere else) | all 101 |
-| HKX, SBK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
+| HKX (Havok physics) | 1,684 | 832/842 held-out files byte-exact (rest: PC re-exported with other values) | all 515 |
+| SBK (sound banks) | 24 | audio path done (EA-XMA decode, XAS encode); metadata needs more pairs (export requested) | |
+| SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
@@ -591,3 +593,17 @@ sample-aligned. `native/xas_enc.c` encodes XAS (per 32-sample group: all
 of up to 27 frames (2,060 bytes); bank samples are one block. SNU
 container: u8 3, u8 0, u16 (1/2), u32 (platform order), u32 offset of the
 audio data (0x20), u32 0, then the big-endian SNR header at 0x10.
+
+## 28. HKX Havok packfiles
+
+Havok 6.5.0 packfiles: 0x40 header (layout rules byte 1 = little-endian
+flag: 0 on 360, 1 on PC), section headers (name, start, local / global /
+virtual fixups, exports, imports, end), `__classnames__` (u32 signature,
+0x09, name), `__data__`. Virtual fixups give each object's class; local and
+global fixups give every pointer. `ds2/hkx.py` types objects by class and
+pointed-to blocks by (class, member offset) and learns templates with the
+shared `ds2/blockmodel.py`, which also learns 8-byte values (Havok property
+values, u64) and keeps names only through their own blocks (alignment
+padding holds stale text that the PC tools swapped as u32). Held-out:
+832/842 files byte-exact, 99.76% of words. All 515 Severed HKX files
+convert with a template for every block.

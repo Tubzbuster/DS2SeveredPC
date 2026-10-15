@@ -158,5 +158,19 @@ def nav(x):
     return N.convert(x)
 
 
+_HKX = None
+
+
+def hkx(x):
+    """Havok packfile: blocks typed by class / member, learned templates
+    (ds2/hkx_model.pkl from learn_hkx.py)."""
+    global _HKX
+    from . import hkx as H
+    if _HKX is None:
+        import os, pickle
+        _HKX = pickle.load(open(os.path.join(os.path.dirname(__file__), 'hkx_model.pkl'), 'rb'))
+    return H.convert(_HKX, x)
+
+
 CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
-              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav}
+              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx}

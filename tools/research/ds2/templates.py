@@ -15,6 +15,7 @@ PREF = [(0, 1, 2, 3), (3, 2, 1, 0), (1, 0, 3, 2), (0, 1, 3, 2), (1, 0, 2, 3), (2
 PERMS.sort(key=lambda p: PREF.index(p) if p in PREF else 99)
 RAW, SWAP = 0, 1
 UNION = 'union'
+Q64, Q64B = 'q64', 'q64b'      # first / second word of an 8-byte value
 
 
 def fitting(w, q):
@@ -31,10 +32,20 @@ class Template:
         self.counts = [[0] * len(PERMS) for _ in range(nwords)]
         self.informative = [0] * nwords   # samples where the word did not fit everything
         self.samples = 0
+        self.q8 = [0] * nwords            # words i, i+1 fit only as one 8-byte value
+        self.not32 = [0] * nwords         # word i or i+1 fits no single 32-bit swap
 
     def train(self, x, q):
         self.samples += 1
-        for i in range(min(self.n, len(x) // 4, len(q) // 4)):
+        n = min(self.n, len(x) // 4, len(q) // 4)
+        for i in range(n - 1):
+            a, b = x[4 * i:4 * i + 8], q[4 * i:4 * i + 8]
+            if a[::-1] == b and a[0:4][::-1] + a[4:8][::-1] != b:
+                self.not32[i] += 1
+                self.q8[i] += 1
+            elif a[0:4][::-1] + a[4:8][::-1] != b and a != b:
+                self.not32[i] += 1
+        for i in range(n):
             m = fitting(x[4 * i:4 * i + 4], q[4 * i:4 * i + 4])
             if m == (1 << len(PERMS)) - 1:
                 continue   # e.g. all-zero word: says nothing
@@ -44,7 +55,7 @@ class Template:
                 if m >> j & 1:
                     c[j] += 1
 
-    def perms(self, union_share=0.02, swap_default_words=0):
+    def perms(self, union_share=0.02, swap_default_words=0, q64=False):
         """swap_default_words: positions below this that no sample decided
         default to a 32-bit swap instead of raw"""
         out = []
@@ -59,6 +70,14 @@ class Template:
                 out.append(UNION)
             else:
                 out.append(PERMS[best])
+        # 8-byte values: where the only consistent reading is one u64
+        i = 0
+        while q64 and i < self.n - 1:
+            if self.q8[i] >= 2 and self.q8[i] >= 0.9 * self.not32[i]:
+                out[i], out[i + 1] = Q64, Q64B
+                i += 2
+            else:
+                i += 1
         return out
 
 
@@ -79,6 +98,13 @@ def apply(perms, x):
     i, n = 0, len(perms)
     while i < n:
         p = perms[i]
+        if p == Q64:
+            out[4 * i:4 * i + 8] = x[4 * i:4 * i + 8][::-1]
+            i += 2
+            continue
+        if p == Q64B:
+            i += 1
+            continue
         if p != UNION:
             w = x[4 * i:4 * i + 4]
             if len(w) == 4:

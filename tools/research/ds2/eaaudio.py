@@ -156,3 +156,47 @@ def decode_xas(blk_iter, channels):
     for c in range(channels):
         out[c::channels] = chans[c][:n]
     return out
+
+
+# ---- XAS v1 encoding (native/xas_enc.c) ---------------------------------------
+
+_LIB = None
+
+
+def _lib():
+    global _LIB
+    if _LIB is None:
+        import ctypes, os
+        _LIB = ctypes.CDLL(os.path.join(os.path.dirname(__file__), '..', 'native', 'libxasenc.so'))
+    return _LIB
+
+
+def encode_xas_channel(samples):
+    """mono int16 array -> frames (0x4C bytes per 128 samples)"""
+    import ctypes, array
+    n = (len(samples) + 127) // 128
+    buf = array.array('h', samples) + array.array('h', bytes(2 * (n * 128 - len(samples))))
+    out = ctypes.create_string_buffer(n * 0x4C)
+    src = (ctypes.c_int16 * len(buf)).from_buffer(buf)
+    _lib().xas_encode(src, n, out)
+    return out.raw
+
+
+def xas_blocks(pcm, channels, frames_per_block=27, single=False):
+    """interleaved int16 PCM -> EAAC blocks of XAS data (frames interleaved
+    per channel); single=True: one block (sound bank samples)"""
+    total = len(pcm) // channels
+    chans = [encode_xas_channel(pcm[c::channels]) for c in range(channels)]
+    nframes = (total + 127) // 128
+    step = nframes if single else frames_per_block
+    out = bytearray()
+    f = 0
+    while f < nframes:
+        k = min(step, nframes - f)
+        body = b''.join(chans[c][(f + j) * 0x4C:(f + j + 1) * 0x4C] for j in range(k) for c in range(channels))
+        samples = min(k * 128, total - f * 128)
+        last = f + k >= nframes
+        flag = 0x80 if (last and not single) else 0
+        out += struct.pack('>II', (flag << 24) | (len(body) + 8), samples) + body
+        f += k
+    return bytes(out)
