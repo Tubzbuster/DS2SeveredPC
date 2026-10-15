@@ -213,5 +213,10 @@ def png(x):
     return x                      # standard PNG files, same on every platform
 
 
+def snu(x):
+    from . import snu as S
+    return S.convert(x)
+
+
 CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
-              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb, 'SMB': smb, 'LH2': lh2, 'ANIM': anim, 'PNG': png}
+              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb, 'SMB': smb, 'LH2': lh2, 'ANIM': anim, 'PNG': png, 'SNU': snu}
