@@ -283,3 +283,21 @@ Which copy of a duplicated file the game uses is still open: probe v2 could
 not hook `ReadFile` on Windows 11 (no hot-patch prologue: `6A 18 68 …`;
 kernel32's export is a `jmp [ptr]` stub). Probe v3 adds trampoline and
 stub-pointer hooks for that.
+
+## 18. An added archive overrides the base game
+
+Probe v3 hooked `ReadFile` (trampoline) and logged where each archive entry
+was read from. With the test `DS2DAT2.DAT` installed, every duplicated file
+was read **only from `DS2DAT2.DAT`**, never from the original copy:
+
+| Entry | File | Original | Read from |
+|-------|------|----------|-----------|
+| `#16408156` | `frontend\frontend.toc` | DS2DAT6 | DS2DAT2 |
+| `#F9E85989` | `frontend\frontend_global.str` | DS2DAT6 | DS2DAT2 |
+| `#15C7731F` | `frontend\frontend.str` (20 MB) | DS2DAT6 | DS2DAT2 |
+| `#16603703` | `global_assets\global_assets_global.str` | DS2DAT9 | DS2DAT2 |
+
+When a file exists in several archives, the lowest-numbered archive wins.
+So Severed can ship as `DS2DAT2.DAT`: its new files are found, and its
+replacement `global_assets_global.str` takes precedence over the base
+game's. No exe changes are needed to install the content.
