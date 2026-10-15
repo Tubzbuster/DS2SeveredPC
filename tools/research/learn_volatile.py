@@ -5,31 +5,7 @@ the conversion of each 4-byte slot, then score (packed vectors within 1)."""
 import collections, struct, sys, pickle
 import pairs
 from ds2 import streamfile, geo, meshconv as MC
-
-SLOT = {
-    'f32': lambda w: w[::-1],
-    'raw': lambda w: w,
-    'h2': lambda w: w[1::-1] + w[3:1:-1],
-    'normal': MC.normal,
-    't32': MC.tangent32,
-    't20': MC.tangent20,
-}
-
-
-def fmt_key(flags):
-    return flags.hex()
-
-
-def streams_in_volatile(g, vsize):
-    out = []
-    for size, count, flags, ptr in g.dt2:
-        if ptr >= g.local_uv_offset and count:
-            off = ptr - g.local_uv_offset
-            stride = size // count if count else 0
-            if off + size <= vsize and stride and stride % 4 == 0:
-                out.append((off, count, stride, flags))
-    return out
-
+from ds2.volslots import SLOT, fmt_key, streams_in_volatile, convert
 
 def candidates(meshes, vol):
     """Meshes this volatile may belong to: same base name, external streams
@@ -90,25 +66,6 @@ def learn(P, meshes):
     for key, d in counts.items():
         table[key] = [max(d[i].items(), key=lambda kv: kv[1])[0] if d.get(i) else 'f32' for i in range(key[1] // 4)]
     return table
-
-
-def convert(table, g, x):
-    out = bytearray(x)
-    done = bytearray(len(x))
-    for off, count, stride, flags in streams_in_volatile(g, len(x)):
-        conv = table.get((fmt_key(flags), stride))
-        if conv is None:
-            return None
-        for v in range(count):
-            for slot, name in enumerate(conv):
-                o = off + stride * v + 4 * slot
-                out[o:o + 4] = SLOT[name](x[o:o + 4])
-        done[off:off + stride * count] = b'\1' * (stride * count)
-    # the rest (per-table UV records of skinned / 0x14 tables) is floats
-    for i in range(0, len(x) - 3, 4):
-        if not done[i]:
-            out[i:i + 4] = x[i:i + 4][::-1]
-    return bytes(out)
 
 
 def score(table, P, meshes):

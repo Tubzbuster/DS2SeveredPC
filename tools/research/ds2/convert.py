@@ -232,6 +232,16 @@ def ism(x):
     return _region('ISM', x)
 
 
+def light_toc(x):
+    from . import lighttoc as L
+    return L.light_toc(x)
+
+
+def variable_dictionary(x):
+    from . import lighttoc as L
+    return L.variable_dictionary(x)
+
+
 def sbk(x):
     from . import sbk as S
     return S.convert(x)
@@ -243,4 +253,5 @@ def snu(x):
 
 
 CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
-              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb, 'SMB': smb, 'LH2': lh2, 'ANIM': anim, 'PNG': png, 'SNU': snu, 'SBK': sbk, 'Graph': graph, 'ISM': ism}
+              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb, 'SMB': smb, 'LH2': lh2, 'ANIM': anim, 'PNG': png, 'SNU': snu, 'SBK': sbk, 'Graph': graph, 'ISM': ism,
+              'LightTOC': light_toc, 'VariableDictionary': variable_dictionary}
