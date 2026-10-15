@@ -29,3 +29,7 @@
 bin/
 obj/
 *.pkl
+
+# Python bytecode
+__pycache__/
+*.pyc
