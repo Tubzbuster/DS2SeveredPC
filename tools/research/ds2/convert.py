@@ -135,5 +135,10 @@ def metamodel(x):
     return M.convert(x)
 
 
+def simgroup(x):
+    from . import simgroup as S
+    return S.convert(x)
+
+
 CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
-              'MetaModel': metamodel}
+              'MetaModel': metamodel, 'SimGroup': simgroup}

@@ -353,7 +353,7 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | Mesh | 4,746 | 90.5% within rounding of the 2,793 pairs with identical structure (rest: PC re-exported differently) | all 1,065 distinct Severed meshes |
 | MeshVolatile | 3,412 | 84% exact or within rounding of 2,780 matched pairs | all 851 |
 | MetaModel | 1,978 | 100% exact | all 584 |
-| SimGroup | 1,291 | base-game format worked out (below); Severed uses a newer format with no PC example | needs the PC field layouts (probe v4) |
+| SimGroup | (no PC example of the Severed format) | converted with the PC engine's own class layouts; output re-validated (all 21,712 message strings, all 1,435 group hashes) | all 160; 27 records of 8 classes the PC exe lacks |
 | HKX, NAV, SBK, BNK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
@@ -456,3 +456,19 @@ the field), 0x11 message (hash, 0, offset relative to the offset word),
 0x13 fixed inline array (type info: count, element type). Flag-set
 descriptors give their storage type at word 6. v5 lost parts of .data and
 cut long field lists; 305 classes decode, 66 Severed classes need v6.
+
+### SimGroup converter (probe v6)
+
+`tools/research/reflect/export_schema.py` turns probe v6's dump into
+`ds2/simgroup_schema.json` (478 PC classes: version, size, fields; arrays
+carry count and element type; type 0x16 = embedded struct with its class).
+`ds2/simgroup.py` converts the Severed format: header words 32-bit except
+the u16 counts at 0x14-0x1B; block header u16 pair at +0x0C; record table
+(u32 x3, u16 x2); records field by field; strings raw; group hashes
+recomputed as sdbm over the members' class-name hashes in little-endian
+order (verified on all 1,435 Severed groups in 360 order). Every non-zero
+byte of every record lies in a known field. 8 Severed classes (27 records:
+e.g. an upgrade-node equip script, an end-of-game UI message) do not exist
+in the PC exe; they are converted heuristically (32-bit words up to their
+strings) and may have to be dropped if the PC game rejects them.
+Colours (type 8) are kept as 4 bytes; unverified.
