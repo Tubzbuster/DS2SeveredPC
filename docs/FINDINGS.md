@@ -191,3 +191,82 @@ differs from the base game's copy. The DLC overrides at least one base file.
 3. Then: archive writer (BIGH + sdbm) → try loading an unmodified PC file
    from a new `DS2DATn.DAT` → converters → loader DLL that points the
    game's PDLC code at the installed content.
+
+---
+
+# Round 3: probe log and sample files
+
+## 11. Probe log
+
+The probe ran without problems (all hooks installed, the game ran normally).
+At startup the game tries **`DS2DAT0.DAT` to `DS2DAT12.DAT`** and opens
+whichever exist; 2–5 and 10–12 are missing. **A new archive in one of those
+slots is loaded with no exe changes.** Movies are loose files under
+`movies\<lang>\`. The game never looked for a DLC folder or any DLC file, so
+DLC discovery is the one piece that will need the loader DLL.
+
+## 12. The PC game already knows the Severed level
+
+The base game's level list (archive entry `#E4529CFE`, identical on PC and
+360) contains:
+
+    pdlc1_ch01_mng /FOLDER pdlc1_ch01_mng\ /STREAMLIST pdlc1_ch01_mng.str
+        /CHECKPOINT initial XONTREALPR_CB22182_E50854D_v3 post_intro_inital ...
+
+with every Severed checkpoint, matching `weller1.lvl`. What PC lacks is the
+level's files and the menu entry.
+
+## 13. Stream file structure
+
+Each asset is a `SHDR` header chunk (type, IDs, uncompressed size, name,
+source path, type name) followed by data chunks:
+
+| | Xbox 360 | PC |
+|-|----------|----|
+| compressed data | `LZXD`: XMemCompress (LZX) frames | `Rpak`: EA RefPack |
+| uncompressed data | `SDAT` | `SDAT` |
+
+Decoders for both are in `tools/research/ds2`. They are cross-verified: all
+14 Lua scripts decode to identical bytes from the 360 LZX and PC RefPack
+data.
+
+Severed's own streams:
+- `dlc_support\level_select.str` (loaded on the main menu) holds one
+  **`LH2`** asset. `.lh2` is in the exe's file-type table next to `.key`
+  and `.pid`; this is almost certainly the Severed menu entry.
+- `global_assets\global_assets_global.str` replaces the base game's copy
+  with updated **Lua 5.0 bytecode** audio scripts (same on both platforms).
+- `pdlc1_ch01_mng.str`: 453 assets (textures, VFX, TOB, materials, meshes,
+  Havok, sound banks, Lua, NAV, LH2, …).
+
+## 14. What converting each asset type takes
+
+Payload comparison of every asset present in both PC and 360 samples (9
+stream pairs, ~2,000 assets):
+
+| Type | Result | Conversion |
+|------|--------|------------|
+| LUA | identical | copy |
+| TOB | 100% match after 32-bit swap | swap every 32-bit word |
+| tg4d (texture data) | 100% match after 16-bit swap | swap 16-bit words; **no untiling** |
+| VFX, ANIM, RCB, LightTOC, APX, HKX, MetaModel | same size, 80–97% match after 32-bit swap | per-type layout (mixed field sizes) |
+| tg4h (texture header), Material, Mesh, MeshVolatile | often different size | real format conversion |
+| SBK (sound bank) | mostly 360-only (PC keeps most outside streams) | audio re-encode + repackaging |
+
+## 15. Reusing the PC's own copies
+
+Asset header IDs identify content: Severed assets with the same `(type,
+name, IDs)` as a base-game asset have identical payloads (116/116 in the
+samples), and the same asset carries the same IDs on PC and 360 (390/400).
+Even against only six base-game streams, **116 of Severed's 453 assets
+(19% of its data) are base-game assets**. The installer can take those
+from the user's own PC archives, matched by header, with no conversion.
+Against the whole game the share will be higher.
+
+## 16. Next
+
+1. Probe v2 + test archive: confirm an added archive overrides base files.
+2. Full asset index of the PC archives and Severed: exactly which Severed
+   assets need converting.
+3. Converters in order of payoff: container (chunks, LZX → SDAT), TOB,
+   textures, then the per-type layouts.

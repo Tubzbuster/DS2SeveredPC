@@ -5,6 +5,11 @@
  *
  * Output: severed_probe.log next to deadspace2.exe.
  *
+ * Version 2 also tracks reads from the game's archives (DS2DAT*.DAT,
+ * *.viv): when one is opened, the probe reads its directory itself and logs
+ * the first read of each entry ("READ DS2DAT6.DAT #C2B10B96 ..."), so we
+ * can see which archive each file is actually loaded from.
+ *
  * Hooks are "hot-patch" hooks on Windows' own file functions in
  * kernelbase.dll (or kernel32.dll): the 5 padding bytes before the
  * function become a jump to our logger and the 2-byte `mov edi,edi` at the
@@ -121,6 +126,9 @@ static GetFileAttributesW_t o_GetFileAttributesW;
 static GetFileAttributesExA_t o_GetFileAttributesExA;
 static GetFileAttributesExW_t o_GetFileAttributesExW;
 
+static void track_open_w(LPCWSTR wpath, const char *u8path, HANDLE h);
+static void track_open_a(LPCSTR path, HANDLE h);
+
 #define CALLER(v) char v[96]; caller_name(__builtin_return_address(0), v, sizeof v)
 
 static HANDLE WINAPI h_CreateFileA(LPCSTR n, DWORD a, DWORD s, LPSECURITY_ATTRIBUTES sa, DWORD c, DWORD f, HANDLE t)
@@ -128,7 +136,7 @@ static HANDLE WINAPI h_CreateFileA(LPCSTR n, DWORD a, DWORD s, LPSECURITY_ATTRIB
     int top = enter();
     HANDLE r = o_CreateFileA(n, a, s, sa, c, f, t);
     DWORD e = GetLastError();
-    if (top) { CALLER(cl); log_line("CreateFileA  %-2s %s -> %s (err %lu) from %s", access_str(a), n ? n : "(null)", r == INVALID_HANDLE_VALUE ? "FAIL" : "ok", r == INVALID_HANDLE_VALUE ? e : 0, cl); }
+    if (top) { CALLER(cl); log_line("CreateFileA  %-2s %s -> %s (err %lu) from %s", access_str(a), n ? n : "(null)", r == INVALID_HANDLE_VALUE ? "FAIL" : "ok", r == INVALID_HANDLE_VALUE ? e : 0, cl); track_open_a(n, r); }
     leave();
     SetLastError(e);
     return r;
@@ -139,7 +147,7 @@ static HANDLE WINAPI h_CreateFileW(LPCWSTR n, DWORD a, DWORD s, LPSECURITY_ATTRI
     int top = enter();
     HANDLE r = o_CreateFileW(n, a, s, sa, c, f, t);
     DWORD e = GetLastError();
-    if (top) { char p[1024]; CALLER(cl); wide_to_utf8(n, p, sizeof p); log_line("CreateFileW  %-2s %s -> %s (err %lu) from %s", access_str(a), p, r == INVALID_HANDLE_VALUE ? "FAIL" : "ok", r == INVALID_HANDLE_VALUE ? e : 0, cl); }
+    if (top) { char p[1024]; CALLER(cl); wide_to_utf8(n, p, sizeof p); log_line("CreateFileW  %-2s %s -> %s (err %lu) from %s", access_str(a), p, r == INVALID_HANDLE_VALUE ? "FAIL" : "ok", r == INVALID_HANDLE_VALUE ? e : 0, cl); track_open_w(n, p, r); }
     leave();
     SetLastError(e);
     return r;
@@ -233,6 +241,204 @@ static BOOL WINAPI h_GetFileAttributesExW(LPCWSTR n, GET_FILEEX_INFO_LEVELS l, L
     return r;
 }
 
+
+/* ---- archive read tracking -------------------------------------------- */
+
+typedef BOOL (WINAPI *ReadFile_t)(HANDLE, LPVOID, DWORD, LPDWORD, LPOVERLAPPED);
+typedef BOOL (WINAPI *CloseHandle_t)(HANDLE);
+static ReadFile_t o_ReadFile;
+static CloseHandle_t o_CloseHandle;
+
+typedef struct { DWORD off, size, hash; } Entry;
+typedef struct {
+    char name[64];
+    Entry *ent;
+    DWORD n, dir_end;
+    BYTE *seen;
+    int dir_logged, stray_logged;
+} Archive;
+
+#define MAX_ARCH 32
+#define MAX_HANDLES 256
+static Archive g_arch[MAX_ARCH];
+static volatile LONG g_narch;
+static struct { HANDLE h; int a; } g_hmap[MAX_HANDLES];
+static volatile LONG g_nh;
+static CRITICAL_SECTION g_acs;
+
+static DWORD be32(const BYTE *p) { return (DWORD)p[0] << 24 | (DWORD)p[1] << 16 | (DWORD)p[2] << 8 | p[3]; }
+
+static int cmp_ent(const void *a, const void *b)
+{
+    DWORD x = ((const Entry *)a)->off, y = ((const Entry *)b)->off;
+    return x < y ? -1 : x > y;
+}
+
+static const char *base_name(const char *path)
+{
+    const char *a = strrchr(path, '\\'), *b = strrchr(path, '/');
+    if (b > a) a = b;
+    return a ? a + 1 : path;
+}
+
+static int is_archive(const char *path)
+{
+    const char *b = base_name(path);
+    size_t n = strlen(b);
+    if (n < 5) return 0;
+    if (_stricmp(b + n - 4, ".viv") == 0) return 1;
+    return _stricmp(b + n - 4, ".DAT") == 0 && _strnicmp(b, "DS2DAT", 6) == 0;
+}
+
+static BOOL raw_read(HANDLE h, void *buf, DWORD n)
+{
+    DWORD got = 0;
+    ReadFile_t rf = o_ReadFile ? o_ReadFile : ReadFile;
+    return rf(h, buf, n, &got, NULL) && got == n;
+}
+
+/* Find or load the directory of an archive; returns its index or -1. */
+static int load_archive(const char *u8path, HANDLE own)
+{
+    const char *b = base_name(u8path);
+    BYTE hdr[16], *dir = NULL;
+    DWORD count, i;
+    Archive *ar;
+    int idx;
+
+    for (idx = 0; idx < g_narch; idx++)
+        if (_stricmp(g_arch[idx].name, b) == 0) return idx;
+    if (g_narch >= MAX_ARCH || own == INVALID_HANDLE_VALUE) return -1;
+    if (!raw_read(own, hdr, 16) || memcmp(hdr, "BIGH", 4) != 0) { log_line("archive %s: not a BIGH archive", b); return -1; }
+    count = be32(hdr + 8);
+    if (count == 0 || count > 200000) { log_line("archive %s: bad entry count %lu", b, count); return -1; }
+    dir = (BYTE *)HeapAlloc(GetProcessHeap(), 0, count * 12);
+    ar = &g_arch[g_narch];
+    ar->ent = (Entry *)HeapAlloc(GetProcessHeap(), 0, count * sizeof(Entry));
+    ar->seen = (BYTE *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, count);
+    if (!dir || !ar->ent || !ar->seen || !raw_read(own, dir, count * 12)) { log_line("archive %s: could not read directory", b); return -1; }
+    for (i = 0; i < count; i++) {
+        ar->ent[i].off = be32(dir + i * 12);
+        ar->ent[i].size = be32(dir + i * 12 + 4);
+        ar->ent[i].hash = be32(dir + i * 12 + 8);
+    }
+    HeapFree(GetProcessHeap(), 0, dir);
+    qsort(ar->ent, count, sizeof(Entry), cmp_ent);
+    lstrcpynA(ar->name, b, sizeof ar->name);
+    ar->n = count;
+    ar->dir_end = be32(hdr + 12);
+    ar->dir_logged = ar->stray_logged = 0;
+    log_line("archive %s: %lu entries, directory read", ar->name, count);
+    return (int)InterlockedIncrement(&g_narch) - 1;
+}
+
+static void track_open(const char *u8path, HANDLE h, HANDLE own)
+{
+    int a, i, slot = -1;
+    if (h == INVALID_HANDLE_VALUE || !is_archive(u8path)) return;
+    EnterCriticalSection(&g_acs);
+    a = load_archive(u8path, own);
+    if (a >= 0) {
+        for (i = 0; i < g_nh; i++) if (g_hmap[i].h == NULL || g_hmap[i].h == h) { slot = i; break; }
+        if (slot < 0 && g_nh < MAX_HANDLES) slot = (int)g_nh++;
+        if (slot >= 0) { g_hmap[slot].h = h; g_hmap[slot].a = a; }
+    }
+    LeaveCriticalSection(&g_acs);
+}
+
+static int archive_of(HANDLE h)
+{
+    int i, a = -1;
+    if (g_nh == 0 || h == NULL || h == INVALID_HANDLE_VALUE) return -1;
+    EnterCriticalSection(&g_acs);
+    for (i = 0; i < g_nh; i++) if (g_hmap[i].h == h) { a = g_hmap[i].a; break; }
+    LeaveCriticalSection(&g_acs);
+    return a;
+}
+
+static void note_read(int a, ULONGLONG pos, DWORD n, void *ret)
+{
+    Archive *ar = &g_arch[a];
+    long lo = 0, hi = (long)ar->n - 1, best = -1;
+    char cl[96];
+
+    EnterCriticalSection(&g_acs);
+    if (pos < ar->dir_end) {
+        if (!ar->dir_logged) { ar->dir_logged = 1; caller_name(ret, cl, sizeof cl); log_line("READ %s directory (%lu bytes at 0x%llx) from %s", ar->name, n, pos, cl); }
+        LeaveCriticalSection(&g_acs);
+        return;
+    }
+    while (lo <= hi) {
+        long mid = (lo + hi) / 2;
+        if (ar->ent[mid].off <= pos) { best = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    if (best >= 0 && pos < (ULONGLONG)ar->ent[best].off + ar->ent[best].size) {
+        if (!ar->seen[best]) {
+            ar->seen[best] = 1;
+            caller_name(ret, cl, sizeof cl);
+            log_line("READ %s #%08lX +0x%llx len %lu (entry %lu bytes) from %s", ar->name, ar->ent[best].hash,
+                     pos - ar->ent[best].off, n, ar->ent[best].size, cl);
+        }
+    } else if (ar->stray_logged < 20) {
+        ar->stray_logged++;
+        log_line("READ %s at 0x%llx len %lu: not inside any entry", ar->name, pos, n);
+    }
+    LeaveCriticalSection(&g_acs);
+}
+
+static BOOL WINAPI h_ReadFile(HANDLE h, LPVOID buf, DWORD n, LPDWORD rd, LPOVERLAPPED ov)
+{
+    int a = archive_of(h);
+    LARGE_INTEGER pos;
+    BOOL r;
+    DWORD e;
+
+    pos.QuadPart = -1;
+    if (a >= 0) {
+        if (ov) pos.QuadPart = (LONGLONG)(((ULONGLONG)ov->OffsetHigh << 32) | ov->Offset);
+        else {
+            LARGE_INTEGER z;
+            z.QuadPart = 0;
+            if (!SetFilePointerEx(h, z, &pos, FILE_CURRENT)) pos.QuadPart = -1;
+        }
+    }
+    r = o_ReadFile(h, buf, n, rd, ov);
+    e = GetLastError();
+    if (a >= 0 && pos.QuadPart >= 0) note_read(a, (ULONGLONG)pos.QuadPart, n, __builtin_return_address(0));
+    SetLastError(e);
+    return r;
+}
+
+static BOOL WINAPI h_CloseHandle(HANDLE h)
+{
+    if (g_nh) {
+        int i;
+        EnterCriticalSection(&g_acs);
+        for (i = 0; i < g_nh; i++) if (g_hmap[i].h == h) g_hmap[i].h = NULL;
+        LeaveCriticalSection(&g_acs);
+    }
+    return o_CloseHandle(h);
+}
+
+/* Open a second handle of our own to read an archive's directory. */
+static void track_open_w(LPCWSTR wpath, const char *u8path, HANDLE h)
+{
+    HANDLE own;
+    if (h == INVALID_HANDLE_VALUE || !is_archive(u8path)) return;
+    own = o_CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    track_open(u8path, h, own);
+    if (own != INVALID_HANDLE_VALUE) o_CloseHandle ? o_CloseHandle(own) : CloseHandle(own);
+}
+
+static void track_open_a(LPCSTR path, HANDLE h)
+{
+    HANDLE own;
+    if (!path || h == INVALID_HANDLE_VALUE || !is_archive(path)) return;
+    own = o_CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    track_open(path, h, own);
+    if (own != INVALID_HANDLE_VALUE) o_CloseHandle ? o_CloseHandle(own) : CloseHandle(own);
+}
+
 /* ---- hot-patch installer ---------------------------------------------- */
 
 static int hotpatch(BYTE *fn, void *hook, void **orig)
@@ -272,6 +478,7 @@ static void start(HMODULE self)
     OSVERSIONINFOA vi;
 
     InitializeCriticalSection(&g_cs);
+    InitializeCriticalSection(&g_acs);
     g_tls = TlsAlloc();
     g_tick0 = GetTickCount();
     GetModuleFileNameA(NULL, path, sizeof path);
@@ -280,7 +487,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 1 - process %s", path);
+    log_line("severed probe 2 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -297,6 +504,8 @@ static void start(HMODULE self)
     install("GetFileAttributesW", (void *)h_GetFileAttributesW, (void **)&o_GetFileAttributesW);
     install("GetFileAttributesExA", (void *)h_GetFileAttributesExA, (void **)&o_GetFileAttributesExA);
     install("GetFileAttributesExW", (void *)h_GetFileAttributesExW, (void **)&o_GetFileAttributesExW);
+    install("CloseHandle", (void *)h_CloseHandle, (void **)&o_CloseHandle);
+    install("ReadFile", (void *)h_ReadFile, (void **)&o_ReadFile);
     log_line("--- hooks installed ---");
 }
 

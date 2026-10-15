@@ -1,13 +1,17 @@
 # Severed probe (dinput8.dll)
 
 A diagnostic DLL. It does **not** add Severed. It writes a log of every file
-Dead Space 2 tries to open, look up or list. That tells us:
+Dead Space 2 tries to open, look up or list, and (version 2) which archive
+each file inside `DS2DAT*.DAT` is actually read from (`READ DS2DAT6.DAT
+#C2B10B96 ...`). That tells us:
 
 - whether the game looks for `DS2DAT2.DAT` … `DS2DAT5.DAT` (free archive
   slots for Severed)
 - whether it looks for DLC folders or DLC files (`*.pid`, `*.lvl`, …)
   anywhere
 - the order in which it loads the archives and level files
+- whether an added archive (`tools/archive/New-TestArchive.ps1`) overrides
+  the game's own copies of a file
 
 It works as a `dinput8.dll` proxy: the game loads it from its own folder,
 it installs the logger, then passes every DirectInput call on to the real
@@ -23,7 +27,8 @@ Windows `dinput8.dll`. It never modifies `deadspace2.exe` or any game file.
 4. At the main menu, wait about 30 seconds. Then open the chapter select /
    load a save so a level loads, play for a few seconds, and quit to
    desktop.
-5. Send `severed_probe.log` from the Dead Space 2 folder.
+5. Send `severed_probe.log` from the Dead Space 2 folder. It contains your
+   Windows user name in some paths; edit those out if you like.
 6. Delete `dinput8.dll` from the game folder.
 
 If the game refuses to start or crashes with the DLL in place, delete it and
