@@ -17,3 +17,6 @@
 
 # Package contents extracted by the scanner
 /tools/scan/extracted/
+
+# Prebuilt probe DLL (our own code, built by tools/probe/build.sh)
+!/tools/probe/bin/dinput8.dll

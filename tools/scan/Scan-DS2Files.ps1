@@ -589,7 +589,10 @@ function Scan-Package([string]$full, [string]$rel) {
                        $(if ($p.DescType -eq 0) { 'STFS' } else { "type $($p.DescType) (not STFS)" }), $p.HeaderSize, $p.First, $p.Sep, ($p.TopLevel + 1)))
         $pkgLines.Add(('Blocks          : {0:N0} allocated, {1:N0} free; file table {2} block(s) from block {3}' -f $p.Alloc, $p.Unalloc, $p.FtBlockCount, $p.FtBlock))
         if ($p.DescType -ne 0) { $pkgLines.Add('(SVOD packages are not supported - extract this one with Velocity)'); return }
-        $entries = @(Get-StfsEntries $p)
+        # Read back from the object rather than the pipeline: PowerShell 5.1 and 7
+        # unroll a returned list differently.
+        [void](Get-StfsEntries $p)
+        $entries = $p.Entries.ToArray()
         $fileEntries = @($entries | Where-Object { -not $_.IsDir })
         $pkgLines.Add(('Contents        : {0} files, {1} folders' -f $fileEntries.Count, ($entries.Count - $fileEntries.Count)))
         $pkgLines.Add('')

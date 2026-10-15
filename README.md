@@ -40,6 +40,11 @@ own and scan that folder. The scanner reads the package directly: its header,
 its full file listing, and a fingerprint of every file inside it (listed in
 the manifest as `<package>::<path inside package>`). No extracting needed.
 
+## Other tools
+
+- `tools/samples/` exports matched PC/360 sample files (see the script header).
+- `tools/probe/` is a diagnostic `dinput8.dll` that logs the game's file access (see its README).
+
 ## Output (`tools\scan\scans\<Label>\`)
 
 | File              | Contents                                                                 |

@@ -115,3 +115,79 @@ Consequences:
 `Disc 1\AvatarAssetPack` and `Disc 2\AvatarAssetPack` failed with "property
 'Count' cannot be found". This happened on packages with a single file,
 under Windows PowerShell 5.1 strict mode. Fixed.
+
+---
+
+# Round 2: archive contents and the exe
+
+Source: second scans (archive entries listed and hashed) and
+`deadspace2.exe` (Steam, SHA-256 `f72f15b8…1d7f`).
+
+## 7. Archive name hash solved
+
+The `BIGH` name hash is **sdbm** (`h = h * 65599 + c`, 32-bit) of the
+**lowercase path with backslashes**, relative to the data root:
+
+    ch01_hos\ch01_hos.toc  ->  0xC2B10B96
+
+118 of 135 guessed chapter file names resolve on both platforms (the rest
+are combinations that don't exist). Chapters on PC are split across
+`DS2DAT6/7/8.DAT` exactly as on the 360 discs, multiplayer is in
+`DS2DAT9.DAT`. None of Severed's paths (`pdlc1_ch01_mng\...`) exist in the
+base archives.
+
+So we can write a valid PC archive holding Severed's files under their real
+names. The exe builds archive names with `%sDS2DAT%d.DAT`, so it numbers
+them. Whether it also tries the missing `DS2DAT2`–`5` is what the probe DLL
+checks.
+
+## 8. PC formats are the 360 formats, little-endian
+
+1,427 level streams (`.str`) and 83 tables of contents (`.toc`) exist on
+both platforms under the same hash. Only 3 small text files are
+byte-identical.
+
+| Format | 360 | PC |
+|--------|-----|----|
+| `.str` | `ols3`, chunk tags `SHOC` `SHDR` `SDAT`, platform byte `04` | `3slo`, tags `COHS` `RDHS`, platform byte `03` |
+| `.toc` | magic `9C BA 7B 28` | `28 7B BA 9C`; counts differ, so rebuilt rather than swapped |
+| `.snu` | header fields big-endian, codec **3 = EA-XMA**, mostly 48 kHz | little-endian, codec **4 = EA-XAS** (471) or **7 = EALayer3** (459), 32 kHz |
+
+In `.str` chunks the 32-bit fields are byte-swapped, while embedded strings
+(e.g. `s:\asset…`) are unchanged. So conversion is schema-aware swapping,
+plus re-encoding of anything platform-specific inside (textures, vertex
+data, maybe shaders). The 360/PC pairs are the test data.
+
+Audio: decode EA-XMA (vgmstream/FFmpeg can), re-encode as EA-XAS (an
+ADPCM codec, simple enough to write an encoder for).
+
+Other contents seen: the chapter list (`ch01_hos /FOLDER ds_2\ /STREAMLIST
+ds_2.str /CHECKPOINT …`), a build/version file, and **Lua game scripts**.
+
+Severed also ships its own `global_assets\global_assets_global.str`, which
+differs from the base game's copy. The DLC overrides at least one base file.
+
+## 9. The exe
+
+- **Code is encrypted on disk.** `.text` and Solidshield's section are
+  uniformly high-entropy, and the import table is a stub (one function per
+  DLL) rebuilt at runtime. Static disassembly of the file is not possible.
+  Readable data (`.rdata`, `.data`) is.
+- **The DLC file types are registered in the PC build:** `.key`, `.pid`,
+  `.lds`, `.add`, `.lvl`, `.dlm` and `pdlc` appear in `.rdata` among other
+  resource extensions (e.g. `.lh2`). So the PC engine has handlers for
+  every Severed descriptor file.
+- The game imports `DINPUT8.dll`, `d3d9.dll`, `XINPUT1_3.dll`,
+  `VERSION.dll`, `DSOUND.dll`, all usable as proxy-DLL entry points. The
+  probe uses `dinput8.dll`.
+
+## 10. Next steps
+
+1. **Probe DLL** (`tools/probe`): log every file the game opens or probes.
+   This shows whether `DS2DAT2`–`5` or any DLC location is looked for.
+2. **Samples** (`tools/samples`): export matched PC/360 file pairs plus
+   key Severed files, to write and test the `.str`, `.toc` and `.snu`
+   converters against.
+3. Then: archive writer (BIGH + sdbm) → try loading an unmodified PC file
+   from a new `DS2DATn.DAT` → converters → loader DLL that points the
+   game's PDLC code at the installed content.
