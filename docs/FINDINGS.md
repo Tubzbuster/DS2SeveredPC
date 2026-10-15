@@ -509,3 +509,20 @@ pr23. The PC exe exposes the upgrade system to Lua (tolua bindings:
 `demo_player_upgrade_levels.lua`), so the equip can be redone from a level
 Lua script responding to `equip_player_upgrade_nodes`; the call signatures
 still need working out.
+
+## 23. Severed's menu entry (360 footage) and the PC's episode select
+
+360 flow with Severed installed: main menu -> single player -> **episode
+select** ("Dead Space 2" / "Dead Space 2: Severed", with a description
+line) -> brightness -> loading. Severed's
+`dlc_support/level_select.str` (LH2 `string_ids_frontend`) holds that
+entry's text in 7 languages ("Dead Space 2: Severed", the description,
+"Difficulty setting not available for this episode.", save-slot name
+"Severed, chapter", `weller1_map_name`, `weller1_save_chapter_xen`).
+
+The PC exe has the same screen: next to the front-end code it holds the
+built-in episode entry (level `ds_2` / `ds_2.str`, `$ui_episode_ds_name`,
+`$ui_episode_ds_help`, picture VFX `XCENTKOWSK_C9C50BC_08B592A_v3`). So the
+episode list exists on PC with only the base game in it; the menu hook
+only has to get Severed (the `weller1.*` DLC descriptor files) into that
+list, not build a new menu.
