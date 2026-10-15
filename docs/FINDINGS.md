@@ -354,7 +354,8 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | MeshVolatile | 3,412 | 84% exact or within rounding of 2,780 matched pairs | all 851 |
 | MetaModel | 1,978 | 100% exact | all 584 |
 | SimGroup | (no PC example of the Severed format) | converted with the PC engine's own class layouts; output re-validated (all 21,712 message strings, all 1,435 group hashes) | all 160; 27 records of 8 classes the PC exe lacks |
-| HKX, NAV, SBK, BNK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
+| BNK (animation banks) | 147 | 99.99% of words right on held-out files (38/73 files exact); remaining misses are rare node layouts | all 100 |
+| HKX, NAV, SBK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
@@ -538,3 +539,28 @@ list, not build a new menu.
 - Gabe's Pulse Rifle at the first bench: Damage 7, Capacity 100,
   Reload 1.2, Alt Fire 5 (the target for the PC upgrade fix); it sells for
   53,500 credits.
+
+## 24. BNK animation banks
+
+Not audio: animation banks. Word 0 is the offset of a relocation table at
+the end (big-endian offsets of every pointer field, ending in 0). The
+compressed animation data is byte-identical on both platforms; node
+structures (u32 fields, floats, (u8, u8, u16) node headers, names, '_'
+padding) are swapped. `ds2/reloc.py` splits the file into pointer-target
+blocks, types each block by (parent's pointer offset, pointer offset,
+block kind: first byte, or ('h', codec) for animation data starting with a
+hash and a codec word), learns a template per type with fallbacks to
+coarser keys, keeps names raw, swaps pointers and the table. Severed: all
+11,403 blocks of its 100 banks have a template (`learn_bnk.py`).
+
+## 25. SBK sound banks
+
+Header `sbnk` v209: metadata size, data size, data offset (u32), metadata
+mostly u32/float with a few byte-packed words (e.g. `50 10 00 01`). Data
+section `sdat`: count, then 16-byte entries (index, 0x0313BABE, offset
+from `sdat`, 0xFEEDFEED), then EA "EAAC" sample headers + audio. Header
+word 1: version:4 codec:4 channel config:6 sample rate:18. 360 samples are
+codec 3 (EA-XMA); every PC sample is codec 7 (EALayer3 v2), sometimes at a
+different sample rate (8 kHz on 360 -> 16 kHz on PC). So Severed's sound
+banks need decoding XMA and encoding EALayer3 (or another codec the PC
+decoder accepts).

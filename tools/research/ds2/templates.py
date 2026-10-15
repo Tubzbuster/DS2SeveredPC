@@ -34,7 +34,7 @@ class Template:
 
     def train(self, x, q):
         self.samples += 1
-        for i in range(self.n):
+        for i in range(min(self.n, len(x) // 4, len(q) // 4)):
             m = fitting(x[4 * i:4 * i + 4], q[4 * i:4 * i + 4])
             if m == (1 << len(PERMS)) - 1:
                 continue   # e.g. all-zero word: says nothing
@@ -44,12 +44,14 @@ class Template:
                 if m >> j & 1:
                     c[j] += 1
 
-    def perms(self, union_share=0.02):
+    def perms(self, union_share=0.02, swap_default_words=0):
+        """swap_default_words: positions below this that no sample decided
+        default to a 32-bit swap instead of raw"""
         out = []
         for i in range(self.n):
             c, inf = self.counts[i], self.informative[i]
             if inf == 0:
-                out.append(PERMS[RAW])
+                out.append(PERMS[SWAP] if i < swap_default_words else PERMS[RAW])
                 continue
             best = max(range(len(PERMS)), key=lambda j: (c[j], -j))
             raw_only = c[RAW] - min(c[RAW], c[SWAP])
