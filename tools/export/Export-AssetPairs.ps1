@@ -39,6 +39,9 @@ $ErrorActionPreference = 'Stop'
 Write-Host 'Export-AssetPairs version 1'
 
 if (-not $ListFile) { $ListFile = Join-Path $PSScriptRoot 'wanted.txt' }
+if (-not (Test-Path -LiteralPath $ListFile)) {
+    throw "The export list was not found at $ListFile. Keep wanted.txt in the same folder as this script (it is in the repo's tools\export folder), or give its path with -ListFile."
+}
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot 'out' }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
