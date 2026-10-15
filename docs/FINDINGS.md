@@ -270,3 +270,16 @@ Against the whole game the share will be higher.
    assets need converting.
 3. Converters in order of payoff: container (chunks, LZX → SDAT), TOB,
    textures, then the per-type layouts.
+
+## 17. Test archive accepted
+
+With a `DS2DAT2.DAT` written by `tools/archive/New-TestArchive.ps1` (6
+entries copied from the PC archives), the game opened it in its normal
+archive sequence (`DS2DAT0, 1, 2, 6, 7, 8, 9`), read its directory and ran
+normally through the menu, a save load and gameplay. The archive format
+written by our tools is accepted.
+
+Which copy of a duplicated file the game uses is still open: probe v2 could
+not hook `ReadFile` on Windows 11 (no hot-patch prologue: `6A 18 68 …`;
+kernel32's export is a `jmp [ptr]` stub). Probe v3 adds trampoline and
+stub-pointer hooks for that.

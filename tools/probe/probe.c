@@ -459,6 +459,64 @@ static int hotpatch(BYTE *fn, void *hook, void **orig)
     return 1;
 }
 
+/* Length of one instruction from the small set found at the start of
+   Windows API functions, or 0 if it is not one we can relocate safely
+   (anything IP-relative such as call/jmp rel32 is refused). */
+static int insn_len(const BYTE *p)
+{
+    if (p[0] >= 0x50 && p[0] <= 0x57) return 1;                 /* push reg */
+    if (p[0] == 0x6A) return 2;                                 /* push imm8 */
+    if (p[0] == 0x68) return 5;                                 /* push imm32 */
+    if (p[0] == 0x8B && (p[1] == 0xFF || p[1] == 0xEC)) return 2; /* mov edi,edi / mov ebp,esp */
+    if (p[0] == 0x83 && p[1] == 0xEC) return 3;                 /* sub esp, imm8 */
+    if (p[0] == 0x81 && p[1] == 0xEC) return 6;                 /* sub esp, imm32 */
+    if (p[0] == 0x33 && (p[1] & 0xC0) == 0xC0) return 2;        /* xor reg, reg */
+    if (p[0] == 0x64 && p[1] == 0xA1) return 6;                 /* mov eax, fs:[imm32] */
+    return 0;
+}
+
+/* Classic detour: copy the first >=5 bytes of whole instructions to a
+   trampoline that jumps back, then put a jmp to the hook at the start. */
+static int trampoline(BYTE *fn, void *hook, void **orig)
+{
+    int len = 0, l;
+    BYTE *t;
+    DWORD old;
+
+    while (len < 5) {
+        if ((l = insn_len(fn + len)) == 0) return 0;
+        len += l;
+    }
+    t = (BYTE *)VirtualAlloc(NULL, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!t) return 0;
+    memcpy(t, fn, len);
+    t[len] = 0xE9;
+    *(DWORD *)(t + len + 1) = (DWORD)((fn + len) - (t + len + 5));
+    FlushInstructionCache(GetCurrentProcess(), t, 32);
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    *orig = t;
+    fn[0] = 0xE9;
+    *(DWORD *)(fn + 1) = (DWORD)((BYTE *)hook - (fn + 5));
+    for (l = 5; l < len; l++) fn[l] = 0x90;
+    VirtualProtect(fn, len, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, len);
+    return 1;
+}
+
+/* kernel32 export that is only "jmp dword ptr [slot]": point the slot at us. */
+static int stub_pointer(BYTE *fn, void *hook, void **orig)
+{
+    void **slot;
+    DWORD old;
+    if (fn[0] != 0xFF || fn[1] != 0x25) return 0;
+    slot = *(void ***)(fn + 2);
+    if (!VirtualProtect(slot, sizeof *slot, PAGE_READWRITE, &old)) return 0;
+    *orig = *slot;
+    *slot = hook;
+    VirtualProtect(slot, sizeof *slot, old, &old);
+    return 1;
+}
+
 static void install(const char *name, void *hook, void **orig)
 {
     static const char *mods[] = { "kernelbase.dll", "kernel32.dll" };
@@ -467,8 +525,10 @@ static void install(const char *name, void *hook, void **orig)
         HMODULE m = GetModuleHandleA(mods[i]);
         BYTE *fn = m ? (BYTE *)GetProcAddress(m, name) : NULL;
         if (!fn) continue;
-        if (hotpatch(fn, hook, orig)) { log_line("hooked %s in %s", name, mods[i]); return; }
-        log_line("could not hook %s in %s (first bytes %02X %02X %02X %02X %02X)", name, mods[i], fn[0], fn[1], fn[2], fn[3], fn[4]);
+        if (hotpatch(fn, hook, orig)) { log_line("hooked %s in %s (hot-patch)", name, mods[i]); return; }
+        if (trampoline(fn, hook, orig)) { log_line("hooked %s in %s (trampoline)", name, mods[i]); return; }
+        if (stub_pointer(fn, hook, orig)) { log_line("hooked %s in %s (stub pointer)", name, mods[i]); return; }
+        log_line("could not hook %s in %s (first bytes %02X %02X %02X %02X %02X %02X %02X)", name, mods[i], fn[0], fn[1], fn[2], fn[3], fn[4], fn[5], fn[6]);
     }
 }
 
@@ -487,7 +547,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 2 - process %s", path);
+    log_line("severed probe 3 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
