@@ -41,6 +41,7 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
+Write-Host 'New-TestArchive version 3'
 $target = Join-Path $GameDir ("DS2DAT{0}.DAT" -f $Slot)
 $marker = $target + '.severedtest'
 
@@ -163,28 +164,30 @@ try {
     if (-not $written) { Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue }
 }
 
-# Verify every entry against its source before putting the archive in place.
-# A new hash object per call: Windows PowerShell 5.1 (.NET Framework) cannot
-# reuse one after TransformFinalBlock.
-function Get-RangeHash([string]$file, [int64]$offset, [int64]$size) {
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    $fs = [System.IO.File]::Open($file, 'Open', 'Read', 'ReadWrite')
+# Verify every entry against its source before putting the archive in place,
+# comparing the bytes directly (no hashing, so nothing version-specific).
+function Test-SameRange([string]$fileA, [int64]$offA, [string]$fileB, [int64]$offB, [int64]$size) {
+    $fa = [System.IO.File]::Open($fileA, 'Open', 'Read', 'ReadWrite')
+    $fb = [System.IO.File]::Open($fileB, 'Open', 'Read', 'ReadWrite')
     try {
-        $fs.Position = $offset
-        $b = New-Object byte[] 1048576
+        $fa.Position = $offA
+        $fb.Position = $offB
+        $ba = New-Object byte[] 1048576
+        $bb = New-Object byte[] 1048576
         $left = $size
         while ($left -gt 0) {
-            $n = $fs.Read($b, 0, [int][Math]::Min($b.Length, $left))
-            [void]$sha.TransformBlock($b, 0, $n, $null, 0)
-            $left -= $n
+            $want = [int][Math]::Min($ba.Length, $left)
+            $na = 0; while ($na -lt $want) { $r = $fa.Read($ba, $na, $want - $na); if ($r -le 0) { return $false }; $na += $r }
+            $nb = 0; while ($nb -lt $want) { $r = $fb.Read($bb, $nb, $want - $nb); if ($r -le 0) { return $false }; $nb += $r }
+            if ([System.Convert]::ToBase64String($ba, 0, $want) -ne [System.Convert]::ToBase64String($bb, 0, $want)) { return $false }
+            $left -= $want
         }
-        [void]$sha.TransformFinalBlock((New-Object byte[] 0), 0, 0)
-        return [System.BitConverter]::ToString($sha.Hash)
-    } finally { $fs.Dispose(); $sha.Dispose() }
+        return $true
+    } finally { $fa.Dispose(); $fb.Dispose() }
 }
 try {
     foreach ($e in $entries) {
-        if ((Get-RangeHash $tmp $e.Offset $e.Size) -ne (Get-RangeHash $e.File $e.SrcOffset $e.Size)) {
+        if (-not (Test-SameRange $tmp $e.Offset $e.File $e.SrcOffset $e.Size)) {
             throw "Verification failed for $($e.Name); nothing was installed."
         }
     }
