@@ -21,7 +21,11 @@ import argparse, glob, os, shutil, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'research'))
 
-from ds2 import bigarchive, build, eaaudio, stfs, streamfile, streamwrite   # noqa: E402
+try:
+    from ds2 import bigarchive, build, eaaudio, stfs, streamfile, streamwrite   # noqa: E402
+except ImportError:
+    raise SystemExit('Run this from the repository\'s tools\\test folder: it needs tools\\research next to it '
+                     '(copy the whole repository, not just this file).')
 
 LEVEL_LIST = 0xE4529CFE        # level list (text), identical on PC and 360
 SLOT = 'DS2DAT2.DAT'
@@ -107,7 +111,8 @@ def main():
     if os.path.exists(target) and not os.path.exists(marker):
         raise SystemExit(target + ' already exists and was not created by this script; not overwriting it.')
     eaaudio.FFMPEG = a.ffmpeg
-    work = a.work or os.path.join(os.path.dirname(os.path.abspath(a.severed)), 'severed_work')
+    a.severed = os.path.abspath(a.severed.rstrip('\\/"'))
+    work = a.work or os.path.join(os.path.dirname(a.severed), 'severed_work')
     src, dst = os.path.join(work, '360'), os.path.join(work, 'pc')
 
     log('Indexing the game archives')
@@ -116,7 +121,10 @@ def main():
         if h not in idx:
             raise SystemExit('Expected file #%08X not found in the game archives' % h)
 
-    if not os.path.exists(os.path.join(work, 'unpacked.ok')):
+    if os.path.isdir(a.severed):
+        src = a.severed                      # already extracted from the package
+        log('Using the extracted Severed folder', src)
+    elif not os.path.exists(os.path.join(work, 'unpacked.ok')):
         log('Unpacking the Severed package')
         pkg = stfs.Package(open(a.severed, 'rb').read())
         for path, data in pkg.files():
@@ -124,7 +132,7 @@ def main():
             os.makedirs(os.path.dirname(q), exist_ok=True)
             open(q, 'wb').write(data)
         open(os.path.join(work, 'unpacked.ok'), 'w').write('ok')
-    root = src
+    root = src.rstrip('\\/')
     while len(os.listdir(root)) == 1 and os.path.isdir(os.path.join(root, os.listdir(root)[0])):
         root = os.path.join(root, os.listdir(root)[0])          # the package's own top folder
 
