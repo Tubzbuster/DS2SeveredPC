@@ -1,18 +1,27 @@
-"""Load the exported PC/360 asset pairs (tools/export output) keyed by
-(type, name, ids)."""
-import sys
+"""PC/360 asset pairs from the export (tools/export), split per type by
+`severed split` into <dir>/pc/<Type>.str and <dir>/x360/<Type>.str.
+
+    for key, x360_payload, pc_payload in pairs.load(dir, 'Material'): ...
+"""
+import os
 from ds2 import streamfile
 
-_cache = {}
+DEFAULT = os.environ.get('DS2_PAIRS', '/tmp/claude-0/-home-user-DS2SeveredPC/55bfe32c-f5f8-5f82-90e0-34e8d63d0db0/scratchpad/exp')
 
 
-def load(export_dir):
-    if export_dir in _cache:
-        return _cache[export_dir]
-    out = {}
-    for plat, f in (('pc', 'pc_assets.str'), ('x', 'x360_assets.str')):
-        be, assets = streamfile.read(open(export_dir + '/' + f, 'rb').read())
-        out[plat] = {(a.type, a.name, a.ids): a for a in assets}
-    keys = set(out['pc']) & set(out['x'])
-    _cache[export_dir] = (out['pc'], out['x'], keys)
-    return _cache[export_dir]
+def _assets(path):
+    if not os.path.exists(path):
+        return {}
+    return {(a.type, a.name, a.ids): a for a in streamfile.read(open(path, 'rb').read())[1]}
+
+
+def load(typ, root=DEFAULT, with_assets=False):
+    pc = _assets(os.path.join(root, 'pc', typ + '.str'))
+    x = _assets(os.path.join(root, 'x360', typ + '.str'))
+    out = []
+    for k in sorted(set(pc) & set(x)):
+        if with_assets:
+            out.append((k, x[k], pc[k]))
+        else:
+            out.append((k, x[k].payload(), pc[k].payload()))
+    return out

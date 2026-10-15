@@ -94,6 +94,37 @@ namespace Severed
             return list;
         }
 
+        /// <summary>Reads assets one at a time from a stream file of any size.</summary>
+        public static IEnumerable<StreamAsset> ReadAll(Stream f, byte[] fileHeader = null)
+        {
+            var h = new byte[12];
+            if (f.Read(h, 0, 12) != 12 || !IsStream(h, out bool be)) throw new InvalidDataException("not a stream file");
+            if (fileHeader != null) Buffer.BlockCopy(h, 0, fileHeader, 0, 12);
+            StreamAsset cur = null;
+            var ch = new byte[12];
+            while (true)
+            {
+                int got = 0;
+                while (got < 12) { int r = f.Read(ch, got, 12 - got); if (r <= 0) break; got += r; }
+                if (got < 12) break;
+                int size = (int)Bytes.U32(ch, 4, be);
+                if (size < 12) break;
+                var c = new byte[size];
+                Buffer.BlockCopy(ch, 0, c, 0, 12);
+                got = 12;
+                while (got < size) { int r = f.Read(c, got, size - got); if (r <= 0) throw new EndOfStreamException(); got += r; }
+                if (Tag(c, 0, be) != "SHOC") continue;
+                string sub = Tag(c, 8, be);
+                if (sub == "SHDR")
+                {
+                    if (cur != null) yield return cur;
+                    cur = new StreamAsset { BigEndian = be, Header = c };
+                }
+                else if (cur != null) cur.Chunks.Add(new StreamChunk { Kind = sub, Data = c });
+            }
+            if (cur != null) yield return cur;
+        }
+
         /// <summary>Copy of a stream file with every compressed chunk replaced by one SDAT chunk (same endianness).</summary>
         public static byte[] Expand(byte[] d)
         {
