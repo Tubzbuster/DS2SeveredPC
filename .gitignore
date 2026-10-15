@@ -33,3 +33,6 @@ obj/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Native build output
+*.so
