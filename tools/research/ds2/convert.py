@@ -213,6 +213,25 @@ def png(x):
     return x                      # standard PNG files, same on every platform
 
 
+_REGION = {}
+
+
+def _region(typ, x):
+    from . import regionmodel
+    import os
+    if typ not in _REGION:
+        _REGION[typ] = regionmodel.Model.load(os.path.join(os.path.dirname(__file__), typ.lower() + '_model.json'))
+    return _REGION[typ].convert(x)
+
+
+def graph(x):
+    return _region('Graph', x)
+
+
+def ism(x):
+    return _region('ISM', x)
+
+
 def sbk(x):
     from . import sbk as S
     return S.convert(x)
@@ -224,4 +243,4 @@ def snu(x):
 
 
 CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
-              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb, 'SMB': smb, 'LH2': lh2, 'ANIM': anim, 'PNG': png, 'SNU': snu, 'SBK': sbk}
+              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb, 'SMB': smb, 'LH2': lh2, 'ANIM': anim, 'PNG': png, 'SNU': snu, 'SBK': sbk, 'Graph': graph, 'ISM': ism}

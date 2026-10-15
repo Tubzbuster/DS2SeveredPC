@@ -357,13 +357,14 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | BNK (animation banks) | 147 | 99.99% of words right on held-out files (38/73 files exact); remaining misses are rare node layouts | all 100 |
 | NAV (navigation) | 770 (paired by name: .xen/.win) | exact except one per-collection hash the PC computes from data we lack (kept; referenced nowhere else) | all 101 |
 | HKX (Havok physics) | 1,684 | 832/842 held-out files byte-exact (rest: PC re-exported with other values) | all 515 |
-| SBK (sound banks) | 24 | audio path done (EA-XMA decode, XAS encode); metadata needs more pairs (export requested) | |
+| SBK (sound banks) | 80 (second export) | metadata 78/80 exact (other 2: different sample sets); sdat rebuild exact; samples EA-XMA -> EA-XAS (26-60 dB SNR) | all 531 |
 | RCB | 358 | 108/179 held-out files exact, 99.91% of words (relocation-table blocks, swap default) | all 54 |
 | SMB | 167 | 158 exact (32-bit + 0x0016 record headers as u16 pairs + names) | all 31 |
 | LH2 (string tables) | (structure check) | header/IDs/offsets 32-bit, text raw; a converted 360 table parses on PC layout, 6,649/6,873 shared strings identical | both (menu text, Severed text) |
 | ANIM | 51 | 99.93% of words held-out (position template) | 1 |
 | PNG | | standard PNG, copied | 2 |
-| Graph, ISM | 122 / 6 | position templates not enough (71% / 88% of words); need structure | 15 / 1 |
+| Graph | 122 | 56/61 held-out files exact, 99.97% of words; all 122 with the full model (region model) | all 15 |
+| ISM (impact tables) | 6 | 3/3 held-out exact, 6/6 (region model) | 1 |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
@@ -573,6 +574,22 @@ different sample rate (8 kHz on 360 -> 16 kHz on PC). So Severed's sound
 banks need decoding XMA and encoding EALayer3 (or another codec the PC
 decoder accepts).
 
+Converter (`ds2/sbk.py`, second export: 80 distinct pairs). The section
+offsets at 0x24-0x44 are relative to 0x18: A end, N, B, C, ?, E, E size,
+G, H. Byte order per section: A records (offsets in the list at 0x68)
+have byte-packed words at +4 and +0x1C (raw); the float tables from C to
+E start each sub-table with a u16 count (`000N0000` -> u16 pair); E holds
+8-byte entries {u16, 2 raw bytes, u32}; H holds 0x18-byte entries whose
+last word is a hash stored byte-reversed (same bytes on both platforms);
+everything else is plain 32-bit. Apart from the data sizes at 0x0C/0x14
+the metadata is otherwise identical on both platforms, so the sample rate
+and length live only in each sample's own header. Samples sit back to back
+after the sdat entries, each one EAAC header plus a single flag-0 block
+(long ones: several). Converted samples: decoded from EA-XMA and encoded
+as XAS (codec 4) at the 360 rate; banks grow about 2.4x (35 -> 86 MB for
+all of Severed). Whether the PC bank player accepts codec 4 (its streams
+do) is to be checked in game; fallback is PCM.
+
 ## 26. NAV navigation collections
 
 Names end in `.xen` (360) / `.win` (PC), so the asset IDs differ: id1-3 =
@@ -612,3 +629,16 @@ values, u64) and keeps names only through their own blocks (alignment
 padding holds stale text that the PC tools swapped as u32). Held-out:
 832/842 files byte-exact, 99.76% of words. All 515 Severed HKX files
 convert with a template for every block.
+
+## 29. Graph and ISM files
+
+Both are a fixed header (Graph 0xA0, ISM 0x20) followed by arrays that
+the header points to (Graph offsets at 0x20-0x48, 0x50, 0x58, 0x60, 0x68,
+0x70, counts as u16 pairs at 0x0C/0x2C/0x3C; ISM offsets at 0x10-0x1C).
+The arrays mix floats, u32, u16 pairs and byte fields (Graph nodes: 0x30
+bytes with a u16 pair and flag bytes; edges 0x30 bytes). `ds2/regionmodel.py`
+cuts a file into the regions the offsets point to and learns each unit's
+byte order by (region, position mod stride), choosing each region's
+stride by leave-one-file-out prediction; the model is JSON
+(`ds2/graph_model.json`, `ds2/ism_model.json`, `learn_region.py`).
+Checked on all Severed files: converted header offsets read the same.
