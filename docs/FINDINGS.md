@@ -526,3 +526,15 @@ built-in episode entry (level `ds_2` / `ds_2.str`, `$ui_episode_ds_name`,
 episode list exists on PC with only the base game in it; the menu hook
 only has to get Severed (the `weller1.*` DLC descriptor files) into that
 list, not build a new menu.
+
+### Reference from 360 footage (Let's Play, first 10 minutes)
+
+- Store kiosk: the normal store screen (Shop / Inventory tabs, credits,
+  nodes) listing the usual weapons (Plasma Cutter, Javelin, Force Gun,
+  Seeker, Pulse Rifle) plus unlocked extras (Hand Cannon, Patrol Seeker):
+  the PC `ShipStore` behaviour, as the re-labelling assumes.
+- Bench: Plasma Cutter, Force Gun, Pulse Rifle, RIG, Stasis Module;
+  "Respec ability unlocked" pop-up on first use.
+- Gabe's Pulse Rifle at the first bench: Damage 7, Capacity 100,
+  Reload 1.2, Alt Fire 5 (the target for the PC upgrade fix); it sells for
+  53,500 credits.
