@@ -495,3 +495,17 @@ AltDamage, AltDamage2, PR12, PR21, PR23; Gabe's pre-upgraded rifle; no PC
 class does this), 8F917978 (3 objects, two hashes) and 742ECD09 (1 object,
 one u32). Behaviour of the re-labelled objects (e.g. whether the store
 lists Severed's items) needs the in-game test.
+
+### Gabe's upgraded Pulse Rifle (360 Severed save)
+
+A 360 Severed starter save (STFS CON package, `ds2/stfs.py`; inside, an
+`MC02` save) holds the upgrade state as 12-byte records (weapon hash, node
+hash, 1), sdbm of lower-case names. The Pulse Rifle (`pulserifle`) has
+exactly the 10 nodes the Severed-only equip object lists: capacity,
+capacity2, damage, damage3, reload2, altdamage, altdamage2, pr12, pr21,
+pr23. The PC exe exposes the upgrade system to Lua (tolua bindings:
+`GetUpgradeManager`, `UpgradeManager:Upgrade`, `Connect`, `UpgradeValue`,
+`DebugFillUpgradeNode`; script names `player_upgrades.lua`,
+`demo_player_upgrade_levels.lua`), so the equip can be redone from a level
+Lua script responding to `equip_player_upgrade_nodes`; the call signatures
+still need working out.
