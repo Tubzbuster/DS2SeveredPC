@@ -358,7 +358,8 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | NAV (navigation) | 770 (paired by name: .xen/.win) | exact except one per-collection hash the PC computes from data we lack (kept; referenced nowhere else) | all 101 |
 | HKX (Havok physics) | 1,684 | 832/842 held-out files byte-exact (rest: PC re-exported with other values) | all 515 |
 | SBK (sound banks) | 24 | audio path done (EA-XMA decode, XAS encode); metadata needs more pairs (export requested) | |
-| SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
+| RCB | 358 | 108/179 held-out files exact, 99.91% of words (relocation-table blocks, swap default) | all 54 |
+| SMB, Graph, LH2, PNG, ISM, ANIM | | not started | |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0

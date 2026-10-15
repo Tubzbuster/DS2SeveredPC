@@ -140,17 +140,24 @@ def simgroup(x):
     return S.convert(x)
 
 
-_BNK = None
+_RELOC = {}
+
+
+def _reloc(typ, x):
+    """relocation-table types: blocks with learned templates
+    (ds2/<type>_model.pkl from learn_reloc.py / learn_bnk.py)"""
+    if typ not in _RELOC:
+        import os, pickle
+        _RELOC[typ] = pickle.load(open(os.path.join(os.path.dirname(__file__), typ.lower() + '_model.pkl'), 'rb'))
+    return _RELOC[typ].convert(x)
 
 
 def bnk(x):
-    """Animation bank: relocation-table blocks with learned templates
-    (ds2/bnk_model.pkl from learn_bnk.py)."""
-    global _BNK
-    if _BNK is None:
-        import os, pickle
-        _BNK = pickle.load(open(os.path.join(os.path.dirname(__file__), 'bnk_model.pkl'), 'rb'))
-    return _BNK.convert(x)
+    return _reloc('BNK', x)
+
+
+def rcb(x):
+    return _reloc('RCB', x)
 
 
 def nav(x):
@@ -173,4 +180,4 @@ def hkx(x):
 
 
 CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
-              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx}
+              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb}

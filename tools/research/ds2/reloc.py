@@ -73,8 +73,9 @@ def blocks(info):
 
 
 class Model:
-    def __init__(self):
+    def __init__(self, default='raw'):
         self.t = {}
+        self.default = default        # blocks without a template: 'raw' or 'swap'
 
     def train(self, x, p):
         info = parse(x)
@@ -104,7 +105,7 @@ class Model:
         return [typ, ('any',)]
 
     def finish(self):
-        self.perms = {k: v.perms(swap_default_words=64) for k, v in self.t.items()}
+        self.perms = {k: v.perms(swap_default_words=64, raw_min=3 if getattr(self, 'default', 'raw') == 'swap' else 0) for k, v in self.t.items()}
         self.samples = {k: v.samples for k, v in self.t.items()}
         self.majority = {}
         for k, v in self.t.items():
@@ -126,15 +127,18 @@ class Model:
                     pm = self.perms[key]
                     break
             if pm is None:
+                if getattr(self, 'default', 'raw') == 'swap':
+                    n = (e - s) // 4
+                    out[s:s + 4 * n] = struct.pack('<%dI' % n, *struct.unpack_from('>%dI' % n, x, s))
                 continue
             n = (e - s) // 4
             if n > len(pm):
                 # longer than any training block: small structure blocks
                 # continue with the template's majority order (records
                 # repeat); large ones (animation data) stay raw
-                fill = self.majority[key] if n <= 256 and key != ('any',) else T.PERMS[T.RAW]
+                fill = self.majority[key] if (n <= 256 or getattr(self, 'default', 'raw') == 'swap') and key != ('any',) else T.PERMS[T.SWAP if getattr(self, 'default', 'raw') == 'swap' else T.RAW]
                 pm = pm + [fill] * (n - len(pm))
-            out[s:s + 4 * n] = T.apply(pm[:n], x[s:s + 4 * n])
+            out[s:s + 4 * n] = T.apply(pm[:n], x[s:s + 4 * n], union_swap=getattr(self, 'default', 'raw') == 'swap')
         # names: printable runs of 4+ bytes ending in NUL stay as they are
         # (whole words inside the run, the '_' padding excluded)
         for m in _TEXT.finditer(x, 0, info['R']):

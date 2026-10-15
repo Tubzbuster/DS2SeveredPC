@@ -55,7 +55,9 @@ class Template:
                 if m >> j & 1:
                     c[j] += 1
 
-    def perms(self, union_share=0.02, swap_default_words=0, q64=False):
+    def perms(self, union_share=0.02, swap_default_words=0, q64=False, raw_min=0):
+        """raw_min: a position is left as stored only with at least this many
+        informative samples saying so (else 32-bit swap)"""
         """swap_default_words: positions below this that no sample decided
         default to a 32-bit swap instead of raw"""
         out = []
@@ -69,6 +71,8 @@ class Template:
             if c[best] < inf * (1 - union_share) and c[RAW] >= inf * union_share and c[SWAP] >= inf * union_share:
                 out.append(UNION)
             else:
+                if best == RAW and inf < raw_min:
+                    best = SWAP
                 out.append(PERMS[best])
         # 8-byte values: where the only consistent reading is one u64
         i = 0
@@ -93,7 +97,7 @@ def _texty(field):
     return n >= 3
 
 
-def apply(perms, x):
+def apply(perms, x, union_swap=False):
     out = bytearray(x)
     i, n = 0, len(perms)
     while i < n:
@@ -118,7 +122,7 @@ def apply(perms, x):
         words = [field[k:k + 4] for k in range(0, len(field), 4)]
         nz = [w for w in words if w != b'\0\0\0\0']
         # hashes repeat (e.g. the same hash in 3 slots); IDs are 16 random bytes; names are text
-        numbers = not _texty(field) and len(nz) > len(set(nz))
+        numbers = not _texty(field) and (union_swap or len(nz) > len(set(nz)))
         if numbers:
             for k in range(i, j):
                 out[4 * k:4 * k + 4] = x[4 * k:4 * k + 4][::-1]
