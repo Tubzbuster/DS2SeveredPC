@@ -84,4 +84,50 @@ def tg4h(x):
     return bytes(o)
 
 
-CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h}
+_MAT_TABLE = None
+
+
+def _material_table():
+    global _MAT_TABLE
+    if _MAT_TABLE is None:
+        import json, os
+        _MAT_TABLE = json.load(open(os.path.join(os.path.dirname(__file__), 'material_table.json')))
+    return _MAT_TABLE
+
+
+def material(x):
+    """Material: byte-swap the structure, replace the 3 shader passes with
+    their PC equivalents (learned table, keyed by the 360 passes), and append
+    the parameter copies the PC shaders need (new value slots at the end of
+    the hash list, holding the same values)."""
+    from . import material as M
+    m = M.parse(x, True)
+    key = ','.join('%08X:%08X:%08X:%s' % (s, f, t, tl.hex()) for s, f, t, tl in m.passes)
+    rule = _material_table().get(key)
+    if rule is None:
+        return None
+    m.passes = []
+    for item in rule['pc'].split(','):
+        s, f, t, tl = item.split(':')
+        m.passes.append((int(s, 16), int(f, 16), int(t, 16), bytes.fromhex(tl)))
+    by_hash = {q[0]: q for q in m.params}
+    nvals = len(m.hashes)
+    for h in rule['append']:
+        q = by_hash[int(h, 16)]
+        m.params.append((q[0], q[1], q[2], 4 * nvals, q[4], q[5]))
+        m.hashes.append(m.hashes[q[3] // 4])
+        nvals += 1
+    # bytes kept in stored order: flag byte groups at 0x10 and 0x20
+    w0 = m.zero10[0:4]
+    m.zero10 = w0 + struct.pack('<II', *struct.unpack('>II', m.zero10[4:12]))
+    d_bytes = struct.pack('>I', m.d)
+    m.d = struct.unpack('<I', d_bytes)[0]
+    m.zero10 = m.zero10  # already in PC order
+    pad = lambda n: b'\0' * ((16 - n % 16) % 16)
+    m.gap1 = pad(0x70 + 12 * len(m.params))
+    out = M.write(m, False)
+    # write() packed zero10 verbatim; flag word 0 must stay in stored byte order
+    return out
+
+
+CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material}
