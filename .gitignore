@@ -25,3 +25,6 @@
 /tools/samples/out/
 /tools/index/out/
 /tools/export/out/
+# .NET build output
+bin/
+obj/
