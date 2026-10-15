@@ -355,7 +355,8 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | MetaModel | 1,978 | 100% exact | all 584 |
 | SimGroup | (no PC example of the Severed format) | converted with the PC engine's own class layouts; output re-validated (all 21,712 message strings, all 1,435 group hashes) | all 160; 27 records of 8 classes the PC exe lacks |
 | BNK (animation banks) | 147 | 99.99% of words right on held-out files (38/73 files exact); remaining misses are rare node layouts | all 100 |
-| HKX, NAV, SBK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
+| NAV (navigation) | 770 (paired by name: .xen/.win) | exact except one per-collection hash the PC computes from data we lack (kept; referenced nowhere else) | all 101 |
+| HKX, SBK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
@@ -564,3 +565,29 @@ codec 3 (EA-XMA); every PC sample is codec 7 (EALayer3 v2), sometimes at a
 different sample rate (8 kHz on 360 -> 16 kHz on PC). So Severed's sound
 banks need decoding XMA and encoding EALayer3 (or another codec the PC
 decoder accepts).
+
+## 26. NAV navigation collections
+
+Names end in `.xen` (360) / `.win` (PC), so the asset IDs differ: id1-3 =
+360 id + (sdbm(PC name) - sdbm(360 name)), id4 = 360 id4 - 1 (769/770; one
+borrow case). Payload: 32-bit throughout except a constant 128-byte table
+(identical in all 825 occurrences; kept), unused pointer slots
+(0xFFFFFFFF followed by 2 or 0x1B -> 0; 1,607/1,607) and a per-collection
+hash in each (nested) header (`00000002 <size> <hash>`) that is computed
+from something not in the file (not CRC/sdbm/MD5 of the file); it is
+referenced nowhere else, so the 360 value is kept. `ds2/nav.py`.
+
+## 27. Audio decoding and encoding
+
+PC streamed audio (.snu) uses codec 4 (EA-XAS v1, 4-bit ADPCM) or 7
+(EALayer3); sound banks use 7. So the PC decoder plays XAS: Severed's
+EA-XMA (codec 3) is decoded and re-encoded as XAS. `ds2/eaaudio.py` parses
+EAAudioCore headers/blocks, turns EA-XMA blocks into standard XMA2 (per
+1/2-channel layer: blocks hold `size*4` + 0x800-byte XMA packets) for
+ffmpeg's xma2 decoder, and decodes XAS. Check: a 360 stream decoded from
+XMA and the PC's own XAS encoding of the same stream correlate at 0.998,
+sample-aligned. `native/xas_enc.c` encodes XAS (per 32-sample group: all
+4 coefficient pairs x 13 shifts in closed loop). PC XAS streams use blocks
+of up to 27 frames (2,060 bytes); bank samples are one block. SNU
+container: u8 3, u8 0, u16 (1/2), u32 (platform order), u32 offset of the
+audio data (0x20), u32 0, then the big-endian SNR header at 0x10.
