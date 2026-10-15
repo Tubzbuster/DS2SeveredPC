@@ -11,9 +11,14 @@
                        format guess and the first bytes as hex
       summary.txt      totals, per-extension and per-format breakdown
       samples.txt      a longer hex dump of a few files of every extension
-      packages.txt     decoded header of any Xbox 360 STFS package (CON/LIVE/PIRS)
+      packages.txt     decoded header and full file listing of any Xbox 360
+                       STFS package (CON/LIVE/PIRS), e.g. the Severed DLC file
       executables.txt  PE (.exe/.dll) and XEX details, plus content/DLC-related
                        strings found inside them
+
+    Files inside Xbox 360 packages are read in place and appear in the
+    manifest as "<package>::<path inside package>", so the Severed DLC file
+    does not need extracting first.
 
     No game data is copied; only metadata and short header excerpts. Paths are
     stored relative to -Path so your Windows user name does not end up in the
@@ -29,7 +34,12 @@
     Short name for this scan. Suggested: PC, Severed360, Base360.
 
 .PARAMETER OutDir
-    Where the scan folder is created. Defaults to the repo's scans\ folder.
+    Where the scan folder is created. Defaults to a scans\ folder next to
+    this script.
+
+.PARAMETER ExtractTo
+    Optional. Also extract the contents of any Xbox 360 package into this
+    folder (one subfolder per package). Keep it outside the git repo.
 
 .PARAMETER SkipHash
     Skip the SHA-256 of every file (much faster on big installs).
@@ -42,6 +52,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Path,
     [Parameter(Mandatory = $true)][string]$Label,
     [string]$OutDir,
+    [string]$ExtractTo,
     [switch]$SkipHash,
     [int]$HeaderBytes = 64,
     [int]$SamplesPerExt = 3,
@@ -198,6 +209,176 @@ function Describe-Stfs([string]$file, [string]$rel) {
     return $lines
 }
 
+# --------------------------------------------------------------------------
+# Xbox 360 STFS package reader (CON/LIVE/PIRS)
+# Layout and block maths follow the Free60 STFS documentation and Velocity.
+# --------------------------------------------------------------------------
+
+function Read-At($fs, [int64]$offset, [int]$count) {
+    $buf = New-Object byte[] $count
+    $fs.Position = $offset
+    $read = 0
+    while ($read -lt $count) {
+        $n = $fs.Read($buf, $read, $count - $read)
+        if ($n -le 0) { break }
+        $read += $n
+    }
+    if ($read -lt $count) { throw ('Unexpected end of package reading 0x{0:X} bytes at 0x{1:X}' -f $count, $offset) }
+    return , $buf
+}
+
+function IDiv([int64]$a, [int64]$b) { return [int64][Math]::Floor($a / $b) }
+function Int24LE([byte[]]$b, [int]$o) { return [int64]$b[$o] -bor ([int64]$b[$o + 1] -shl 8) -bor ([int64]$b[$o + 2] -shl 16) }
+function Int24BE([byte[]]$b, [int]$o) { return ([int64]$b[$o] -shl 16) -bor ([int64]$b[$o + 1] -shl 8) -bor [int64]$b[$o + 2] }
+
+function Open-Stfs([string]$file) {
+    $fs = [System.IO.File]::Open($file, 'Open', 'Read', 'ReadWrite')
+    $h = Read-At $fs 0 0x3B0
+    $headerSize = [int64](U32BE $h 0x340)
+    $vd = 0x379
+    $sep = [int]$h[$vd + 2]
+    $sex = (-bnot $sep) -band 1          # 0 = "female" (1 table per level), 1 = "male" (2 tables)
+    $alloc = [int64](U32BE $h ($vd + 0x1C))
+    $p = [pscustomobject]@{
+        Fs           = $fs
+        DescType     = [int64](U32BE $h 0x3A9)
+        HeaderSize   = $headerSize
+        First        = [int64](IDiv ($headerSize + 0xFFF) 0x1000) * 0x1000
+        Sep          = $sep
+        Sex          = $sex
+        Step0        = $(if ($sex -eq 0) { 0xAB } else { 0xAC })
+        Step1        = $(if ($sex -eq 0) { 0x718F } else { 0x723A })
+        FtBlockCount = [int64]$h[$vd + 3] -bor ([int64]$h[$vd + 4] -shl 8)
+        FtBlock      = Int24LE $h ($vd + 5)
+        Alloc        = $alloc
+        Unalloc      = [int64](U32BE $h ($vd + 0x20))
+        TopLevel     = $(if ($alloc -le 0xAA) { 0 } elseif ($alloc -le 0x70E4) { 1 } else { 2 })
+        TopAddr      = [int64]0
+        Entries      = $null
+    }
+    $topBacking = switch ($p.TopLevel) { 0 { 0 } 1 { $p.Step0 } 2 { $p.Step1 } }
+    $p.TopAddr = ([int64]$topBacking -shl 12) + $p.First + (([int64]($sep -band 2)) -shl 11)
+    return $p
+}
+
+function Stfs-DataBlock($p, [int64]$n) {
+    $s = $p.Sex
+    $r = ((IDiv ($n + 0xAA) 0xAA) -shl $s) + $n
+    if ($n -lt 0xAA) { return $r }
+    if ($n -lt 0x70E4) { return $r + ((IDiv ($n + 0x70E4) 0x70E4) -shl $s) }
+    return (1 -shl $s) + $r + ((IDiv ($n + 0x70E4) 0x70E4) -shl $s)
+}
+
+function Stfs-BlockAddr($p, [int64]$n) { return ((Stfs-DataBlock $p $n) -shl 12) + $p.First }
+
+function Stfs-L0Backing($p, [int64]$n) {
+    if ($n -lt 0xAA) { return [int64]0 }
+    $num = (IDiv $n 0xAA) * $p.Step0 + (((IDiv $n 0x70E4) + 1) -shl $p.Sex)
+    if ((IDiv $n 0x70E4) -eq 0) { return $num }
+    return $num + (1 -shl $p.Sex)
+}
+
+function Stfs-L1Backing($p, [int64]$n) {
+    if ($n -lt 0x70E4) { return [int64]$p.Step0 }
+    return (1 -shl $p.Sex) + (IDiv $n 0x70E4) * $p.Step1
+}
+
+function Stfs-NextBlock($p, [int64]$n) {
+    $addr = ((Stfs-L0Backing $p $n) -shl 12) + $p.First + ($n % 0xAA) * 0x18
+    switch ($p.TopLevel) {
+        0 { $addr += ([int64]($p.Sep -band 2)) -shl 11 }
+        1 {
+            $st = (Read-At $p.Fs ($p.TopAddr + (IDiv $n 0xAA) * 0x18 + 0x14) 1)[0]
+            $addr += ([int64]($st -band 0x40)) -shl 6
+        }
+        2 {
+            $st2 = (Read-At $p.Fs ($p.TopAddr + (IDiv $n 0x70E4) * 0x18 + 0x14) 1)[0]
+            $l1 = ((Stfs-L1Backing $p $n) -shl 12) + $p.First + (([int64]($st2 -band 0x40)) -shl 6)
+            $st1 = (Read-At $p.Fs ($l1 + ((IDiv $n 0xAA) % 0xAA) * 0x18 + 0x14) 1)[0]
+            $addr += ([int64]($st1 -band 0x40)) -shl 6
+        }
+    }
+    $e = Read-At $p.Fs $addr 0x18
+    return Int24BE $e 0x15
+}
+
+function FatTime([int64]$v) {
+    $d = ($v -shr 16) -band 0xFFFF; $t = $v -band 0xFFFF
+    try { return (Get-Date -Year ((($d -shr 9) -band 0x7F) + 1980) -Month (($d -shr 5) -band 0xF) -Day ($d -band 0x1F) `
+                         -Hour (($t -shr 11) -band 0x1F) -Minute (($t -shr 5) -band 0x3F) -Second (($t -band 0x1F) * 2)).ToString('yyyy-MM-dd HH:mm:ss') }
+    catch { return ('0x{0:X8}' -f $v) }
+}
+
+function Get-StfsEntries($p) {
+    $entries = New-Object System.Collections.Generic.List[object]
+    $block = $p.FtBlock
+    for ($i = 0; $i -lt $p.FtBlockCount; $i++) {
+        $b = Read-At $p.Fs (Stfs-BlockAddr $p $block) 0x1000
+        for ($e = 0; $e -lt 0x40; $e++) {
+            $o = $e * 0x40
+            $flags = $b[$o + 0x28]
+            $nameLen = $flags -band 0x3F
+            if ($nameLen -eq 0) { continue }
+            $entries.Add([pscustomobject]@{
+                Index      = $entries.Count
+                Name       = [System.Text.Encoding]::ASCII.GetString($b, $o, [Math]::Min($nameLen, 0x28))
+                IsDir      = [bool]($flags -band 0x80)
+                Consecutive = [bool]($flags -band 0x40)
+                Blocks     = Int24LE $b ($o + 0x29)
+                StartBlock = Int24LE $b ($o + 0x2F)
+                Parent     = [int](([int]$b[$o + 0x32] -shl 8) -bor $b[$o + 0x33])
+                Size       = [int64](U32BE $b ($o + 0x34))
+                Created    = FatTime (U32BE $b ($o + 0x38))
+                Path       = ''
+            })
+        }
+        if ($i -lt $p.FtBlockCount - 1) {
+            $next = Stfs-NextBlock $p $block
+            if ($next -ge $p.Alloc -or $next -eq 0xFFFFFF) { $next = $block + 1 }
+            $block = $next
+        }
+    }
+    foreach ($en in $entries) {
+        $parts = New-Object System.Collections.Generic.List[string]
+        $parts.Add($en.Name)
+        $cur = $en.Parent
+        $guard = 0
+        while ($cur -ne 0xFFFF -and $cur -ge 0 -and $cur -lt $entries.Count -and $guard -lt 64) {
+            $parts.Insert(0, $entries[$cur].Name); $cur = $entries[$cur].Parent; $guard++
+        }
+        $en.Path = $parts -join '/'
+    }
+    $p.Entries = $entries
+    return $entries
+}
+
+# Streams a file out of the package, calling $sink with (buffer, count) for each block.
+function Read-StfsFile($p, $entry, [int64]$maxBytes, [scriptblock]$sink) {
+    $remaining = [Math]::Min($entry.Size, $maxBytes)
+    $block = $entry.StartBlock
+    $i = 0
+    while ($remaining -gt 0) {
+        $n = [int][Math]::Min(0x1000, $remaining)
+        $buf = Read-At $p.Fs (Stfs-BlockAddr $p $block) $n
+        & $sink $buf $n
+        $remaining -= $n
+        $i++
+        if ($remaining -gt 0) {
+            if ($entry.Consecutive) { $block = $entry.StartBlock + $i }
+            else {
+                $block = Stfs-NextBlock $p $block
+                if ($block -ge $p.Alloc) { throw ('Broken block chain in {0} (next block 0x{1:X})' -f $entry.Path, $block) }
+            }
+        }
+    }
+}
+
+function Read-StfsHead($p, $entry, [int]$count) {
+    $ms = New-Object System.IO.MemoryStream
+    Read-StfsFile $p $entry $count { param($buf, $n) $ms.Write($buf, 0, $n) }
+    return , $ms.ToArray()
+}
+
 $keywordPattern = 'dlc|sever|weller|lexine|titan|download|marketplace|entitle|content|package|mount|chapter|\.str\b|\.viv\b|\.big\b|\.toc\b|\.sb\b|\.arc\b|\.ini\b|\.cfg\b'
 
 function Describe-Executable([string]$file, [string]$rel, [string]$kind) {
@@ -271,10 +452,11 @@ function Describe-Executable([string]$file, [string]$rel, [string]$kind) {
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath.TrimEnd('\', '/')
 if (-not (Test-Path -LiteralPath $root -PathType Container)) { throw "Not a folder: $Path" }
 
-if (-not $OutDir) { $OutDir = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'scans' }
+if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot 'scans' }
 $safeLabel = ($Label -replace '[^A-Za-z0-9_.-]', '_')
 $dest = Join-Path $OutDir $safeLabel
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
+if ($ExtractTo) { New-Item -ItemType Directory -Force -Path $ExtractTo | Out-Null; $ExtractTo = (Resolve-Path -LiteralPath $ExtractTo).ProviderPath }
 
 Write-Host "Scanning $root"
 Write-Host "Writing to $dest"
@@ -283,11 +465,86 @@ $files = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force -ErrorAction S
 $total = $files.Count
 Write-Host "$total files found"
 
+$headLen = [Math]::Max([Math]::Max($HeaderBytes, $SampleBytes), 64)
 $rows = New-Object System.Collections.Generic.List[object]
-$stfs = New-Object System.Collections.Generic.List[object]
+$heads = New-Object 'System.Collections.Generic.Dictionary[string,byte[]]'
 $exes = New-Object System.Collections.Generic.List[object]
+$pkgLines = New-Object System.Collections.Generic.List[string]
 $errors = New-Object System.Collections.Generic.List[string]
+$stfsCount = 0
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
+
+function Add-Row([string]$rel, [string]$ext, [int64]$size, [string]$hash, [byte[]]$head) {
+    $fmt = Guess-Format $head
+    $rows.Add([pscustomobject]@{
+        RelativePath = $rel
+        Extension    = $ext.ToLowerInvariant()
+        Size         = $size
+        SHA256       = $hash
+        Magic        = (Magic-Text $head)
+        Format       = $fmt
+        HeaderHex    = (To-Hex $head $HeaderBytes)
+    })
+    $heads[$rel] = $head
+    return $fmt
+}
+
+function Scan-Package([string]$full, [string]$rel) {
+    $pkgLines.Add('')
+    foreach ($l in (Describe-Stfs $full $rel)) { $pkgLines.Add($l) }
+    $p = Open-Stfs $full
+    try {
+        $pkgLines.Add(('Volume          : {0}, header size 0x{1:X}, first block at 0x{2:X}, block separation {3}, {4} hash levels' -f `
+                       $(if ($p.DescType -eq 0) { 'STFS' } else { "type $($p.DescType) (not STFS)" }), $p.HeaderSize, $p.First, $p.Sep, ($p.TopLevel + 1)))
+        $pkgLines.Add(('Blocks          : {0:N0} allocated, {1:N0} free; file table {2} block(s) from block {3}' -f $p.Alloc, $p.Unalloc, $p.FtBlockCount, $p.FtBlock))
+        if ($p.DescType -ne 0) { $pkgLines.Add('(SVOD packages are not supported - extract this one with Velocity)'); return }
+        $entries = Get-StfsEntries $p
+        $fileEntries = @($entries | Where-Object { -not $_.IsDir })
+        $pkgLines.Add(('Contents        : {0} files, {1} folders' -f $fileEntries.Count, ($entries.Count - $fileEntries.Count)))
+        $pkgLines.Add('')
+        $pkgLines.Add(('  {0,-60} {1,15} {2,8} {3,-5} {4}' -f 'Path', 'Size', 'Blocks', 'Contig', 'Created'))
+        foreach ($en in $entries) {
+            $shown = if ($en.IsDir) { $en.Path + '/' } else { $en.Path }
+            $pkgLines.Add(('  {0,-60} {1,15:N0} {2,8} {3,-5} {4}' -f $shown, $en.Size, $en.Blocks, $(if ($en.Consecutive) { 'yes' } else { 'no' }), $en.Created))
+        }
+        $k = 0
+        foreach ($en in $fileEntries) {
+            $k++
+            $innerRel = "$rel::$($en.Path)"
+            Write-Progress -Id 1 -Activity "Reading package $rel" -Status "$k / $($fileEntries.Count)  $($en.Path)" -PercentComplete ([int](100 * $k / [Math]::Max(1, $fileEntries.Count)))
+            try {
+                $script:pkgHead = New-Object System.IO.MemoryStream
+                $sha = $null; $out = $null
+                $outPath = $null
+                if ($ExtractTo) {
+                    $outPath = Join-Path (Join-Path $ExtractTo ([System.IO.Path]::GetFileName($rel))) ($en.Path -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+                    New-Item -ItemType Directory -Force -Path (Split-Path $outPath -Parent) | Out-Null
+                    $out = [System.IO.File]::Create($outPath)
+                }
+                $limit = $en.Size
+                if (-not $out -and $SkipHash) { $limit = $headLen }
+                if (-not $SkipHash) { $sha = [System.Security.Cryptography.SHA256]::Create() }
+                try {
+                    Read-StfsFile $p $en $limit {
+                        param($buf, $n)
+                        if ($script:pkgHead.Length -lt $headLen) { $script:pkgHead.Write($buf, 0, [Math]::Min($n, $headLen - [int]$script:pkgHead.Length)) }
+                        if ($sha) { [void]$sha.TransformBlock($buf, 0, $n, $null, 0) }
+                        if ($out) { $out.Write($buf, 0, $n) }
+                    }
+                } finally { if ($out) { $out.Dispose() } }
+                $hash = ''
+                if ($sha) { [void]$sha.TransformFinalBlock((New-Object byte[] 0), 0, 0); $hash = ([System.BitConverter]::ToString($sha.Hash)).Replace('-', ''); $sha.Dispose() }
+                $fmt = Add-Row $innerRel ([System.IO.Path]::GetExtension($en.Name)) $en.Size $hash $script:pkgHead.ToArray()
+                if ($fmt -eq 'PE/MZ executable' -or $fmt -like 'X360 executable*') {
+                    $exes.Add([pscustomobject]@{ Full = $outPath; Rel = $innerRel; Kind = $(if ($fmt -like 'X360*') { 'XEX' } else { 'PE' }) })
+                }
+            } catch {
+                $errors.Add("$innerRel : $($_.Exception.Message)")
+            }
+        }
+        Write-Progress -Id 1 -Activity "Reading package $rel" -Completed
+    } finally { $p.Fs.Dispose() }
+}
 
 for ($idx = 0; $idx -lt $total; $idx++) {
     $f = $files[$idx]
@@ -296,20 +553,16 @@ for ($idx = 0; $idx -lt $total; $idx++) {
         Write-Progress -Activity "Scanning $safeLabel" -Status "$idx / $total  $rel" -PercentComplete ([int](100 * $idx / [Math]::Max(1, $total)))
     }
     try {
-        $head = Read-Head $f.FullName ([Math]::Max($HeaderBytes, 64))
-        $fmt = Guess-Format $head
+        $head = Read-Head $f.FullName $headLen
         $hash = ''
         if (-not $SkipHash) { $hash = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash }
-        $rows.Add([pscustomobject]@{
-            RelativePath = $rel
-            Extension    = $f.Extension.ToLowerInvariant()
-            Size         = $f.Length
-            SHA256       = $hash
-            Magic        = (Magic-Text $head)
-            Format       = $fmt
-            HeaderHex    = (To-Hex $head $HeaderBytes)
-        })
-        if ($fmt -like 'X360 STFS*') { $stfs.Add([pscustomobject]@{ Full = $f.FullName; Rel = $rel }) }
+        $fmt = Add-Row $rel $f.Extension $f.Length $hash $head
+        if ($fmt -like 'X360 STFS*') {
+            $stfsCount++
+            Write-Host "Reading Xbox 360 package $rel"
+            try { Scan-Package $f.FullName $rel }
+            catch { $pkgLines.Add("  (error reading package: $($_.Exception.Message))"); $errors.Add("$rel : $($_.Exception.Message)") }
+        }
         elseif ($fmt -eq 'PE/MZ executable') { $exes.Add([pscustomobject]@{ Full = $f.FullName; Rel = $rel; Kind = 'PE' }) }
         elseif ($fmt -like 'X360 executable*') { $exes.Add([pscustomobject]@{ Full = $f.FullName; Rel = $rel; Kind = 'XEX' }) }
     } catch {
@@ -322,22 +575,28 @@ Write-Progress -Activity "Scanning $safeLabel" -Completed
 $rows | Export-Csv -LiteralPath (Join-Path $dest 'manifest.csv') -NoTypeInformation -Encoding UTF8
 
 # summary.txt
+function Top-Folder([string]$rel) {
+    $i = $rel.IndexOf('::')
+    if ($i -ge 0) { return $rel.Substring(0, $i) + ' (package contents)' }
+    return ($rel -split '[\\/]')[0]
+}
 $sum = New-Object System.Collections.Generic.List[string]
-$totalBytes = [int64]0
-foreach ($r in $rows) { $totalBytes += $r.Size }
+$diskBytes = [int64]0
+foreach ($f in $files) { $diskBytes += $f.Length }
 $sum.Add("DS2 file scan: $safeLabel")
 $sum.Add(('Scanned folder : {0}' -f (Split-Path $root -Leaf)))
 $sum.Add(('Scan date      : {0:yyyy-MM-dd HH:mm} (local)' -f (Get-Date)))
 $sum.Add(('PowerShell     : {0}' -f $PSVersionTable.PSVersion))
-$sum.Add(('Files          : {0}' -f $rows.Count))
-$sum.Add(('Total size     : {0:N0} bytes ({1:N2} GB)' -f $totalBytes, ($totalBytes / 1GB)))
+$sum.Add(('Files on disk  : {0} ({1:N0} bytes, {2:N2} GB)' -f $files.Count, $diskBytes, ($diskBytes / 1GB)))
+$sum.Add(('Packages       : {0} Xbox 360 package(s), {1} files inside them (listed as package::path)' -f $stfsCount, ($rows.Count - $files.Count)))
 $sum.Add(('Hashes         : {0}' -f $(if ($SkipHash) { 'skipped' } else { 'SHA-256' })))
+$sum.Add(('Extracted to   : {0}' -f $(if ($ExtractTo) { 'yes (folder not recorded)' } else { 'no' })))
 $sum.Add(('Elapsed        : {0:N0} s' -f $sw.Elapsed.TotalSeconds))
 $sum.Add('')
 $sum.Add('Top-level folders:')
-foreach ($g in ($rows | Group-Object { ($_.RelativePath -split '[\\/]')[0] } | Sort-Object Name)) {
+foreach ($g in ($rows | Group-Object { Top-Folder $_.RelativePath } | Sort-Object Name)) {
     $sz = ($g.Group | Measure-Object Size -Sum).Sum
-    $sum.Add(('  {0,-40} {1,8} files {2,18:N0} bytes' -f $g.Name, $g.Count, $sz))
+    $sum.Add(('  {0,-60} {1,8} files {2,18:N0} bytes' -f $g.Name, $g.Count, $sz))
 }
 $sum.Add('')
 $sum.Add('By extension:')
@@ -371,23 +630,16 @@ foreach ($g in ($rows | Group-Object Extension | Sort-Object Name)) {
     foreach ($r in $pick) {
         $smp.Add('')
         $smp.Add(('== {0}  ({1:N0} bytes, {2})' -f $r.RelativePath, $r.Size, $r.Format))
-        try {
-            $b = Read-Head (Join-Path $root $r.RelativePath) $SampleBytes
-            foreach ($l in (Hex-Dump $b)) { $smp.Add($l) }
-        } catch { $smp.Add("  (unreadable: $($_.Exception.Message))") }
+        $b = $heads[$r.RelativePath]
+        if ($b.Length -gt $SampleBytes) { $t = New-Object byte[] $SampleBytes; [Array]::Copy($b, $t, $SampleBytes); $b = $t }
+        foreach ($l in (Hex-Dump $b)) { $smp.Add($l) }
     }
 }
 $smp | Set-Content -LiteralPath (Join-Path $dest 'samples.txt') -Encoding UTF8
 
 # packages.txt
-$pkg = New-Object System.Collections.Generic.List[string]
-$pkg.Add("Xbox 360 STFS packages - $safeLabel ($($stfs.Count) found)")
-foreach ($p in $stfs) {
-    $pkg.Add('')
-    try { foreach ($l in (Describe-Stfs $p.Full $p.Rel)) { $pkg.Add($l) } }
-    catch { $pkg.Add("== $($p.Rel)  (error: $($_.Exception.Message))") }
-}
-$pkg | Set-Content -LiteralPath (Join-Path $dest 'packages.txt') -Encoding UTF8
+$pkgLines.Insert(0, "Xbox 360 STFS packages - $safeLabel ($stfsCount found)")
+$pkgLines | Set-Content -LiteralPath (Join-Path $dest 'packages.txt') -Encoding UTF8
 
 # executables.txt
 $exe = New-Object System.Collections.Generic.List[string]
@@ -395,6 +647,7 @@ $exe.Add("Executables - $safeLabel ($($exes.Count) found)")
 $exe.Add("String filter: $keywordPattern")
 foreach ($x in $exes) {
     $exe.Add('')
+    if (-not $x.Full) { $exe.Add("== $($x.Rel)  [$($x.Kind)]  (inside a package - rerun with -ExtractTo to analyse it)"); continue }
     Write-Host "Inspecting $($x.Rel)"
     try { foreach ($l in (Describe-Executable $x.Full $x.Rel $x.Kind)) { $exe.Add($l) } }
     catch { $exe.Add("== $($x.Rel)  (error: $($_.Exception.Message))") }
@@ -402,6 +655,7 @@ foreach ($x in $exes) {
 $exe | Set-Content -LiteralPath (Join-Path $dest 'executables.txt') -Encoding UTF8
 
 Write-Host ''
-Write-Host "Done in $([int]$sw.Elapsed.TotalSeconds) s. $($rows.Count) files, $($stfs.Count) STFS packages, $($exes.Count) executables."
+Write-Host "Done in $([int]$sw.Elapsed.TotalSeconds) s. $($files.Count) files on disk, $stfsCount Xbox 360 package(s), $($rows.Count - $files.Count) files inside packages, $($exes.Count) executables."
 Write-Host "Results: $dest"
+if ($ExtractTo) { Write-Host "Package contents extracted to: $ExtractTo" }
 if ($errors.Count -gt 0) { Write-Warning "$($errors.Count) files could not be read; see summary.txt" }
