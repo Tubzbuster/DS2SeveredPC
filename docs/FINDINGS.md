@@ -484,10 +484,10 @@ them (`REMAP` in `ds2/simgroup.py`):
 | Severed class (hash) | Objects | PC layout | Notes |
 |---|---:|---|---|
 | AC69505E | 5 | ShipStore v11 | store kiosks; the PC class already has the DLC item fields (PDLC item, upgrade node, `m_enablePDLCScanning` = 1) |
-| 8F69BA55 | 9 | SaveKiosk v2 | save stations ("Save Menu") |
+| 8F69BA55 (SaveKioskExt) | 9 | SaveKiosk v2 | save stations ("Save Menu") |
 | AA6A826D | 4 | SimplePressAndHoldSwitch v8 | quarry / mining camp door switches |
 | 9F75D02A | 1 | RigAnnouncementSystem v3 | RIG message VFX setup |
-| A1C89AA7 | 1 | UIEndOfGameData v2 | end of the DLC: fade, credits after 18 s; 20 extra bytes, all zero |
+| A1C89AA7 (UIEndOfGameDataExt) | 1 | UIEndOfGameData v2 | end of the DLC: fade, credits after 18 s; 20 extra bytes, all zero |
 
 Left: 2B747EB6 (3 objects, on message `equip_player_upgrade_nodes`: weapon
 `PulseRifle`, nodes Capacity, Capacity2, Damage, Damage3, Reload2,

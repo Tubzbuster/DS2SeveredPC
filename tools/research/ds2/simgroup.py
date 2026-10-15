@@ -35,10 +35,10 @@ _SCHEMA = None
 # data outside the fields; see docs/FINDINGS.md).
 REMAP = {
     0xAC69505E: 'ShipStore',                 # store kiosks (5), DLC item fields set
-    0x8F69BA55: 'SaveKiosk',                 # save stations (9), "Save Menu"
+    0x8F69BA55: 'SaveKiosk',                 # SaveKioskExt: save stations (9)
     0xAA6A826D: 'SimplePressAndHoldSwitch',  # quarry / mining camp switches (4)
     0x9F75D02A: 'RigAnnouncementSystem',     # RIG announcement setup (1)
-    0xA1C89AA7: 'UIEndOfGameData',           # end of DLC (1); 20 extra zero bytes
+    0xA1C89AA7: 'UIEndOfGameData',           # UIEndOfGameDataExt: end of DLC (1); 20 extra zero bytes
 }
 
 
