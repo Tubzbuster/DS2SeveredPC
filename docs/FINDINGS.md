@@ -365,6 +365,7 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | PNG | | standard PNG, copied | 2 |
 | Graph | 122 | 56/61 held-out files exact, 99.97% of words; all 122 with the full model (region model) | all 15 |
 | ISM (impact tables) | 6 | 3/3 held-out exact, 6/6 (region model) | 1 |
+| LightTOC, VariableDictionary | 1 / 1 (different content) | layout from the pair (0xA0-byte light records; word table + strings) | 1 / 1 |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
@@ -642,3 +643,35 @@ byte order by (region, position mod stride), choosing each region's
 stride by leave-one-file-out prediction; the model is JSON
 (`ds2/graph_model.json`, `ds2/ism_model.json`, `learn_region.py`).
 Checked on all Severed files: converted header offsets read the same.
+
+## 30. Writing PC streams, TOCs and the archive
+
+Stream files on both platforms are read in 128 KB sectors: no chunk
+crosses a sector boundary, data that does not fit is split into several
+chunks at the boundary, FILL pads a sector when the next chunk does not
+fit and pads the last sector. PC streams mix Rpak (RefPack) and SDAT
+chunks of any size, so the converted streams are written with SDAT only
+(`ds2/streamwrite.py`). Checks: re-writing the PC frontend and ch01_hos
+streams gives the same assets; 360 asset headers convert to the exact PC
+headers (flags, IDs and alignment are the same; source paths `.xen` ->
+`.win`). File header word 3: 360 `00 02 04 01`, PC `02 00 03 01`.
+
+TOC (`ds2/toc.py`): magic 0x9CBA7B28, version 10, u16 stream count, u16
+name count, two u16; 20-byte stream entries {name entry, total
+uncompressed size of the stream, 4 byte fields, u32, dependency list};
+hash-sorted name entries {hash, string offset}; dependency lists; names.
+Converted 360 TOCs equal the PC ones once each stream's size is filled in
+(4 pairs with the same stream list). The sizes come from the converted
+streams.
+
+`ds2/build.py` converts the whole Severed folder; `ds2/bigarchive.py`
+writes the DS2DAT archive. Severed's other files: `.lds .key .pid .lvl
+.dlm` are text, `.add` lists each stream with a 32-bit value that is not
+a CRC-32 of the file (not needed unless the console DLC loader is used),
+`spa.bin` is the Xbox dashboard achievement file (not needed), `.vp6`
+videos are platform-neutral.
+
+`global_assets\global_assets_global.str`: Severed's copy replaces the
+base game's with updated Lua audio scripts. On PC the installer should
+patch the PC's own copy (swap in Severed's Lua assets, identical bytecode
+on both platforms) rather than replace the file.
