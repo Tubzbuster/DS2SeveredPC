@@ -7,6 +7,8 @@ Step 1 is working out how the PC and Xbox 360 file formats differ. The
 scanner in `tools/scan/` produces text-only reports for that. **No game
 files go into this repo**, only the scan output.
 
+Findings so far: [`docs/FINDINGS.md`](docs/FINDINGS.md). Plan: [`docs/DESIGN.md`](docs/DESIGN.md).
+
 ## Running the scanner (Windows)
 
 1. Double-click `tools\scan\Scan-DS2Files.bat`, or drag a folder onto it.
@@ -45,6 +47,8 @@ the manifest as `<package>::<path inside package>`). No extracting needed.
 | `summary.txt`     | Totals, per-folder, per-extension and per-format breakdown               |
 | `manifest.csv`    | Every file: relative path, size, SHA-256, magic bytes, format guess, first 64 bytes as hex |
 | `samples.txt`     | 512-byte hex dumps of the smallest and largest file of each extension    |
+| `archives.txt`    | EA BIGH archive directories (PC `DS2DAT*.DAT`, 360 `bigfile*.viv`); entries are in the manifest as `<archive>::#<hash>` |
+| `smallfiles.txt`  | Full contents of small descriptor/config files (`.toc .add .dlm .key .lds .lvl .pid .txt .xml` …) |
 | `packages.txt`    | Decoded Xbox 360 package headers (content type, title ID, name) and the full list of files inside |
 | `executables.txt` | EXE/DLL/XEX details (version, sections) and DLC/content-related strings  |
 

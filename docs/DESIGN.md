@@ -1,6 +1,8 @@
 # Design (draft)
 
-Status: **provisional**. Nothing below is decided until the scans of the PC
+Status: **provisional**. See [FINDINGS.md](FINDINGS.md) for what the first scans showed; section 6 there supersedes the open questions below where they overlap.
+
+ Nothing below is decided until the scans of the PC
 install, the Severed package and the Xbox 360 base game have been analysed.
 Each open question lists what will answer it.
 

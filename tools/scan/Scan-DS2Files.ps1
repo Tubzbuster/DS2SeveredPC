@@ -13,6 +13,11 @@
       samples.txt      a longer hex dump of a few files of every extension
       packages.txt     decoded header and full file listing of any Xbox 360
                        STFS package (CON/LIVE/PIRS), e.g. the Severed DLC file
+      archives.txt     directory summary of EA BIGH archives (PC DS2DAT*.DAT,
+                       Xbox 360 bigfile*.viv); their entries are in the manifest
+                       as "<archive>::#<name hash>"
+      smallfiles.txt   full contents of small descriptor/config files
+                       (.toc .add .dlm .key .lds .lvl .pid .txt .xml ...)
       executables.txt  PE (.exe/.dll) and XEX details, plus content/DLC-related
                        strings found inside them
 
@@ -147,6 +152,11 @@ function Guess-Format([byte[]]$b) {
         'AKPK' { return 'Wwise package' }
         'DXBC' { return 'DirectX shader bytecode' }
         'RIFX' { return 'RIFF big-endian (RIFX)' }
+        'ols3' { return 'Visceral stream (ols3)' }
+        '3slo' { return 'Visceral stream (3slo, byte-swapped)' }
+        'XDBF' { return 'X360 XDBF (achievements/SPA)' }
+        'MVhd' { return 'EA VP6 video (MVhd)' }
+        'MSCF' { return 'Microsoft CAB' }
     }
     if ($m4 -ceq 'RIFF' -and $b.Length -ge 12) {
         return ('RIFF/' + [System.Text.Encoding]::ASCII.GetString($b, 8, 4))
@@ -349,7 +359,7 @@ function Get-StfsEntries($p) {
         $en.Path = $parts -join '/'
     }
     $p.Entries = $entries
-    return $entries
+    return , $entries
 }
 
 # Streams a file out of the package, calling $sink with (buffer, count) for each block.
@@ -379,7 +389,7 @@ function Read-StfsHead($p, $entry, [int]$count) {
     return , $ms.ToArray()
 }
 
-$keywordPattern = 'dlc|sever|weller|lexine|titan|download|marketplace|entitle|content|package|mount|chapter|\.str\b|\.viv\b|\.big\b|\.toc\b|\.sb\b|\.arc\b|\.ini\b|\.cfg\b'
+$keywordPattern = 'dlc|pdlc|sever|weller|lexine|titan|download|marketplace|entitle|content|package|mount|chapter|bundle|level_select|xcontent|\.lvl\b|\.lds\b|\.pid\b|\.dlm\b|\.key\b|\.add\b|\.snu\b|\.vp6\b|bigfile|ds2dat|\.str\b|\.viv\b|\.big\b|\.toc\b|\.sb\b|\.arc\b|\.ini\b|\.cfg\b'
 
 function Describe-Executable([string]$file, [string]$rel, [string]$kind) {
     $lines = New-Object System.Collections.Generic.List[string]
@@ -472,6 +482,9 @@ $exes = New-Object System.Collections.Generic.List[object]
 $pkgLines = New-Object System.Collections.Generic.List[string]
 $errors = New-Object System.Collections.Generic.List[string]
 $stfsCount = 0
+$bigCount = 0
+$bigLines = New-Object System.Collections.Generic.List[string]
+$smallLines = New-Object System.Collections.Generic.List[string]
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
 function Add-Row([string]$rel, [string]$ext, [int64]$size, [string]$hash, [byte[]]$head) {
@@ -489,6 +502,84 @@ function Add-Row([string]$rel, [string]$ext, [int64]$size, [string]$hash, [byte[
     return $fmt
 }
 
+
+# EA BIGH archives (PC DS2DAT*.DAT and Xbox 360 bigfile*.viv).
+# Layout seen in the scans: 'BIGH', u32 LE archive size, u32 BE entry count,
+# u32 BE header size, then per entry u32 BE offset, u32 BE size, u32 BE name hash.
+function Scan-Big([string]$full, [string]$rel) {
+    $fs = [System.IO.File]::Open($full, 'Open', 'Read', 'ReadWrite')
+    try {
+        $h = Read-At $fs 0 16
+        $count = [int64](U32BE $h 8)
+        $hsz = [int64](U32BE $h 12)
+        $bigLines.Add('')
+        $bigLines.Add("== $rel")
+        $bigLines.Add(('Archive size field : {0:N0} (file is {1:N0})' -f [System.BitConverter]::ToUInt32($h, 4), $fs.Length))
+        $bigLines.Add(('Entries            : {0}' -f $count))
+        $bigLines.Add(('Header size        : 0x{0:X}' -f $hsz))
+        if ($count -le 0 -or 16 + $count * 12 -gt $hsz -or $hsz -gt $fs.Length) { $bigLines.Add('(directory does not match the expected layout; skipped)'); return }
+        $dir = Read-At $fs 16 ([int]($count * 12))
+        $extra = $hsz - 16 - $count * 12
+        if ($extra -gt 0) {
+            $t = Read-At $fs (16 + $count * 12) ([int][Math]::Min($extra, 64))
+            $bigLines.Add(('Bytes after table  : {0}' -f (To-Hex $t 64)))
+        }
+        $magics = @{}
+        for ($i = 0; $i -lt $count; $i++) {
+            $off = [int64](U32BE $dir ($i * 12))
+            $size = [int64](U32BE $dir ($i * 12 + 4))
+            $nh = U32BE $dir ($i * 12 + 8)
+            $innerRel = ('{0}::#{1:X8}' -f $rel, $nh)
+            if (($i % 50) -eq 0) {
+                Write-Progress -Id 1 -Activity "Reading archive $rel" -Status "$i / $count" -PercentComplete ([int](100 * $i / [Math]::Max(1, $count)))
+            }
+            try {
+                if ($off + $size -gt $fs.Length) { throw ('entry runs past end of file (offset 0x{0:X}, size 0x{1:X})' -f $off, $size) }
+                $head = Read-At $fs $off ([int][Math]::Min($size, $headLen))
+                $hash = ''
+                if (-not $SkipHash) {
+                    $sha = [System.Security.Cryptography.SHA256]::Create()
+                    $buf = New-Object byte[] 1048576
+                    $fs.Position = $off
+                    $left = $size
+                    while ($left -gt 0) {
+                        $n = $fs.Read($buf, 0, [int][Math]::Min($buf.Length, $left))
+                        if ($n -le 0) { throw 'short read' }
+                        [void]$sha.TransformBlock($buf, 0, $n, $null, 0)
+                        $left -= $n
+                    }
+                    [void]$sha.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+                    $hash = ([System.BitConverter]::ToString($sha.Hash)).Replace('-', '')
+                    $sha.Dispose()
+                }
+                $fmt = Add-Row $innerRel '(archive entry)' $size $hash $head
+                $key = "'" + (Magic-Text $head) + "' " + $fmt
+                if ($magics.ContainsKey($key)) { $magics[$key]++ } else { $magics[$key] = 1 }
+            } catch {
+                $errors.Add("$innerRel : $($_.Exception.Message)")
+            }
+        }
+        Write-Progress -Id 1 -Activity "Reading archive $rel" -Completed
+        $bigLines.Add('Entry types (by first 4 bytes):')
+        foreach ($k in ($magics.GetEnumerator() | Sort-Object Value -Descending)) {
+            $bigLines.Add(('  {0,6}  {1}' -f $k.Value, $k.Key))
+        }
+    } finally { $fs.Dispose() }
+}
+
+# Small descriptor/config files are dumped in full to smallfiles.txt.
+$smallExts = @('.toc', '.add', '.dlm', '.key', '.lds', '.lvl', '.pid', '.txt', '.xml', '.ini', '.cfg', '.lng', '.manifest', '.vdf')
+$smallMax = 65536
+function Dump-Small([string]$rel, [byte[]]$data) {
+    $smallLines.Add('')
+    $smallLines.Add(('== {0}  ({1:N0} bytes)' -f $rel, $data.Length))
+    if ((Guess-Format $data) -like 'text*' -or (Guess-Format $data) -eq 'XML') {
+        $smallLines.Add([System.Text.Encoding]::GetEncoding(28591).GetString($data).TrimEnd())
+    } else {
+        foreach ($l in (Hex-Dump $data)) { $smallLines.Add($l) }
+    }
+}
+
 function Scan-Package([string]$full, [string]$rel) {
     $pkgLines.Add('')
     foreach ($l in (Describe-Stfs $full $rel)) { $pkgLines.Add($l) }
@@ -498,7 +589,7 @@ function Scan-Package([string]$full, [string]$rel) {
                        $(if ($p.DescType -eq 0) { 'STFS' } else { "type $($p.DescType) (not STFS)" }), $p.HeaderSize, $p.First, $p.Sep, ($p.TopLevel + 1)))
         $pkgLines.Add(('Blocks          : {0:N0} allocated, {1:N0} free; file table {2} block(s) from block {3}' -f $p.Alloc, $p.Unalloc, $p.FtBlockCount, $p.FtBlock))
         if ($p.DescType -ne 0) { $pkgLines.Add('(SVOD packages are not supported - extract this one with Velocity)'); return }
-        $entries = Get-StfsEntries $p
+        $entries = @(Get-StfsEntries $p)
         $fileEntries = @($entries | Where-Object { -not $_.IsDir })
         $pkgLines.Add(('Contents        : {0} files, {1} folders' -f $fileEntries.Count, ($entries.Count - $fileEntries.Count)))
         $pkgLines.Add('')
@@ -535,6 +626,11 @@ function Scan-Package([string]$full, [string]$rel) {
                 $hash = ''
                 if ($sha) { [void]$sha.TransformFinalBlock((New-Object byte[] 0), 0, 0); $hash = ([System.BitConverter]::ToString($sha.Hash)).Replace('-', ''); $sha.Dispose() }
                 $fmt = Add-Row $innerRel ([System.IO.Path]::GetExtension($en.Name)) $en.Size $hash $script:pkgHead.ToArray()
+                if ($smallExts -contains [System.IO.Path]::GetExtension($en.Name).ToLowerInvariant() -and $en.Size -le $smallMax) {
+                    $script:smallBuf = New-Object System.IO.MemoryStream
+                    Read-StfsFile $p $en $en.Size { param($buf, $n) $script:smallBuf.Write($buf, 0, $n) }
+                    Dump-Small $innerRel $script:smallBuf.ToArray()
+                }
                 if ($fmt -eq 'PE/MZ executable' -or $fmt -like 'X360 executable*') {
                     $exes.Add([pscustomobject]@{ Full = $outPath; Rel = $innerRel; Kind = $(if ($fmt -like 'X360*') { 'XEX' } else { 'PE' }) })
                 }
@@ -557,11 +653,20 @@ for ($idx = 0; $idx -lt $total; $idx++) {
         $hash = ''
         if (-not $SkipHash) { $hash = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash }
         $fmt = Add-Row $rel $f.Extension $f.Length $hash $head
+        if ($smallExts -contains $f.Extension.ToLowerInvariant() -and $f.Length -le $smallMax -and $rel -notmatch '^Support[\\/]') {
+            Dump-Small $rel ([System.IO.File]::ReadAllBytes($f.FullName))
+        }
         if ($fmt -like 'X360 STFS*') {
             $stfsCount++
             Write-Host "Reading Xbox 360 package $rel"
             try { Scan-Package $f.FullName $rel }
             catch { $pkgLines.Add("  (error reading package: $($_.Exception.Message))"); $errors.Add("$rel : $($_.Exception.Message)") }
+        }
+        elseif ($fmt -like 'EA BIG archive (BIGH)') {
+            $bigCount++
+            Write-Host "Reading archive $rel"
+            try { Scan-Big $f.FullName $rel }
+            catch { $bigLines.Add("  (error reading archive: $($_.Exception.Message))"); $errors.Add("$rel : $($_.Exception.Message)") }
         }
         elseif ($fmt -eq 'PE/MZ executable') { $exes.Add([pscustomobject]@{ Full = $f.FullName; Rel = $rel; Kind = 'PE' }) }
         elseif ($fmt -like 'X360 executable*') { $exes.Add([pscustomobject]@{ Full = $f.FullName; Rel = $rel; Kind = 'XEX' }) }
@@ -577,7 +682,7 @@ $rows | Export-Csv -LiteralPath (Join-Path $dest 'manifest.csv') -NoTypeInformat
 # summary.txt
 function Top-Folder([string]$rel) {
     $i = $rel.IndexOf('::')
-    if ($i -ge 0) { return $rel.Substring(0, $i) + ' (package contents)' }
+    if ($i -ge 0) { return $rel.Substring(0, $i) + ' (contents)' }
     return ($rel -split '[\\/]')[0]
 }
 $sum = New-Object System.Collections.Generic.List[string]
@@ -588,7 +693,7 @@ $sum.Add(('Scanned folder : {0}' -f (Split-Path $root -Leaf)))
 $sum.Add(('Scan date      : {0:yyyy-MM-dd HH:mm} (local)' -f (Get-Date)))
 $sum.Add(('PowerShell     : {0}' -f $PSVersionTable.PSVersion))
 $sum.Add(('Files on disk  : {0} ({1:N0} bytes, {2:N2} GB)' -f $files.Count, $diskBytes, ($diskBytes / 1GB)))
-$sum.Add(('Packages       : {0} Xbox 360 package(s), {1} files inside them (listed as package::path)' -f $stfsCount, ($rows.Count - $files.Count)))
+$sum.Add(('Containers     : {0} Xbox 360 package(s), {1} BIGH archive(s); {2} files inside them (listed as container::path or container::#hash)' -f $stfsCount, $bigCount, ($rows.Count - $files.Count)))
 $sum.Add(('Hashes         : {0}' -f $(if ($SkipHash) { 'skipped' } else { 'SHA-256' })))
 $sum.Add(('Extracted to   : {0}' -f $(if ($ExtractTo) { 'yes (folder not recorded)' } else { 'no' })))
 $sum.Add(('Elapsed        : {0:N0} s' -f $sw.Elapsed.TotalSeconds))
@@ -637,6 +742,14 @@ foreach ($g in ($rows | Group-Object Extension | Sort-Object Name)) {
 }
 $smp | Set-Content -LiteralPath (Join-Path $dest 'samples.txt') -Encoding UTF8
 
+# archives.txt
+$bigLines.Insert(0, "EA BIGH archives - $safeLabel ($bigCount found). Entries appear in manifest.csv as <archive>::#<name hash>.")
+$bigLines | Set-Content -LiteralPath (Join-Path $dest 'archives.txt') -Encoding UTF8
+
+# smallfiles.txt
+$smallLines.Insert(0, "Small descriptor/config files, full contents - $safeLabel")
+$smallLines | Set-Content -LiteralPath (Join-Path $dest 'smallfiles.txt') -Encoding UTF8
+
 # packages.txt
 $pkgLines.Insert(0, "Xbox 360 STFS packages - $safeLabel ($stfsCount found)")
 $pkgLines | Set-Content -LiteralPath (Join-Path $dest 'packages.txt') -Encoding UTF8
@@ -655,7 +768,7 @@ foreach ($x in $exes) {
 $exe | Set-Content -LiteralPath (Join-Path $dest 'executables.txt') -Encoding UTF8
 
 Write-Host ''
-Write-Host "Done in $([int]$sw.Elapsed.TotalSeconds) s. $($files.Count) files on disk, $stfsCount Xbox 360 package(s), $($rows.Count - $files.Count) files inside packages, $($exes.Count) executables."
+Write-Host "Done in $([int]$sw.Elapsed.TotalSeconds) s. $($files.Count) files on disk, $stfsCount Xbox 360 package(s), $bigCount BIGH archive(s), $($rows.Count - $files.Count) files inside them, $($exes.Count) executables."
 Write-Host "Results: $dest"
 if ($ExtractTo) { Write-Host "Package contents extracted to: $ExtractTo" }
 if ($errors.Count -gt 0) { Write-Warning "$($errors.Count) files could not be read; see summary.txt" }
