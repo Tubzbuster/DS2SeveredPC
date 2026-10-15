@@ -335,3 +335,37 @@ need converting too. **Converter workload: about 6,900 assets, 414 MB**:
 Stream layout rules (both platforms): chunks are 4-byte aligned, never cross
 a 128 KB boundary, `FILL` chunks pad to the next boundary, files are a
 multiple of 128 KB.
+
+## 20. Converter status (from the full PC/360 pair export)
+
+Method: for each type, a 360 -> PC converter is scored against every
+exported pair (`tools/research/score.py`, `learn_*.py`): exact byte match
+with the real PC asset, or within rounding for re-packed vertex data.
+
+| Type | Pairs | Result | Severed coverage |
+|------|------:|--------|------------------|
+| LUA | 46 | 100% exact (identical bytecode) | all |
+| TOB | 501 | 100% exact (32-bit swap) | all |
+| tg4d (texture data) | 315 (samples) | 100% (16-bit swap) | all |
+| tg4h (texture header) | 16,768 | 99.6% exact; rest are different PC images | all |
+| Material | 4,054 | 100% exact | all 5,553 distinct Severed materials |
+| VFX | 8,807 | 99.4% exact (97.4% held-out); misses are float rounding | all 1,580 |
+| Mesh / MeshVolatile | 4,746 / 3,412 | in progress | |
+| MetaModel, SimGroup, HKX, NAV, SBK, BNK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
+
+Material: PC shader passes follow a deterministic table per 360 shader
+setup (60 setups, learned from the pairs), plus parameter copies the PC
+shaders need. VFX: components (`.prt`, `.fnc`, `.snd`, ...) with learned
+per-word byte permutations; one 16-byte union field (name / raw ID /
+hashes) decided per record.
+
+Mesh notes so far: header `EAGM` v50, platform word 1 (360) -> 3 (PC);
+header pointers to tables (0x4C 0x50 0x54 0x60 0x68 0x6C 0x78 0x7C; total
+size at 0x9C). Stream descriptors (size, count, stride, type, flags,
+offset); offset 0 / past the end = buffer in the companion
+`<name>.volatile` (MeshVolatile) asset. Vertex slots: floats swap; normals
+360 DEC3N -> PC UBYTE4N; tangents 360 signed bytes (reversed) -> PC
+UBYTE4N; index buffers u16 swap. PC values were packed from the source
+data separately, so re-packed normals match within rounding, not exactly.
+Some meshes have several stream tables (LODs); the full table layout is
+not worked out yet.
