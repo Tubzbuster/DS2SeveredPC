@@ -179,5 +179,39 @@ def hkx(x):
     return H.convert(_HKX, x)
 
 
+def smb(x):
+    from . import smb as S
+    return S.convert(x)
+
+
+def lh2(x):
+    from . import lh2 as L
+    return L.convert(x)
+
+
+_POS = {}
+
+
+def _postmpl(typ, x):
+    """small fixed-layout types: per-position template (learn_postmpl.py);
+    positions past it are swapped"""
+    from . import templates as T
+    if typ not in _POS:
+        import os, pickle
+        _POS[typ] = pickle.load(open(os.path.join(os.path.dirname(__file__), typ.lower() + '_postmpl.pkl'), 'rb'))
+    pm = _POS[typ]
+    m = len(x) // 4
+    q = pm[:m] + [T.PERMS[T.SWAP]] * (m - len(pm))
+    return T.apply(q, x[:4 * m], union_swap=True) + x[4 * m:]
+
+
+def anim(x):
+    return _postmpl('ANIM', x)
+
+
+def png(x):
+    return x                      # standard PNG files, same on every platform
+
+
 CONVERTERS = {'LUA': lua, 'TOB': tob, 'tg4d': tg4d, 'tg4h': tg4h, 'Material': material,
-              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb}
+              'MetaModel': metamodel, 'SimGroup': simgroup, 'BNK': bnk, 'NAV': nav, 'HKX': hkx, 'RCB': rcb, 'SMB': smb, 'LH2': lh2, 'ANIM': anim, 'PNG': png}

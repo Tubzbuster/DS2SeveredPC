@@ -359,7 +359,11 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | HKX (Havok physics) | 1,684 | 832/842 held-out files byte-exact (rest: PC re-exported with other values) | all 515 |
 | SBK (sound banks) | 24 | audio path done (EA-XMA decode, XAS encode); metadata needs more pairs (export requested) | |
 | RCB | 358 | 108/179 held-out files exact, 99.91% of words (relocation-table blocks, swap default) | all 54 |
-| SMB, Graph, LH2, PNG, ISM, ANIM | | not started | |
+| SMB | 167 | 158 exact (32-bit + 0x0016 record headers as u16 pairs + names) | all 31 |
+| LH2 (string tables) | (structure check) | header/IDs/offsets 32-bit, text raw; a converted 360 table parses on PC layout, 6,649/6,873 shared strings identical | both (menu text, Severed text) |
+| ANIM | 51 | 99.93% of words held-out (position template) | 1 |
+| PNG | | standard PNG, copied | 2 |
+| Graph, ISM | 122 / 6 | position templates not enough (71% / 88% of words); need structure | 15 / 1 |
 
 Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
 as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
