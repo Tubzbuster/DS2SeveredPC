@@ -136,7 +136,9 @@ for ($i = 0; $i -lt $entries.Count; $i++) {
 $trailer.CopyTo($head, 16 + 12 * $entries.Count)
 
 $tmp = $target + '.tmp'
+if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp }   # left over from a failed run
 $out = [System.IO.File]::Create($tmp)
+$written = $false
 try {
     $out.Write($head, 0, $head.Length)
     $buf = New-Object byte[] 1048576
@@ -155,11 +157,17 @@ try {
         } finally { $in.Dispose() }
     }
     $out.SetLength($total)
-} finally { $out.Dispose() }
+    $written = $true
+} finally {
+    $out.Dispose()
+    if (-not $written) { Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue }
+}
 
 # Verify every entry against its source before putting the archive in place.
-$sha = [System.Security.Cryptography.SHA256]::Create()
+# A new hash object per call: Windows PowerShell 5.1 (.NET Framework) cannot
+# reuse one after TransformFinalBlock.
 function Get-RangeHash([string]$file, [int64]$offset, [int64]$size) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
     $fs = [System.IO.File]::Open($file, 'Open', 'Read', 'ReadWrite')
     try {
         $fs.Position = $offset
@@ -172,13 +180,17 @@ function Get-RangeHash([string]$file, [int64]$offset, [int64]$size) {
         }
         [void]$sha.TransformFinalBlock((New-Object byte[] 0), 0, 0)
         return [System.BitConverter]::ToString($sha.Hash)
-    } finally { $fs.Dispose() }
+    } finally { $fs.Dispose(); $sha.Dispose() }
 }
-foreach ($e in $entries) {
-    if ((Get-RangeHash $tmp $e.Offset $e.Size) -ne (Get-RangeHash $e.File $e.SrcOffset $e.Size)) {
-        Remove-Item -LiteralPath $tmp
-        throw "Verification failed for $($e.Name); nothing was installed."
+try {
+    foreach ($e in $entries) {
+        if ((Get-RangeHash $tmp $e.Offset $e.Size) -ne (Get-RangeHash $e.File $e.SrcOffset $e.Size)) {
+            throw "Verification failed for $($e.Name); nothing was installed."
+        }
     }
+} catch {
+    Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
+    throw
 }
 
 Move-Item -LiteralPath $tmp -Destination $target -Force
