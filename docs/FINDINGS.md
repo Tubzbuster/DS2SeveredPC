@@ -350,8 +350,22 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | tg4h (texture header) | 16,768 | 99.6% exact; rest are different PC images | all |
 | Material | 4,054 | 100% exact | all 5,553 distinct Severed materials |
 | VFX | 8,807 | 99.4% exact (97.4% held-out); misses are float rounding | all 1,580 |
-| Mesh / MeshVolatile | 4,746 / 3,412 | in progress | |
+| Mesh | 4,746 | 90.5% within rounding of the 2,793 pairs with identical structure (rest: PC re-exported differently) | all 1,065 distinct Severed meshes |
+| MeshVolatile | 3,412 | 84% exact or within rounding of 2,780 matched pairs | all 851 |
 | MetaModel, SimGroup, HKX, NAV, SBK, BNK, SMB, Graph, RCB, LH2, PNG, ISM, ANIM | | not started | |
+
+Mesh structure from the DS1-3 Modding Toolkit by 4Kodda (Nexus mod 101; used
+as a format reference, no code copied): DataTable1 at header 0x50 (0xC0
+bytes per draw table: name, vertex count/size/offset, face count/offset,
+primitive type, bone palette, vert_id pool, UV size), DataTable2 at 0x68
+(buffer descriptors size/count/format/ptr; ptr >= local UV offset at 0x9C
+means the buffer is in the MeshVolatile, which directly follows its mesh
+in a stream file). PC encodings: normal = floor((c/511 + 1) * 127.5) from
+the 360 DEC3N; tangent from 360 signed bytes (skinned 0x20 records: x y z
+w, handedness byte flipped; 0x14 records: stored w z y x); bone indices
+kept; weights u16 swapped; a DT1 face-count field the 360 stores as
+count+1. Gibbed.Visceral (zlib licence) documents stream sets, BIG
+archives, texture headers and SimGroup.
 
 Material: PC shader passes follow a deterministic table per 360 shader
 setup (60 setups, learned from the pairs), plus parameter copies the PC
