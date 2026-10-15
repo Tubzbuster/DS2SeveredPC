@@ -95,6 +95,8 @@ def build(src, dst, log=print):
             elif ext == '.toc':
                 tocs.append((p, q))
             elif ext == '.snu':
+                if os.path.exists(q) and os.path.getsize(q):
+                    continue                      # converted by an earlier run
                 from . import snu
                 y = snu.convert(open(p, 'rb').read())
                 if y is None:
