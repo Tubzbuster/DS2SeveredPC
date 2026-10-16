@@ -1163,3 +1163,21 @@ Suspected effect: the thumping during the opening's RIG call. It starts
 near the end of the call, comes from the call screen's position
 (`VidScreen`, `CMD_SetMaterialAudio3D` = 1) and stops when the scene ends.
 
+## 44. Lighting data audit (darker than console footage)
+
+| Data | Check | Result |
+|---|---|---|
+| Light VFX (`lt_*`) | 360 of 465 are PC copies; components scored on the VFX pairs | `.bem` `.flc` `.flr` `.fnc` 100% exact, `.lit` 99.8% (6 words, rounding) |
+| LightTOC | colour bytes at +0x5C | an RGBA byte array (alpha last) on both platforms: kept as stored, correct |
+| SimGroup colours (type 8) | all 7 non-zero values | RGBA bytes (fade colours, ZoneWorld background); correct |
+| ZoneWorld | fog | fog type 0, fog colours black: fog effectively off |
+| AnimateLight (695) | layout | light references, timings and messages only |
+| AO maps (`ao_lmp_*`) | headers | DXT1 with full mip chains, sizes consistent |
+| Level geometry (`opt_model*`) | per-vertex streams: 4 raw bytes, 4 floats (two UV sets), normal, tangent | no level-mesh pairs in the samples: unverified |
+
+No conversion error found that would darken the whole game. To be settled
+by comparing a base-game area on PC with console footage at the same
+brightness setting. The quarry's black haze is separate: probably the object
+whose texture list overruns its shader (probe 31 refuses the extra
+texture).
+

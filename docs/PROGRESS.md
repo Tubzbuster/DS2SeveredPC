@@ -72,6 +72,7 @@ and is corrected as we play.
 | Save stations | partial | saving and loading a save work; the second use of a save station locked up once (recheck); saves are listed as "Chapter 1" |
 | Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
 | Performance near some lights | partial | frame drops in the drill tunnel |
+| Overall brightness | to check | console footage looks brighter throughout. Lighting data audited (FINDINGS 44): light VFX components exact on the pairs, LightTOC colours and SimGroup colours/fog correct, AO maps plain DXT1. Not verifiable: level geometry (no pairs). Next: compare a base-game spot on PC with console footage at the same brightness setting |
 | Gabe's pain sounds | works | Isaac's grunts and damage lines, as on console (the DLC reuses them) |
 | First view after the terminal | broken | stretched slabs in front of the camera (screenshot); a mesh still converted wrongly |
 | Menu text (localised episode name) | partial | English placeholder via the probe |
