@@ -1497,6 +1497,54 @@ static void heap_watch(void)
 }
 
 
+/* ---- texture list pass (probe 32) ---------------------------------------
+ * Probe 31 found the bad slot's origin: exe 0x6DAF10 (ecx = render object)
+ * binds a list of texture handles (arg 1, count arg 2) using per-shader slot
+ * tables (6 dwords each: 0x2033E78 for one kind of texture, 0x2033E90 for
+ * the other, index (obj+0xB0)*24 + i). An object given more textures than
+ * its shader has slots reads past them (slot 176). Each such object is
+ * logged once per shader: shader index, the textures (handle and record)
+ * and both slot rows. */
+static const char SIG_TEXPASS[] =
+    "55 8B EC 83 E4 F0 83 EC 14 53 56 57 33 DB 33 FF 39 5D 0C 8B F1 0F 8E 94 00 00 00 8D 86 B8 00 00 00";
+static DWORD *g_slots_a, *g_slots_b;
+static DWORD g_texpass_seen[64];
+static int g_ntexpass_seen;
+static volatile LONG g_texpass_logs;
+
+static void __cdecl note_texpass(const DWORD *sp)
+{
+    DWORD obj = sp[-2], *list = (DWORD *)sp[1], count = sp[2], shader, i, bad = 0, *ra, *rb;
+    char line[1024];
+    int len, k;
+    if (!g_slots_a || !mem_ok((void *)(obj + 0xB0), 4) || count == 0 || count > 64 || !mem_ok(list, count * 4)) return;
+    shader = *(DWORD *)(obj + 0xB0);
+    if (shader > 0x10000) return;
+    ra = g_slots_a + shader * 24;
+    rb = g_slots_b + shader * 24;
+    if (!mem_ok(ra, 6 * 4) || !mem_ok(rb, 6 * 4)) return;
+    for (i = 0; i < count && i < 6; i++)
+        if ((ra[i] & 0xFF) >= 16 || (rb[i] & 0xFF) >= 16) bad = 1;
+    if (count > 6) bad = 1;
+    if (!bad) return;
+    for (k = 0; k < g_ntexpass_seen; k++) if (g_texpass_seen[k] == shader) return;
+    if (g_ntexpass_seen < 64) g_texpass_seen[g_ntexpass_seen++] = shader;
+    if (InterlockedIncrement(&g_texpass_logs) > 32) return;
+    len = wsprintfA(line, "TEXTURE LIST: object %08lx shader %lu, %lu texture(s); slot rows A", obj, shader, count);
+    for (i = 0; i < 6; i++) len += wsprintfA(line + len, " %08lx", ra[i]);
+    len += wsprintfA(line + len, " B");
+    for (i = 0; i < 6; i++) len += wsprintfA(line + len, " %08lx", rb[i]);
+    log_line("%s", line);
+    for (i = 0; i < count && i < 12; i++) {
+        DWORD h = list[i], idx = h == 0xFFFFFFFF ? 0xFFF : h, *rec;
+        if (idx >= 0x1000) { log_line("  texture %lu: handle %08lx", i, h); continue; }
+        rec = (DWORD *)(0x20E04D8 + idx * 0x3C);
+        if (!mem_ok(rec, 0x3C)) continue;
+        log_line("  texture %lu: handle %08lx record %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx",
+                 i, h, rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8], rec[9], rec[10], rec[11], rec[12], rec[13], rec[14]);
+    }
+}
+
 /* ---- scripted sequence trace (probe 22) ---------------------------------
  * A ScriptedEventSequence runs a table-driven state machine
  * (ScriptedSequenceSM: idle, gotoSS, gotoPos, trackToPos, waitAtSS, faceOrient,
@@ -1645,6 +1693,17 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                         if (ls) g_streammgr = *(void ***)(ls + 0x52);
                     }
                     if (!g_sendmsg) g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm2);
+                }
+                {
+                    int nt = 0, kk;
+                    BYTE *tp = find_sig(SIG_TEXPASS, &nt);
+                    for (kk = 0; kk < 50 && !tp; kk++) { Sleep(200); tp = find_sig(SIG_TEXPASS, &nt); }
+                    if (tp && tp[0x83] == 0x8B && tp[0xF7] == 0x8B) {
+                        g_slots_a = *(DWORD **)(tp + 0x86);
+                        g_slots_b = *(DWORD **)(tp + 0xFA);
+                    }
+                    log_line("texture list pass: %d match(es) at exe+0x%lx, slot tables %p %p%s", nt, tp ? (DWORD)tp - base : 0,
+                             g_slots_a, g_slots_b, tp && g_slots_a && hook_log_sp(tp, 9, note_texpass) ? ", hooked" : "");
                 }
                 log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s (after %d retries)", nb,
                          bb ? (DWORD)bb - base : 0, bb && hook_log_sp(bb, 9, note_batch) ? ", hooked" : "", k);
@@ -2220,7 +2279,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 31 - process %s", path);
+    log_line("severed probe 32 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

@@ -117,7 +117,7 @@ Open, most important first:
      byte, +16 for vertex shaders.
    - An object handed more textures than its shader has slots reads past
      the table: slot 176 → stage 417 → Direct3D writes past its tables.
-   - **Next:** log the object (shader index `[esi+0xB0]`, texture count,
+   - **Next (probe 32 logs this as `TEXTURE LIST:` lines):** log the object (shader index `[esi+0xB0]`, texture count,
      texture handles; the texture table is `0x20E04D8`, 0x3C bytes per
      entry) to find the asset. Suspects: quarry_z01's converted VFX,
      especially `pdlc_quarry_atmo_01-07`. Then fix the conversion.
