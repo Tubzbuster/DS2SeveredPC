@@ -1482,6 +1482,40 @@ static void addr_name(DWORD a, char *out, int n)
     (void)n;
 }
 
+/* a loaded mesh: header 'MGAE'; header 0x20 = model name (offset, or pointer after relocation) */
+static int mesh_name(DWORD q, char *out, int n)
+{
+    DWORD off;
+    const char *s;
+    int i;
+    if (q < 0x10000 || (q & 3) || !mem_ok((void *)q, 0x24) || memcmp((void *)q, "MGAE", 4) != 0) return 0;
+    off = *(DWORD *)(q + 0x20);         /* file offset, or a pointer once relocated */
+    if (off < 0x24) return 0;
+    s = off < 0x4000000 ? (const char *)(q + off) : (const char *)off;
+    for (i = 0; i < n - 1 && mem_ok(s + i, 1) && s[i] >= 32 && s[i] < 127; i++) out[i] = s[i];
+    out[i] = 0;
+    return i > 0;
+}
+
+/* meshes reachable from a register: the pointed object and the objects its
+   first 64 words point to (data only) */
+static void log_meshes_near(const char *reg, DWORD p)
+{
+    char name[96];
+    DWORD i, j, q, r, found = 0;
+    if (mesh_name(p, name, sizeof name)) { log_line("  %s -> mesh %s", reg, name); return; }
+    if (p < 0x10000 || !mem_ok((void *)p, 256)) return;
+    for (i = 0; i < 64 && found < 4; i++) {
+        q = ((DWORD *)p)[i];
+        if (mesh_name(q, name, sizeof name)) { log_line("  %s+0x%02lx -> mesh %s", reg, i * 4, name); found++; continue; }
+        if (q < 0x10000 || (q & 3) || !mem_ok((void *)q, 128)) continue;
+        for (j = 0; j < 32; j++) {
+            r = ((DWORD *)q)[j];
+            if (mesh_name(r, name, sizeof name)) { log_line("  %s+0x%02lx+0x%02lx -> mesh %s", reg, i * 4, j * 4, name); found++; break; }
+        }
+    }
+}
+
 static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
 {
     static LONG count;
@@ -1501,6 +1535,9 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
                  (DWORD)r->ExceptionInformation[1]);
     log_line("  eax %08lx ebx %08lx ecx %08lx edx %08lx esi %08lx edi %08lx ebp %08lx esp %08lx",
              c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp, c->Esp);
+    log_meshes_near("eax", c->Eax); log_meshes_near("ebx", c->Ebx); log_meshes_near("ecx", c->Ecx);
+    log_meshes_near("edx", c->Edx); log_meshes_near("esi", c->Esi); log_meshes_near("edi", c->Edi);
+    log_meshes_near("ebp", c->Ebp);
     sp = (DWORD *)c->Esp;
     for (i = 0; i < 2048 && found < 24 && mem_ok(sp + i, 4); i++) {
         MEMORY_BASIC_INFORMATION mi;
@@ -1561,7 +1598,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 20 - process %s", path);
+    log_line("severed probe 21 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
