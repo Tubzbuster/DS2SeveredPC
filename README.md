@@ -292,6 +292,7 @@ These were used to map the formats. You don't need them to try Severed.
 - The probe only reads memory, and its logs contain addresses and values,
   not code.
 
+
 ```text
 ================================================================================
 [SV10]                         DISCLAIMER & LEGAL
