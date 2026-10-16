@@ -74,7 +74,7 @@ and is corrected as we play.
 | Save stations | partial | saving and loading a save work; the second use of a save station locked up once (recheck); saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). On console the load menu shows "Severed, chapter N" with its own picture (Gabe in a corridor, from footage); Severed's files hold only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`), so that picture is probably in a front-end file still to find |
 | Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
 | Performance near some lights | partial | frame drops in the drill tunnel |
-| Overall brightness | to check | console footage looks brighter throughout. Lighting data audited (FINDINGS 44): light VFX components exact on the pairs, LightTOC colours and SimGroup colours/fog correct, AO maps plain DXT1. Not verifiable: level geometry (no pairs). Next: compare a base-game spot on PC with console footage at the same brightness setting |
+| Overall brightness | works | confirmed by the user after the LUT fix: the darkness was only the quarry's colour grading (FINDINGS 45). Lighting data audit in FINDINGS 44 |
 | Gabe's pain sounds | works | Isaac's grunts and damage lines, as on console (the DLC reuses them) |
 | First view after the terminal | broken | stretched slabs in front of the camera (screenshot); a mesh still converted wrongly |
 | Menu text (localised episode name) | partial | English placeholder via the probe |

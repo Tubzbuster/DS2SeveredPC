@@ -1241,3 +1241,7 @@ docking bay doors and locks, `door_pubvu01_cln`, `exterior_black_win`
 `mesh_helmet_dism`). The PC exporter also merges vertex buffers with equal
 flags; we keep the 360's buffers (the PC game has meshes with duplicate
 buffer flags too).
+
+Update to 44: after the LUT conversion (45) the user confirmed the DLC's
+overall lighting looks right; the darkness had been the quarry's colour
+grading only.
