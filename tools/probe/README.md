@@ -87,3 +87,8 @@ Probe 10 also logs every read inside `DS2DAT2.DAT` (entry hash and
 offset, so a crash can be tied to one asset of a stream) and, once Severed
 has been added, the first serious exceptions: code, module + offset, the
 faulting address, registers and the return addresses on the stack.
+
+Probe 11 also logs every stream the game requests ("STREAM request
+<path>", from a hook on the loader's stream request function, found by
+byte pattern), and the Severed entry's description is just "Gabe Weller's
+story".

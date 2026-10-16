@@ -759,3 +759,23 @@ uses is PNG: `weller1_ch1.png` / `weller1_ch2.png` from
 `shared\ui\icons\xenon\`, the Xbox save game icons. They are now left out
 of the PC streams (`build.DROP`; the test script strips them from earlier
 output and fixes the TOC sizes).
+
+Without the PNGs Severed loads without crashing, but into an empty black
+level (pause menu works). After `pdlc1_ch01_mng.toc/_global.str/.str` no
+level section was read. What the exe shows:
+
+- The base game's stream sets are loaded from a fixed list in the exe
+  (0x01C30434: ch01_hos ... ch11_mtb, `%s\%s_streamsets.str`).
+- The level start routine (0x0042C600) checks whether the level folder
+  contains "pdlc": DLC levels skip that list and call the `.lds` manager
+  (load mask), then request each stream of the episode's stream list
+  (`folder\stream`) through 0x0074BDD0.
+- Severed's StreamSet objects (182) are inside its main level SimGroup
+  (`pdlc1_ch01_mng.simgroup.bin`); their stream references are the
+  section SimGroups' GUIDs (4 words; GUID text prints words 3-4 as bytes).
+  The start checkpoint (`XONTREALPR_CB22182_E50854D`) is object
+  52CB2218 2E50854D 'ONTR' 'EALP' in that SimGroup.
+- The `.add` values are not sdbm/CRC/FNV of the stream names, GUIDs or
+  files.
+
+Probe 11 logs every stream request to see what the StreamSets ask for.

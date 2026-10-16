@@ -1031,12 +1031,52 @@ static void *__attribute__((thiscall)) hook_frontend_ctor(void *self)
     void *r = g_ctor_tramp(self);
     log_line("front end constructed (thread %lu)", GetCurrentThreadId());
     log_episodes(self);
-    g_add(self, "Dead Space 2: Severed", "Gabe Weller's story (converted from the Xbox 360 DLC)",
+    g_add(self, "Dead Space 2: Severed", "Gabe Weller's story",
           "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
     InterlockedIncrement(&g_added);
     log_line("added Severed to the episode list");
     log_episodes(self);
     return r;
+}
+
+
+/* ---- stream request log -------------------------------------------------
+ * The level loader asks for each stream through one function (retail exe
+ * 0x0074BDD0: sub esp, 0x124 ...; first stack argument = stream path).
+ * A small stub logs that argument and continues in the original code. */
+static const char SIG_STREAMREQ[] =
+    "81 EC 24 01 00 00 53 55 8B E9 8B ?? ?? ?? ?? 00 00 56 33 C0 57 85 C9 0F 84 ?? ?? ?? ?? 38 01 0F 84 ?? ?? ?? ?? "
+    "51 8D 4C 24 14 E8 ?? ?? ?? ?? 8B ?? ?? ?? ?? 00 00 8B C7 8D 74 24 10 E8 ?? ?? ?? ?? 6A 01 8B CE E8";
+
+static void __cdecl log_stream_request(const char *path)
+{
+    static LONG n;
+    if (InterlockedIncrement(&n) > 5000) return;
+    log_line("STREAM request %s", path && mem_ok(path, 1) ? path : "(null)");
+}
+
+/* fn starts with `len` bytes of position-independent code */
+static int hook_log_arg1(BYTE *fn, int len, void (__cdecl *cb)(const char *))
+{
+    BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
+    DWORD old;
+    if (!t) return 0;
+    q = t;
+    *q++ = 0x60;                                   /* pushad */
+    *q++ = 0x9C;                                   /* pushfd */
+    *q++ = 0xFF; *q++ = 0x74; *q++ = 0x24; *q++ = 0x28;   /* push [esp+0x28] = first argument */
+    *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
+    *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
+    *q++ = 0x9D;                                   /* popfd */
+    *q++ = 0x61;                                   /* popad */
+    memcpy(q, fn, len); q += len;                  /* the original first instructions */
+    *q++ = 0xE9; *(DWORD *)q = (DWORD)(fn + len) - (DWORD)(q + 4); q += 4;
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)t - (DWORD)(fn + 5);
+    if (len > 5) memset(fn + 5, 0x90, len - 5);
+    VirtualProtect(fn, len, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, len);
+    return 1;
 }
 
 static DWORD WINAPI menu_hook_thread(LPVOID p)
@@ -1066,6 +1106,12 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
     VirtualProtect(ctor, 5, old, &old);
     FlushInstructionCache(GetCurrentProcess(), ctor, 5);
     log_line("menu hook: installed after %d ms", tries * 10);
+    {
+        int ns;
+        BYTE *sr = find_sig(SIG_STREAMREQ, &ns);
+        log_line("stream request log: %d match(es) at exe+0x%lx%s", ns, sr ? (DWORD)sr - base : 0,
+                 sr && hook_log_arg1(sr, 6, log_stream_request) ? ", hooked" : "");
+    }
     return 0;
 }
 
@@ -1165,7 +1211,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 10 - process %s", path);
+    log_line("severed probe 11 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
