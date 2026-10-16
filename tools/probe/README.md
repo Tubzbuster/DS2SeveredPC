@@ -97,3 +97,7 @@ Probe 12 (experiment): at the start of a level whose folder contains
 "pdlc", also requests `<folder>\<folder>_streamsets.str` in stream-sets
 mode, as the game does for the base chapters (the test archive holds
 Severed's level SimGroup under that name).
+
+Probe 13 logs every SimGroup data block the game loads ("SIMGROUP block
+<magic> size records -> ok/FAILED") from a wrapper around the block
+dispatcher (packed 0x011795D9 / property tree 0x91C8773C).

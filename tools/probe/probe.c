@@ -1135,6 +1135,42 @@ static int hook_call_ecx(BYTE *fn, int len, void (__cdecl *cb)(void *))
     return 1;
 }
 
+
+/* ---- SimGroup block loads -----------------------------------------------
+ * The SimGroup data block dispatcher (retail exe 0x0085D090, cdecl,
+ * argument = block, returns al) sends block 0x011795D9 (packed records,
+ * Severed's format) and 0x91C8773C (property tree, base game) to their
+ * loaders. Wrapped to log every block and the result. */
+static const char SIG_SGBLOCK[] =
+    "8B 54 24 04 8B 0A 32 C0 81 F9 D9 95 17 01 75 09 89 54 24 04 E9 ?? ?? ?? ?? 81 F9 3C 77 C8 91 75 09 89 54 24 04 E9";
+typedef unsigned char (__cdecl *sgblock_fn)(DWORD *blk);
+static sgblock_fn g_sgblock_tramp;
+
+static unsigned char __cdecl hook_sgblock(DWORD *blk)
+{
+    static LONG n;
+    unsigned char r = g_sgblock_tramp(blk);
+    if (InterlockedIncrement(&n) <= 3000 && mem_ok(blk, 0x18))
+        log_line("SIMGROUP block %08lx size 0x%lx records %lu -> %s", blk[0], blk[1], blk[4], r ? "ok" : "FAILED");
+    return r;
+}
+
+static int hook_wrap(BYTE *fn, int len, void *hook, void **tramp)
+{
+    BYTE *t = (BYTE *)VirtualAlloc(NULL, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    DWORD old;
+    if (!t) return 0;
+    memcpy(t, fn, len);
+    t[len] = 0xE9; *(DWORD *)(t + len + 1) = (DWORD)(fn + len) - (DWORD)(t + len + 5);
+    *tramp = t;
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)hook - (DWORD)(fn + 5);
+    if (len > 5) memset(fn + 5, 0x90, len - 5);
+    VirtualProtect(fn, len, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, len);
+    return 1;
+}
+
 static DWORD WINAPI menu_hook_thread(LPVOID p)
 {
     int na = 0, nc = 0, tries;
@@ -1175,6 +1211,12 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                hooked entry still works (it just logs) */
             g_streamreq = (stream_req_fn)sr;
             if (ls) g_streammgr = *(void ***)(ls + 0x52);
+            {
+                int ng;
+                BYTE *sg = find_sig(SIG_SGBLOCK, &ng);
+                log_line("simgroup block log: %d match(es) at exe+0x%lx%s", ng, sg ? (DWORD)sg - base : 0,
+                         sg && hook_wrap(sg, 6, (void *)hook_sgblock, (void **)&g_sgblock_tramp) ? ", hooked" : "");
+            }
             log_line("level start: %d match(es) at exe+0x%lx, stream manager global 0x%08lx%s", nl,
                      ls ? (DWORD)ls - base : 0, (DWORD)g_streammgr,
                      ls && hook_call_ecx(ls, 6, on_level_start) ? ", hooked" : "");
@@ -1279,7 +1321,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 12 - process %s", path);
+    log_line("severed probe 13 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

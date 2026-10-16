@@ -791,3 +791,10 @@ the stream sets SimGroup (e.g. chapter 1's `initial`
 references); in Severed they are in the level SimGroup. The `.add` values
 equal the TOC's stream name hashes. Experiment: probe 12 requests
 Severed's level SimGroup as a stream sets file at level start.
+
+Probe 12: `pdlc1_ch01_mng_streamsets.str` (the level SimGroup) was
+requested in stream-sets mode and read, still no section loaded. The PC
+exe does handle the packed SimGroup block (dispatcher 0x0085D090: 0x011795D9
+-> 0x0085C110, 0x91C8773C -> 0x0085D020, anything else int3). Probe 13
+logs each block load and whether the loader accepted it, to see whether
+Severed's converted SimGroups are rejected.
