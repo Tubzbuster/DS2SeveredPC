@@ -31,6 +31,8 @@ static DWORD g_tick0;
 static DWORD g_tls = TLS_OUT_OF_INDEXES;
 static LONG g_lines;
 #define MAX_LINES 300000
+#define CRASH_RESERVE 20000
+static volatile DWORD g_crash_thread;  /* thread inside crash_handler */
 
 /* ---- logging ---------------------------------------------------------- */
 
@@ -42,7 +44,17 @@ static void log_line(const char *fmt, ...)
     DWORD w;
 
     if (g_log == INVALID_HANDLE_VALUE) return;
-    if (InterlockedIncrement(&g_lines) > MAX_LINES) return;
+    n = InterlockedIncrement(&g_lines);
+    /* past the cap only the crash handler still writes (up to a reserve) */
+    if (n > MAX_LINES && (GetCurrentThreadId() != g_crash_thread || n > MAX_LINES + CRASH_RESERVE)) {
+        if (n == MAX_LINES + 1) {
+            static const char cap[] = "log limit reached: only crash reports are logged from here\r\n";
+            EnterCriticalSection(&g_cs);
+            WriteFile(g_log, cap, sizeof cap - 1, &w, NULL);
+            LeaveCriticalSection(&g_cs);
+        }
+        return;
+    }
     n = _snprintf(buf, sizeof buf, "%8lu [%5lu] ", GetTickCount() - g_tick0, GetCurrentThreadId());
     if (n < 0) n = 0;
     va_start(ap, fmt);
@@ -318,7 +330,14 @@ static int load_archive(const char *u8path, HANDLE own)
     ar = &g_arch[g_narch];
     ar->ent = (Entry *)HeapAlloc(GetProcessHeap(), 0, count * sizeof(Entry));
     ar->seen = (BYTE *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, count);
-    if (!dir || !ar->ent || !ar->seen || !raw_read(own, dir, count * 12)) { log_line("archive %s: could not read directory", b); return -1; }
+    if (!dir || !ar->ent || !ar->seen || !raw_read(own, dir, count * 12)) {
+        log_line("archive %s: could not read directory", b);
+        if (dir) HeapFree(GetProcessHeap(), 0, dir);
+        if (ar->ent) HeapFree(GetProcessHeap(), 0, ar->ent);
+        if (ar->seen) HeapFree(GetProcessHeap(), 0, ar->seen);
+        ar->ent = NULL; ar->seen = NULL;
+        return -1;
+    }
     for (i = 0; i < count; i++) {
         ar->ent[i].off = be32(dir + i * 12);
         ar->ent[i].size = be32(dir + i * 12 + 4);
@@ -1219,11 +1238,11 @@ static int find_sendmsg(void)
 static void queue_messages(const char **names, int n)
 {
     int i;
-    if (g_msgs_pending) return;
+    if (g_msgs_pending) { log_line("messages: the last ones are still being sent - try again"); return; }
     if (!find_sendmsg()) { log_line("messages: the game's message function was not found - nothing sent"); return; }
     for (i = 0; i < n && i < MAX_MSGS; i++) lstrcpynA(g_msgs[i], names[i], sizeof g_msgs[i]);
     g_nmsgs = i;
-    InterlockedExchange(&g_msgs_pending, 1);
+    InterlockedExchange(&g_msgs_pending, 1);   /* the list stays untouched until the game thread sets 0 */
     log_line("messages: %d queued for the game thread", g_nmsgs);
 }
 
@@ -1252,11 +1271,12 @@ static void run_pending_messages(void)
 {
     int i;
     if (!g_msgs_pending || GetCurrentThreadId() != g_game_thread || !g_sendmsg) return;
-    if (InterlockedExchange(&g_msgs_pending, 0) == 0) return;
+    if (InterlockedCompareExchange(&g_msgs_pending, 2, 1) != 1) return;
     for (i = 0; i < g_nmsgs; i++) {
         log_line("send message %s", g_msgs[i]);
         g_sendmsg(g_msgs[i], NULL, NULL);
     }
+    InterlockedExchange(&g_msgs_pending, 0);
     MessageBeep(MB_ICONASTERISK);
 }
 
@@ -1613,14 +1633,21 @@ static void log_meshes_near(const char *reg, DWORD p)
 static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
 {
     static LONG count;
+    static volatile DWORD seen[32];             /* addresses already reported */
     EXCEPTION_RECORD *r = e->ExceptionRecord;
     CONTEXT *c = e->ContextRecord;
     char where[MAX_PATH + 32], ra[MAX_PATH + 32];
     DWORD *sp, i, found = 0;
     if (r->ExceptionCode < 0xC0000000 || r->ExceptionCode == 0xC0000027 /* unwind */ ||
-        r->ExceptionCode == 0xE06D7363 /* C++ throw */ || !g_added /* start-up: the DRM uses exceptions */ ||
-        InterlockedIncrement(&count) > 20)
+        r->ExceptionCode == 0xE06D7363 /* C++ throw */ || !g_added /* start-up: the DRM uses exceptions */)
         return EXCEPTION_CONTINUE_SEARCH;
+    /* an exception the game handles itself can repeat: report each address
+       once, so the budget is left for the crash */
+    for (i = 0; i < 32; i++)
+        if (seen[i] == (DWORD)r->ExceptionAddress) return EXCEPTION_CONTINUE_SEARCH;
+    if (InterlockedIncrement(&count) > 20) return EXCEPTION_CONTINUE_SEARCH;
+    seen[(count - 1) & 31] = (DWORD)r->ExceptionAddress;
+    g_crash_thread = GetCurrentThreadId();
     addr_name((DWORD)r->ExceptionAddress, where, sizeof where);
     log_line("EXCEPTION 0x%08lx at %s thread %lu%s", r->ExceptionCode, where, GetCurrentThreadId(),
              r->ExceptionCode == 0xC0000005 ? "" : "");
@@ -1632,8 +1659,8 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
     {
         LONG k, last = g_batch_pos;
         char who[MAX_PATH + 32];
-        for (k = 0; k < 16 && last - k > 0; k++) {
-            DWORD a = g_batch_ring[(last - k) & 15];
+        for (k = 0; k < 16; k++) {               /* unset slots are 0; wraps safely */
+            DWORD a = g_batch_ring[(DWORD)(last - k) & 15];
             if (!a) continue;
             addr_name(a, who, sizeof who);
             log_line("  geometry batch %ld started from %s", (long)k, who);
@@ -1653,6 +1680,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
         log_line("  stack +0x%03lx %s", i * 4, ra);
         found++;
     }
+    g_crash_thread = 0;
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -1702,7 +1730,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 24 - process %s", path);
+    log_line("severed probe 25 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -1724,8 +1752,8 @@ static void start(HMODULE self)
     install("PeekMessageA", (void *)h_PeekMessageA, (void **)&o_PeekMessageA);
     install("PeekMessageW", (void *)h_PeekMessageW, (void **)&o_PeekMessageW);
     log_line("--- hooks installed ---");
-    CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL);
-    CreateThread(NULL, 0, menu_hook_thread, NULL, 0, NULL);
+    CloseHandle(CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL));
+    CloseHandle(CreateThread(NULL, 0, menu_hook_thread, NULL, 0, NULL));
     AddVectoredExceptionHandler(1, crash_handler);
     log_line("Severed is added to the episode list when the front end starts; F9 logs the list, F10 for the reflection scan, F11 for the descriptor dump");
 }

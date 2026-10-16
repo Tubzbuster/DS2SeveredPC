@@ -19,6 +19,7 @@ EXPORT long refpack_decompress(const uint8_t *src, long srclen, uint8_t *dst, lo
     i = 2;
     n = (flags & 0x80) ? 4 : 3;
     if (flags & 0x01) i += n;
+    if (i + n > srclen) return -1;
     usize = 0;
     for (k = 0; k < n; k++) usize = (usize << 8) | src[i + k];
     i += n;

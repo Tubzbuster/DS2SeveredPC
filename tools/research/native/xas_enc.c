@@ -42,7 +42,7 @@ static uint32_t enc_group(const int16_t *x, uint8_t *nib)
                 if (n < -8) n = -8;
                 if (n > 7) n = 7;
                 /* decoder: (int16)(nib << 12) >> shift, then + pred */
-                int16_t v = (int16_t)(n << 12);
+                int16_t v = (int16_t)(uint16_t)((unsigned)n << 12);
                 int s = clamp16((v >> shift) + pred);
                 double e = (double)(s - x[i + 2]);
                 err += e * e;
