@@ -26,9 +26,7 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Author ....... tubzbuster & DS2SeveredPC contributors
   Updated ...... 2026-10-16
 ================================================================================
-
-  This document is best viewed in a monospaced font at 80 columns, just like
-  the good old days. Use Ctrl+F with the codes below to jump to a section.
+Use Ctrl+F with the codes below to jump to a section.
 ```
 
 ```text
