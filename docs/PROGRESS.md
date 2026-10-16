@@ -20,16 +20,16 @@ and is corrected as we play.
 | Severed in Single Player > Episode Select | works | via the probe DLL |
 | Level loads (no black void, no crash) | works | |
 | Intro terminal ("Primary mission assets", RIG call video, dialogue) | works | |
-| Gabe on the ground, RIG call scene, getting up | broken | the scene's audio is primed but the sequence never starts (not the audio format: stereo did not help either); probe 22 traces its state machine. F8 skips it |
-| Control handed back after the scene | partial | only with F8 so far |
+| Gabe on the ground, RIG call scene, getting up | works | since probe 23 stopped loading a second copy of the level data |
+| Control handed back after the scene | works | no F8 needed |
 
 ## Chapter 1: the mines
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | partial | walkable, dialogue plays, objective added |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | something collides constantly off camera during the opening scene (sound) |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
-| drill_tunnel: drill_saferoom | partial | door and next area work (PC game's own assets); save station saves once, a second use locks the player (camera zooms in, no menu) |
+| drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | untested | grinder_room loads when picking up the Flamethrower |
 | bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | untested | |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
@@ -63,11 +63,14 @@ and is corrected as we play.
 | Dialogue and audio logs (stereo streams) | works | |
 | Cutscene audio (5.1 streams) | fix pending | stereo downmix |
 | RIG health spine | works | since the PC game's own RIG bar meshes are used |
-| Starting equipment (`equip_command_player_initial`) | broken | inventory empty |
+| Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle and RIG upgrades | missing | Severed-only object type, to be redone |
 | Weapons: Flamethrower pickup | works | |
+| Weapons, kinesis | works | |
+| Necromorph AI | broken | enemies attack but run in place (navigation data, likely the converted NAV meshes) |
+| Crash loading a later area | broken | which area and the log still to come |
 | Save stations | partial | first save works; second use locks up; saves are listed as "Chapter 1" (loading one probably starts the base game: do not rely on them) |
-| Stores, benches | untested | |
+| Stores, benches | works | shop lists base-game suits as well |
 | Performance near some lights | partial | frame drops in the drill tunnel |
 | Gabe's pain sounds | untested | possibly Isaac's; whether Severed has its own is not known yet |
 | First view after the terminal | broken | stretched slabs in front of the camera (screenshot); a mesh still converted wrongly |
