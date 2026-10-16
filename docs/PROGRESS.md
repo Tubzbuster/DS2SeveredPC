@@ -31,7 +31,7 @@ and is corrected as we play.
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
-| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | works | loads and plays (probe 31, and no `D3D GUARD` lines since the LUT fix). Price's scene and attack, the override switch, the door encounter and the cargo lift all work. The black screen when the quarry door opened is fixed (colour-grading LUTs, FINDINGS 45). One door draws as a solid black panel (screenshot); suspect `door_inner_01_am`, the only mining door the PC game lacks, so the only one built by our mesh converter |
+| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | works | loads and plays (probe 31, and no `D3D GUARD` lines since the LUT fix). Price's scene and attack, the override switch, the door encounter and the cargo lift all work. The black screen when the quarry door opened is fixed (colour-grading LUTs, FINDINGS 45). One door (`door_inner_01_am`) drew as a solid black slab: fix pending (lightmap materials need the PC's 20-byte UV stream, FINDINGS 46) |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | partial | reached. The upside-down tentacle grab after the lift plays; pressing stomp during it put Gabe inside the ceiling (he got out once the animation ended). The quarantine lockdown with 3 override terminals starts. Died there: Twitchers sometimes repeat the same attack and stunlock Gabe in a damage loop |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | untested | scene `igc_01_05`; end of chapter 1 |
@@ -64,14 +64,14 @@ and is corrected as we play.
 | Cutscene audio (5.1 streams) | fix pending | stereo downmix |
 | RIG health spine | works | since the PC game's own RIG bar meshes are used |
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
-| Gabe's Pulse Rifle and RIG upgrades | missing | Severed-only object type, to be redone; next feature |
-| Twitchers | partial | sometimes repeat one attack and stunlock Gabe (Severed's own Twitcher variants, `pdlc_twitcher_security` / `_oracle`) |
-| Scripted grabs (tentacle) | partial | stomp is accepted during the upside-down grab and moves Gabe into the ceiling |
+| Gabe's Pulse Rifle upgrades | fix pending | probe 34 sets the 10 nodes in the PC UpgradeManager (`pulse rifle upgrades:` log lines); RIG upgrades not looked at yet |
+| Twitchers | partial | sometimes repeat one attack and stunlock Gabe. Their animations, rig, collision and AI are the PC game's own; our template data (corpse/dismemberment) looks sane. To check: the difficulty in effect (Severed has none of its own), and a clip |
+| Scripted hang after the cargo lift | partial | Gabe hangs upside down from a set piece; stomp is accepted there and moves him into the ceiling |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
 | Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
 | Crash in the quarry | works | fixed by the LUT conversion; probe 31 stays as a safety net |
-| Save stations | partial | saving and loading a save work; the second use of a save station locked up once (recheck); saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). Severed's own save art is only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`, Gabe's helmet) |
+| Save stations | partial | saving and loading a save work; the second use of a save station locked up once (recheck); saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). On console the load menu shows "Severed, chapter N" with its own picture (Gabe in a corridor, from footage); Severed's files hold only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`), so that picture is probably in a front-end file still to find |
 | Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
 | Performance near some lights | partial | frame drops in the drill tunnel |
 | Overall brightness | to check | console footage looks brighter throughout. Lighting data audited (FINDINGS 44): light VFX components exact on the pairs, LightTOC colours and SimGroup colours/fog correct, AO maps plain DXT1. Not verifiable: level geometry (no pairs). Next: compare a base-game spot on PC with console footage at the same brightness setting |

@@ -156,19 +156,18 @@ Not yet played: the mining camp onwards, and all of chapter 2.
 
 ## Next steps
 
-0. **State at the last update:** the LUT fix worked (no black screen, no
-   `D3D GUARD` lines). Played through the quarry, the cargo lift and into
-   the mining camp's quarantine lockdown (3 terminals). New issues:
-   - one quarry door draws solid black; suspect `door_inner_01_am`
-     (doors_mng folderstream), the only mining door built by our mesh
-     converter;
-   - stomp during the upside-down tentacle grab put Gabe in the ceiling;
-   - Twitchers sometimes repeat one attack and stunlock Gabe;
-   - save picture: the load menu (exe 0xBAE170) looks up `ch%02d` by the
-     save's chapter number in a table (global 0x208BE88, 0x14-byte entries);
-     Severed saves are chapter 1. Severed's only save art is the 64x64 Xbox
-     dashboard PNGs `weller1_ch1/ch2.png`.
-   Next feature: **Gabe's upgraded Pulse Rifle**.
+0. **State at the last update:** played through the quarry, the cargo lift
+   and into the mining camp's quarantine lockdown. Pushed, waiting for a
+   test (rebuild with `Make-SeveredTest.bat`, probe 34):
+   - probe 34 sets Gabe's 10 Pulse Rifle nodes in the PC UpgradeManager;
+   - the black door: lightmap materials need 20-byte UV streams (FINDINGS
+     46, `ds2/uvwide.py`, step `uv_streams.ok`; 9 meshes incl. Gabe's helmet).
+   Open: Twitcher stunlock (AI and animations are PC-own; asked the user for
+   the difficulty and a clip); stomp during the hang after the cargo lift
+   puts Gabe in the ceiling; the bouncing body in the opening (corpses in
+   drill_tunnel_01 use PC-own models and ragdolls; only placement is ours);
+   the save picture (console shows "Severed, chapter N" with its own image).
+   Gabe's upgraded Pulse Rifle (done in probe 34, kept for reference):
    - Severed-only class `2B747EB6`, neutralised, on message
      `equip_player_upgrade_nodes`; 10 nodes, listed in FINDINGS "Severed-only
      classes".
