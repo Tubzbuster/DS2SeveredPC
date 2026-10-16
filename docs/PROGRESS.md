@@ -27,7 +27,7 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | a body thumping the ground, ragdoll-style, the whole time Gabe is on the floor in the opening scene. The section has two ragdoll corpses (`Corpse_deadpose1`, one impaled, with cloth); their impact sound (`collision_corpse_limb`) fires at 0.01 m/s, so a corpse that never settles thumps constantly. Their ragdoll data is the PC game's own, so the placement or pin (or the converted level collision under them) is the suspect. To check in game: is one of the corpses twitching? |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | a body thumping the ground, ragdoll-style, only while the opening scene plays; stops the moment control is handed over. Not the corpses (none twitch). Checked and fine: the video screen attached to Gabe (no physics), Gabe's intro animation bank (all blocks converted with full templates; the long animation data is stored as on the 360, which the PC pairs confirm), the converted floor collision (finite vertices, indices in range, no welding data). Next: a probe hook that names the object behind each impact sound |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
