@@ -67,3 +67,14 @@ fixes memory lost at region edges and long field lists cut short.
 ## Building
 
 `build.sh` cross-compiles it with Zig (`pip install ziglang==0.13.0`).
+
+## F9: add Severed to the episode list (probe 7)
+
+With the Severed test archive installed (`tools/test`, without
+`--hijack-ch01`), press **F9** once on the title screen or main menu
+(before opening Single Player). Windows plays its "asterisk" sound and the
+log shows the episode list before and after. Then Single Player -> New
+Game should offer the episode select with "Dead Space 2: Severed". F9 calls
+the game's own add-episode function (the one the console's DLC `.lvl`
+handler uses) with the values from Severed's `weller1.lvl`; it changes
+nothing on disk.

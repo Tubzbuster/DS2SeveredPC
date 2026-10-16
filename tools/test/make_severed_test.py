@@ -3,16 +3,14 @@ r"""First in-game test of the converted Severed files.
 Builds DS2DAT2.DAT in the Dead Space 2 folder from your own Severed addon
 file:
   - every Severed file converted to the PC formats, at its own path;
-  - chapter 1's stream sets file replaced by an empty stream (Severed has
-    none);
-  - Severed's top-level stream list and TOCs also under the episode names
-    ds_2\ds_2.* that the PC's chapter 1 entry loads;
-  - the game's level list with the chapter 1 entry ('ch01_hos') pointing
-    at Severed's level (folder, stream list, checkpoints), and Severed's
-    TOCs also under chapter 1's TOC names, so New Game should start
-    Severed;
-  - the PC's own global_assets\\global_assets_global.str with Severed's
+  - the PC's own global_assets\global_assets_global.str with Severed's
     updated Lua audio scripts swapped in.
+Severed is then started from the episode select screen: the probe DLL
+(tools/probe, v7) adds its entry when F9 is pressed on the title screen.
+With --hijack-ch01 (older test) New Game loads Severed in place of
+chapter 1 instead (Severed's TOCs and stream list under chapter 1's and
+the ds_2 episode's names, chapter 1's stream sets blanked, level list
+entry patched).
 Nothing else is changed; remove it with --remove (the game is normal
 again). Never overwrites an archive it did not create (marker file
 DS2DAT2.DAT.severedtest next to it).
@@ -105,6 +103,8 @@ def main():
     ap.add_argument('--ffmpeg', default='ffmpeg')
     ap.add_argument('--work', default=None)
     ap.add_argument('--remove', action='store_true')
+    ap.add_argument('--hijack-ch01', action='store_true',
+                    help='older test: New Game loads Severed in place of chapter 1')
     a = ap.parse_args()
     if a.remove:
         return remove(a.game)
@@ -167,22 +167,25 @@ def main():
     ga, swapped, total = patched_global_assets(pc_ga, open(os.path.join(dst, 'global_assets', 'global_assets_global.str'), 'rb').read())
     log('  global_assets_global.str: %d of %d Severed Lua scripts swapped in' % (swapped, total))
     files.append(('global_assets\\global_assets_global.str', ga))
-    lvl = patched_level_list(read_entry(idx, LEVEL_LIST))
-    toc_dir = os.path.join(dst, 'pdlc1_ch01_mng')
-    files.append(('ch01_hos\\ch01_hos.toc', os.path.join(toc_dir, 'pdlc1_ch01_mng.toc')))
-    files.append(('ch01_hos\\ch01_hos_global.toc', os.path.join(toc_dir, 'pdlc1_ch01_mng_global.toc')))
-    # Severed has no stream sets file (the console DLC loads without one);
-    # chapter 1's would stream chapter 1's own sections, so blank it.
-    files.append(('ch01_hos\\ch01_hos_streamsets.str', streamwrite.Writer().data()))
-    # The PC's chapter 1 entry (built into the exe) uses the episode folder
-    # ds_2\ with stream list ds_2.str; Severed's entry uses its own
-    # pdlc1_ch01_mng\pdlc1_ch01_mng.str. Put Severed's under the ds_2 names.
-    for n in ('.toc', '_global.toc', '.str', '_global.str'):
-        files.append(('ds_2\\ds_2' + n, os.path.join(toc_dir, 'pdlc1_ch01_mng' + n)))
+    extra, raw = [], {}
+    if a.hijack_ch01:
+        lvl = patched_level_list(read_entry(idx, LEVEL_LIST))
+        toc_dir = os.path.join(dst, 'pdlc1_ch01_mng')
+        files.append(('ch01_hos\\ch01_hos.toc', os.path.join(toc_dir, 'pdlc1_ch01_mng.toc')))
+        files.append(('ch01_hos\\ch01_hos_global.toc', os.path.join(toc_dir, 'pdlc1_ch01_mng_global.toc')))
+        # Severed has no stream sets file (the console DLC loads without one);
+        # chapter 1's would stream chapter 1's own sections, so blank it.
+        files.append(('ch01_hos\\ch01_hos_streamsets.str', streamwrite.Writer().data()))
+        # The PC's chapter 1 entry (built into the exe) uses the episode folder
+        # ds_2\ with stream list ds_2.str; Severed's entry uses its own
+        # pdlc1_ch01_mng\pdlc1_ch01_mng.str. Put Severed's under the ds_2 names.
+        for n in ('.toc', '_global.toc', '.str', '_global.str'):
+            files.append(('ds_2\\ds_2' + n, os.path.join(toc_dir, 'pdlc1_ch01_mng' + n)))
+        extra, raw = [('#level list', lvl)], {'#level list': LEVEL_LIST}
 
     log('Writing', target)
     tmp = target + '.tmp'
-    names = bigarchive.write(tmp, files + [('#level list', lvl)], trailer, raw={'#level list': LEVEL_LIST})
+    names = bigarchive.write(tmp, files + extra, trailer, raw=raw)
     os.replace(tmp, target)
     open(marker, 'w').write('Severed test archive created by tools/test/make_severed_test.py. Remove with --remove.')
     log('Done: %d files in %s (%.1f GB)' % (len(names), target, os.path.getsize(target) / 1e9))

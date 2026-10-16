@@ -928,11 +928,70 @@ static void desc_dump(void)
     MessageBeep(MB_ICONASTERISK);
 }
 
+
+/* ---- F9: add Severed to the episode list --------------------------------
+ * Same build as the unwrapped retail exe (fixed base 0x400000):
+ *   frontend singleton   [0x0201C0E4], set by its constructor (0x00AA09E0)
+ *   episode list         frontend + 0x980: vector {begin, end, cap} of
+ *                        0x68-byte entries (strings of 16 bytes, text
+ *                        pointer first): +0x00 name, +0x10 description,
+ *                        +0x20 folder, +0x30 stream list, +0x40 extra,
+ *                        +0x50 start checkpoint GUID, +0x60 flags,
+ *                        +0x64 unlock key
+ *   AddEpisode           0x00A93520, thiscall, 8 arguments (ret 0x20); the
+ *                        console DLC path (.lvl) calls it with weller1.lvl's
+ *                        fields.
+ */
+typedef void (__attribute__((thiscall)) *add_episode_fn)(void *self, const char *name, const char *desc,
+        const char *folder, const char *streams, const char *checkpoint, int flags, int unlock, const char *extra);
+
+static int mem_ok(const void *p, SIZE_T n)
+{
+    MEMORY_BASIC_INFORMATION mi;
+    if (!p || !VirtualQuery(p, &mi, sizeof mi) || mi.State != MEM_COMMIT || (mi.Protect & (PAGE_GUARD | PAGE_NOACCESS)))
+        return 0;
+    return (BYTE *)p + n <= (BYTE *)mi.BaseAddress + mi.RegionSize;
+}
+
+static void log_episodes(void *fe)
+{
+    BYTE *v = (BYTE *)fe + 0x980, *b, *e, *x;
+    if (!mem_ok(v, 12)) return;
+    b = *(BYTE **)v; e = *(BYTE **)(v + 4);
+    log_line("episode list: %d entries", b && e > b ? (int)((e - b) / 0x68) : 0);
+    for (x = b; x && x < e && mem_ok(x, 0x68); x += 0x68) {
+        const char *n = *(const char **)x, *f = *(const char **)(x + 0x20), *c = *(const char **)(x + 0x50);
+        log_line("  %s | %s | %s", n && mem_ok(n, 1) ? n : "-", f && mem_ok(f, 1) ? f : "-", c && mem_ok(c, 1) ? c : "-");
+    }
+}
+
+static void add_severed(void)
+{
+    static int done;
+    void *fe;
+    if (!mem_ok((void *)0x0201C0E4, 4) || !(fe = *(void **)0x0201C0E4)) {
+        log_line("F9: the front end is not up yet - press F9 on the title screen or main menu");
+        return;
+    }
+    log_episodes(fe);
+    if (done) { log_line("F9: Severed was already added"); return; }
+    ((add_episode_fn)0x00A93520)(fe, "Dead Space 2: Severed", "Gabe Weller's story (converted from the Xbox 360 DLC)",
+        "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
+    done = 1;
+    log_line("F9: added Severed to the episode list");
+    log_episodes(fe);
+    MessageBeep(MB_ICONASTERISK);
+}
+
 static DWORD WINAPI hotkey_thread(LPVOID p)
 {
     (void)p;
     for (;;) {
         Sleep(200);
+        if (GetAsyncKeyState(VK_F9) & 0x8000) {
+            add_severed();
+            while (GetAsyncKeyState(VK_F9) & 0x8000) Sleep(100);
+        }
         if (GetAsyncKeyState(VK_F10) & 0x8000) {
             reflect_scan();
             while (GetAsyncKeyState(VK_F10) & 0x8000) Sleep(100);
@@ -960,7 +1019,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 6 - process %s", path);
+    log_line("severed probe 7 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -981,7 +1040,7 @@ static void start(HMODULE self)
     install("ReadFile", (void *)h_ReadFile, (void **)&o_ReadFile);
     log_line("--- hooks installed ---");
     CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL);
-    log_line("press F10 for the reflection scan, F11 for the descriptor dump");
+    log_line("press F9 to add Severed to the episode list, F10 for the reflection scan, F11 for the descriptor dump");
 }
 
 /* ---- dinput8 forwarding ----------------------------------------------- */

@@ -710,3 +710,36 @@ PC's level entries appear to be built into the exe (the level list file
 `ds_2\ds_2.toc/.str/_global.str` were). Next test: Severed's own
 top-level files (`pdlc1_ch01_mng\pdlc1_ch01_mng.toc/.str/_global.*`) also
 under the `ds_2\ds_2.*` names.
+
+## 32. The episode list and how the console added Severed
+
+A retail build of `deadspace2.exe` without the Steam wrapper (same build:
+`.rdata`/`.data` match the Steam exe page for page, only the Steam exe's
+code is encrypted; fixed base 0x400000) lets the code be read statically.
+Read-only analysis, nothing patched on disk:
+
+- The engine registers a loader per file extension: `.lds` (0x00414380,
+  manager [0x02021410]), `.rep`, `.add` ([0x02021418]), `.lvl`
+  (0x00A54440, manager [0x020213F0], level count at +0x8528), etc. So the
+  DLC descriptors are ordinary resources.
+- The front end (constructor 0x00AA09E0, singleton [0x0201C0E4]) keeps
+  the episode list at +0x980: a vector of 0x68-byte entries (+0x00 name,
+  +0x10 description, +0x20 folder, +0x30 stream list, +0x40 extra, +0x50
+  start checkpoint GUID, +0x60 flags, +0x64 unlock key; strings are 16-byte
+  objects with the text pointer first). The constructor adds the built-in
+  entry: `$ui_episode_ds_name`, `$ui_episode_ds_help`, `ds_2`,
+  `ds_2.str`, "", `XCENTKOWSK_C9C50BC_08B592A_v3` (chapter 1's initial
+  checkpoint).
+- AddEpisode 0x00A93520 (thiscall, 8 arguments: name, description,
+  folder, stream list, checkpoint, flags, unlock key, extra) is called only
+  from 0x00A99C00, a message handler taking a level descriptor - the
+  `.lvl` path. Severed's `weller1.lvl` has exactly these fields: name
+  `$weller1_map_name`, description `$weller1_map_desc`, flags 0, unlock
+  key 0 (always unlocked), folder `pdlc1_ch01_mng`, stream
+  `pdlc1_ch01_mng.str`, checkpoint `XONTREALPR_CB22182_E50854D_v3`, save
+  chapter name, "no difficulty" text, save icon suffix.
+
+So the menu hook only has to make that one call (probe 7: F9). The
+episode's display text (`$weller1_*`) is in Severed's
+`dlc_support\level_select.str`, which the console loads in the front end
+through `weller1.lds` (load mask 1 = front end).
