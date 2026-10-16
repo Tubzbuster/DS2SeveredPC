@@ -106,23 +106,23 @@ and grinder area. Works:
 
 Open, most important first:
 
-1. **Quarry crash** (`bomb_run/quarry_z01`), cause found by probe 30.
-   - Just before the crash the game sets sampler states on stage **417**:
-     its texture apply (exe `0x13D8540`) adds 0xF1 to slots >= 16, so slot
-     176 was asked for.
-   - Direct3D 9 has stages 0-15 and 256-260 only; an unchecked stage
-     writes past its internal tables. That explains the same garbage
-     (`0x15FFCF8F`) and the crash surfacing later in an innocent
-     full-screen pass.
-   - "Set texture on slot N" (exe `0x13C8070`) also writes past the game's
-     own 20-entry slot table (`0x211C6DC`).
-   - Probe 31 refuses SetTexture/SetSamplerState on invalid stages and logs
-     the exe call chain (`D3D GUARD: ... is not a Direct3D stage`).
-   - **Next:** from the chain, find which asset asks for slot 176 (likely
-     a converted Material/VFX sampler index in `quarry_z01`) and fix its
-     conversion.
-   - Ruled out earlier: heap corruption, invalid or freed objects, the
-     vertex texture (R32F; unbinding it changed nothing).
+1. **Quarry crash: worked around by probe 31**, which refuses
+   SetTexture/SetSamplerState on invalid stages. The quarry now loads and
+   plays.
+   - The bad call came from exe `0x6DAF10` (per-frame pass; chain
+     `0x6DF625` → `0x6DB018` → `0x13D2710` → `0x13C8070` →
+     `0x13D8540`). It binds a list of textures `[ebp+8]` (count
+     `[ebp+0xC]`) using the slot table `0x2033E90` (6 dwords per shader:
+     index `(obj+0xB0)*6 + i`); `0x13D2710` takes the slot from the low
+     byte, +16 for vertex shaders.
+   - An object handed more textures than its shader has slots reads past
+     the table: slot 176 → stage 417 → Direct3D writes past its tables.
+   - **Next:** log the object (shader index `[esi+0xB0]`, texture count,
+     texture handles; the texture table is `0x20E04D8`, 0x3C bytes per
+     entry) to find the asset. Suspects: quarry_z01's converted VFX,
+     especially `pdlc_quarry_atmo_01-07`. Then fix the conversion.
+   - Probably related: the quarry is very dark, with "black smog" (the
+     object draws with a leftover texture on that slot).
 2. **Thumping in the opening scene:** absent in the user's last two runs
    (one without F9). Possibly fixed by the video audio conversion
    (FINDINGS 43); not confirmed. Ruled out: the cutscene audio, corpse
