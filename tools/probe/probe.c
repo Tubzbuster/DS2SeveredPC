@@ -1286,10 +1286,26 @@ static void __cdecl on_level_start(void *self)
     lstrcpynA(name, folder, sizeof name);
     n = lstrlenA(name);
     while (n && (name[n - 1] == '\\' || name[n - 1] == '/')) name[--n] = 0;
+    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) g_severed_level = 1;
+    /* Probe 12's experiment loaded a copy of the level's SimGroup as a stream
+       sets file. Since probe 23 it is off: every level object then existed
+       twice under the same GUID, and messages aimed at the Player (starting
+       equipment, health, Gabe's opening scene) reached the copy instead of
+       the player. A file named severed_streamsets.on in the game folder
+       turns it back on. */
+    {
+        char flag[MAX_PATH], *slash;
+        GetModuleFileNameA(NULL, flag, sizeof flag);
+        slash = strrchr(flag, '\\');
+        if (slash) lstrcpyA(slash + 1, "severed_streamsets.on");
+        if (GetFileAttributesA(flag) == INVALID_FILE_ATTRIBUTES) {
+            log_line("level start: level SimGroup copy not requested (severed_streamsets.on absent)");
+            return;
+        }
+    }
     wsprintfA(path, "%s\\%s_streamsets.str", name, name);
     log_line("level start: requesting %s in stream-sets mode", path);
     g_streamreq(*g_streammgr, path, 0.0f, 0, 0, 0);
-    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) g_severed_level = 1;
 }
 
 /* stub: pushad/pushfd, call cb(ecx), restore, run the original first
@@ -1644,7 +1660,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 22 - process %s", path);
+    log_line("severed probe 23 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

@@ -1075,3 +1075,25 @@ loudest), R, Ls, Rs, LFE (silent). Mix:
 - scaled down only if it would clip.
 
 Working list of in-game progress: docs/PROGRESS.md.
+
+## 40. The Player object resolved to a copy
+
+The scripted sequence trace (probe 22) hooks the handler dispatcher of
+ScriptedSequenceSM (exe 0xECA440). It recorded one state machine, in the
+front end, and none at all in Severed. So `ses_player_01_01` never created
+its state machine; its audio was primed, the first step on triggering.
+
+Three things target the same Player object
+`{52CB2210-69DE-25A9-5254-4E4F504C4145}`, and all three failed:
+- the scene `ses_player_01_01`;
+- `equip_command_player_initial`, even when sent by F8 (inventory empty);
+- `set_health_player_health_initial` (RIG health missing).
+
+Probe 12's experiment loaded a copy of the level SimGroup as
+`pdlc1_ch01_mng_streamsets.str` in stream-sets mode, so every object of the
+main SimGroup, the Player included, existed twice under one GUID.
+
+Probe 23 no longer requests the copy. A file `severed_streamsets.on` in the
+game folder brings it back, in case the level needs it after all: since the
+Severed-only classes are neutralised, sections stream without it as far as
+we know.
