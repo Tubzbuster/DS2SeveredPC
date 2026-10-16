@@ -62,7 +62,7 @@ and is corrected as we play.
 | Subtitles | works | |
 | Dialogue and audio logs (stereo streams) | works | |
 | Cutscene audio (5.1 streams) | fix pending | stereo downmix |
-| RIG health spine | broken | not shown at all; fix pending (PC game's own RIG bar meshes) |
+| RIG health spine | works | since the PC game's own RIG bar meshes are used |
 | Starting equipment (`equip_command_player_initial`) | broken | inventory empty |
 | Gabe's Pulse Rifle and RIG upgrades | missing | Severed-only object type, to be redone |
 | Weapons: Flamethrower pickup | works | |

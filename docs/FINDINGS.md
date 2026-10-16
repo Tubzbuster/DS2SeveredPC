@@ -1084,10 +1084,12 @@ front end, and none at all in Severed. So `ses_player_01_01` never created
 its state machine; its audio was primed, the first step on triggering.
 
 Three things target the same Player object
-`{52CB2210-69DE-25A9-5254-4E4F504C4145}`, and all three failed:
+`{52CB2210-69DE-25A9-5254-4E4F504C4145}`:
 - the scene `ses_player_01_01`;
 - `equip_command_player_initial`, even when sent by F8 (inventory empty);
-- `set_health_player_health_initial` (RIG health missing).
+- `set_health_player_health_initial`. The missing RIG health turned out to
+  be the RIG bar meshes: it works since the PC game's own assets are used.
+  Whether the health message itself arrives is not known.
 
 Probe 12's experiment loaded a copy of the level SimGroup as
 `pdlc1_ch01_mng_streamsets.str` in stream-sets mode, so every object of the
