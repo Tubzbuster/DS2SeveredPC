@@ -834,3 +834,10 @@ drill_cavern_01, drill_saferoom, doors_mng_folderstream (StreamSet GUIDs
 print as {w0-w1lo-w1hi-...} and match the section SimGroups' names).
 Probe 17 requests those sections directly to see whether converted level
 sections load and render.
+
+Probe 17: requesting the start sections at level start loaded
+`drill_tunnel_01`'s SimGroup (44 records, ZoneRender/props/components) right
+after the main level SimGroup, then crashed in ZoneRender setup (null zone,
+exe+0x3EE6A1 called from the CMD_SetFilterMask/ZoneRenderFlags handler):
+the sections came before the main level stream was set up. Probe 18 queues
+the request on F9 in the black level and runs it on the game thread.

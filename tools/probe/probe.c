@@ -526,10 +526,11 @@ static int stub_pointer(BYTE *fn, void *hook, void **orig)
 
 static void install(const char *name, void *hook, void **orig)
 {
-    static const char *mods[] = { "kernelbase.dll", "kernel32.dll" };
+    static const char *mods[] = { "kernelbase.dll", "kernel32.dll", "user32.dll" };
     int i;
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 3; i++) {
         HMODULE m = GetModuleHandleA(mods[i]);
+        if (!m && i == 2) m = LoadLibraryA("user32.dll");
         BYTE *fn = m ? (BYTE *)GetProcAddress(m, name) : NULL;
         if (!fn) continue;
         if (hotpatch(fn, hook, orig)) { log_line("hooked %s in %s (hot-patch)", name, mods[i]); return; }
@@ -1134,6 +1135,43 @@ typedef void *(__attribute__((thiscall)) *stream_req_fn)(void *mgr, const char *
 static stream_req_fn g_streamreq;
 static void **g_streammgr;
 
+
+/* ---- F9: request the start sections on the game's thread ---------------
+ * Probe 17 requested them at level start, before the main level stream was
+ * set up, and ZoneRender crashed on its missing zone. Now F9 (in the black
+ * level) queues the request and the game's own thread runs it from its
+ * message loop (PeekMessage hook). */
+static volatile LONG g_sections_pending;
+static int g_severed_level;
+static DWORD g_game_thread;
+static const char *g_sections[] = {
+    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_01\\drill_tunnel_01.str",
+    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_02\\drill_tunnel_02.str",
+    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_cavern_01\\drill_cavern_01.str",
+    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_saferoom\\drill_saferoom.str",
+    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\shared\\design\\mini-global\\doors_mng\\doors_mng_folderstream.str",
+};
+
+static void run_pending_sections(void)
+{
+    int i;
+    if (!g_sections_pending || GetCurrentThreadId() != g_game_thread || !g_streamreq || !g_streammgr || !*g_streammgr)
+        return;
+    if (InterlockedExchange(&g_sections_pending, 0) == 0) return;
+    for (i = 0; i < (int)(sizeof g_sections / sizeof g_sections[0]); i++) {
+        log_line("F9: requesting section %s", g_sections[i]);
+        g_streamreq(*g_streammgr, g_sections[i], 0.0f, 2, 0, 0);
+    }
+    MessageBeep(MB_ICONASTERISK);
+}
+
+typedef BOOL (WINAPI *PeekMessageA_t)(LPMSG, HWND, UINT, UINT, UINT);
+typedef BOOL (WINAPI *PeekMessageW_t)(LPMSG, HWND, UINT, UINT, UINT);
+static PeekMessageA_t o_PeekMessageA;
+static PeekMessageW_t o_PeekMessageW;
+static BOOL WINAPI h_PeekMessageA(LPMSG m, HWND w, UINT a, UINT b, UINT r) { run_pending_sections(); return o_PeekMessageA(m, w, a, b, r); }
+static BOOL WINAPI h_PeekMessageW(LPMSG m, HWND w, UINT a, UINT b, UINT r) { run_pending_sections(); return o_PeekMessageW(m, w, a, b, r); }
+
 static void __cdecl on_level_start(void *self)
 {
     const char *folder = self && mem_ok((BYTE *)self + 0x28, 4) ? *(const char **)((BYTE *)self + 0x28) : NULL;
@@ -1141,6 +1179,8 @@ static void __cdecl on_level_start(void *self)
     int n;
     if (!folder || !mem_ok(folder, 1)) return;
     log_line("level start: folder %s", folder);
+    g_game_thread = GetCurrentThreadId();
+    g_severed_level = 0;
     if (!strstr(folder, "pdlc") || !g_streamreq || !g_streammgr || !*g_streammgr) return;
     lstrcpynA(name, folder, sizeof name);
     n = lstrlenA(name);
@@ -1148,23 +1188,7 @@ static void __cdecl on_level_start(void *self)
     wsprintfA(path, "%s\\%s_streamsets.str", name, name);
     log_line("level start: requesting %s in stream-sets mode", path);
     g_streamreq(*g_streammgr, path, 0.0f, 0, 0, 0);
-    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) {
-        /* experiment: the sections of the start checkpoint's stream set
-           (XONTREALPR_CB22182_E50854D -> StreamSet 52CB2218 2E50854E),
-           requested directly as level streams */
-        static const char *sections[] = {
-            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_01\\drill_tunnel_01.str",
-            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_02\\drill_tunnel_02.str",
-            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_cavern_01\\drill_cavern_01.str",
-            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_saferoom\\drill_saferoom.str",
-            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\shared\\design\\mini-global\\doors_mng\\doors_mng_folderstream.str",
-        };
-        int i;
-        for (i = 0; i < (int)(sizeof sections / sizeof sections[0]); i++) {
-            log_line("level start: requesting section %s", sections[i]);
-            g_streamreq(*g_streammgr, sections[i], 0.0f, 2, 0, 0);
-        }
-    }
+    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) g_severed_level = 1;
 }
 
 /* stub: pushad/pushfd, call cb(ecx), restore, run the original first
@@ -1327,6 +1351,10 @@ static void add_severed(void)
     void **global = (void **)0x0201C0E4, *fe;
     (void)ctor; (void)nc;
     log_line("F9: Severed added %ld time(s) by the menu hook", g_added);
+    if (g_severed_level) {
+        log_line("F9: start sections queued for the game thread (%lu)", g_game_thread);
+        InterlockedExchange(&g_sections_pending, 1);
+    }
     log_class_fields(0x02098B78, 0x0575C2F4);
     if (mem_ok(global, 4) && (fe = *global)) log_episodes(fe);
 }
@@ -1417,7 +1445,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 17 - process %s", path);
+    log_line("severed probe 18 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -1436,6 +1464,8 @@ static void start(HMODULE self)
     install("GetFileAttributesExW", (void *)h_GetFileAttributesExW, (void **)&o_GetFileAttributesExW);
     install("CloseHandle", (void *)h_CloseHandle, (void **)&o_CloseHandle);
     install("ReadFile", (void *)h_ReadFile, (void **)&o_ReadFile);
+    install("PeekMessageA", (void *)h_PeekMessageA, (void **)&o_PeekMessageA);
+    install("PeekMessageW", (void *)h_PeekMessageW, (void **)&o_PeekMessageW);
     log_line("--- hooks installed ---");
     CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL);
     CreateThread(NULL, 0, menu_hook_thread, NULL, 0, NULL);

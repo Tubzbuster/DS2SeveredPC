@@ -120,3 +120,9 @@ Probe 17 (experiment): when Severed starts, also requests the five
 sections of its start checkpoint's stream set (drill tunnel 01/02, drill
 cavern, drill saferoom, doors) directly as level streams. The name hash
 log of probe 16 is off again (that function only sees UI names).
+
+Probe 18: the start sections are no longer requested at level start
+(probe 17 did that before the main level stream was set up and ZoneRender
+crashed on its missing zone). Instead press **F9** in the black Severed
+level: the request is queued and the game's main thread runs it from its
+message loop (PeekMessage hook).
