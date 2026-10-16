@@ -1131,6 +1131,32 @@ static int hook_log_arg1(BYTE *fn, int len, void (__cdecl *cb)(const char *))
     return hook_log_word(fn, len, cb, 4);
 }
 
+/* like hook_log_word, but cb gets the entry stack pointer (sp[0] = return
+   address, sp[1..] = arguments) */
+static int hook_log_sp(BYTE *fn, int len, void (__cdecl *cb)(const DWORD *))
+{
+    BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
+    DWORD old;
+    if (!t) return 0;
+    q = t;
+    *q++ = 0x60;                                   /* pushad */
+    *q++ = 0x9C;                                   /* pushfd */
+    *q++ = 0x8D; *q++ = 0x44; *q++ = 0x24; *q++ = 0x24;   /* lea eax, [entry esp] */
+    *q++ = 0x50;                                   /* push eax */
+    *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
+    *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
+    *q++ = 0x9D;                                   /* popfd */
+    *q++ = 0x61;                                   /* popad */
+    memcpy(q, fn, len); q += len;
+    *q++ = 0xE9; *(DWORD *)q = (DWORD)(fn + len) - (DWORD)(q + 4); q += 4;
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) { VirtualFree(t, 0, MEM_RELEASE); return 0; }
+    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)t - (DWORD)(fn + 5);
+    if (len > 5) memset(fn + 5, 0x90, len - 5);
+    VirtualProtect(fn, len, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, len);
+    return 1;
+}
+
 static int hook_log_word(BYTE *fn, int len, void (__cdecl *cb)(const char *), int off)
 {
     BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
@@ -1280,10 +1306,13 @@ static void run_pending_messages(void)
     MessageBeep(MB_ICONASTERISK);
 }
 
+static void heap_watch(void);
+
 static void run_pending_sections(void)
 {
     int i;
     run_pending_messages();
+    heap_watch();
     if (!g_sections_pending || GetCurrentThreadId() != g_game_thread || !g_streamreq || !g_streammgr || !*g_streammgr)
         return;
     if (InterlockedExchange(&g_sections_pending, 0) == 0) return;
@@ -1406,13 +1435,58 @@ static int hook_wrap(BYTE *fn, int len, void *hook, void **tramp)
 static const char SIG_BATCHBEGIN[] =
     "8B 44 24 14 53 8B 5C 24 14 56 57 81 FB 00 00 00 80 74 04 8B 44 24 14 8B 7C 24 18 8B 15 ?? ?? ?? ?? "
     "0F AF C7 83 C0 0F C1 E8 04 40 C1 E0 04 8B F0";
-static volatile DWORD g_batch_ring[16];
+/* per batch: caller, then begin's arguments (primitive, vertex count,
+   stride, count override (0x80000000 = use the next one), count, flag) */
+static volatile DWORD g_batch_ring[16][7];
 static volatile LONG g_batch_pos;
 
-static void __cdecl note_batch(const char *ret)
+static void __cdecl note_batch(const DWORD *sp)
 {
     LONG i = InterlockedIncrement(&g_batch_pos);
-    g_batch_ring[i & 15] = (DWORD)ret;
+    int k;
+    for (k = 0; k < 7; k++) g_batch_ring[i & 15][k] = sp[k];
+}
+
+/* ---- heap watch (probe 26) ------------------------------------------------
+ * The quarry crash is inside a heap function called by Direct3D, with
+ * garbage in the registers: heap corruption. Every 2 s (on the game
+ * thread, from the PeekMessage hook) and at a crash, every process heap is
+ * validated; the first failure of each heap is logged, which dates the
+ * corruption (loading a section vs rendering). */
+static DWORD g_heap_tick;
+static HANDLE g_heap_bad[64];
+static int g_nheap_bad;
+
+static int heap_known_bad(HANDLE h)
+{
+    int i;
+    for (i = 0; i < g_nheap_bad; i++) if (g_heap_bad[i] == h) return 1;
+    return 0;
+}
+
+static void check_heaps(const char *when)
+{
+    HANDLE heaps[64];
+    DWORD n, i;
+    n = GetProcessHeaps(64, heaps);
+    if (n > 64) n = 64;
+    for (i = 0; i < n; i++) {
+        if (heap_known_bad(heaps[i])) continue;
+        if (!HeapValidate(heaps[i], 0, NULL)) {
+            log_line("HEAP %lu of %lu (%p%s) is CORRUPT - found %s", i, n, heaps[i],
+                     heaps[i] == GetProcessHeap() ? ", process heap" : "", when);
+            if (g_nheap_bad < 64) g_heap_bad[g_nheap_bad++] = heaps[i];
+        }
+    }
+}
+
+static void heap_watch(void)
+{
+    DWORD now = GetTickCount();
+    if (!g_added || GetCurrentThreadId() != g_game_thread || now - g_heap_tick < 2000) return;
+    if (!g_heap_tick) log_line("heap watch: validating all heaps every 2 s");
+    g_heap_tick = now;
+    check_heaps("by the 2 s check");
 }
 
 
@@ -1543,7 +1617,7 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                 int nb;
                 BYTE *bb = find_sig(SIG_BATCHBEGIN, &nb);
                 log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s", nb, bb ? (DWORD)bb - base : 0,
-                         bb && hook_log_word(bb, 9, note_batch, 0) ? ", hooked" : "");
+                         bb && hook_log_sp(bb, 9, note_batch) ? ", hooked" : "");
             }
             {
                 int nq;
@@ -1660,12 +1734,14 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
         LONG k, last = g_batch_pos;
         char who[MAX_PATH + 32];
         for (k = 0; k < 16; k++) {               /* unset slots are 0; wraps safely */
-            DWORD a = g_batch_ring[(DWORD)(last - k) & 15];
-            if (!a) continue;
-            addr_name(a, who, sizeof who);
-            log_line("  geometry batch %ld started from %s", (long)k, who);
+            volatile DWORD *b = g_batch_ring[(DWORD)(last - k) & 15];
+            if (!b[0]) continue;
+            addr_name(b[0], who, sizeof who);
+            log_line("  geometry batch %ld started from %s (prim %lu, verts %lu, stride %lu, %08lx, count %lu, %lu)",
+                     (long)k, who, b[1], b[2], b[3], b[4], b[5], b[6]);
         }
     }
+    if (GetCurrentThreadId() == g_game_thread) check_heaps("at the crash");
     log_meshes_near("eax", c->Eax); log_meshes_near("ebx", c->Ebx); log_meshes_near("ecx", c->Ecx);
     log_meshes_near("edx", c->Edx); log_meshes_near("esi", c->Esi); log_meshes_near("edi", c->Edi);
     log_meshes_near("ebp", c->Ebp);
@@ -1730,7 +1806,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 25 - process %s", path);
+    log_line("severed probe 26 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

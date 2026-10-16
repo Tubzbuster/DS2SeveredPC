@@ -27,11 +27,11 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | something collides constantly off camera during the opening scene (sound) |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | loud collision sound repeats the whole time Gabe is on the floor in the opening scene (still there with the navmesh fixed); suspects: a physics body stuck in the level collision (two of the section's collision files are our conversions), or Gabe's own body during the animation |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
-| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash in Direct3D a few seconds after quarry_z01 loaded, while drawing the frame's dynamic geometry (particles / decals); probe 24 names the code that queued it |
+| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, 4 s after quarry_z01 (38 MB) finished loading. Inside a Windows heap function called by Direct3D while drawing a full-screen post-processing pass, with garbage in the registers: heap corruption from earlier. Probe 26 checks the heaps every 2 s to date it |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | untested | scene `igc_01_05`; end of chapter 1 |
@@ -67,7 +67,7 @@ and is corrected as we play.
 | Gabe's Pulse Rifle and RIG upgrades | missing | Severed-only object type, to be redone |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
-| Necromorph AI | fix pending | enemies ran in place: the game rejected every converted navigation mesh (checksum); the checksums are now recomputed |
+| Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
 | Crash in the quarry | broken | see bomb_run |
 | Save stations | partial | first save works; second use locks up; saves are listed as "Chapter 1" (loading one probably starts the base game: do not rely on them) |
 | Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
@@ -81,3 +81,15 @@ and is corrected as we play.
 - F8 (probe 20+): sends the intro hand-over. F7: sends the messages listed
   in `severed_send.txt`.
 - Crash reports name the meshes near the crash (probe 21+).
+
+## To do for a release
+
+- **Installer app:** a small window that asks for:
+  - A) the Xbox 360 Severed add-on file, or the unpacked add-on folder;
+  - B) the Dead Space 2 PC folder (retail or Steam).
+
+  Each box has a Browse button. The app then runs the conversion that
+  `Make-SeveredTest.bat` does now.
+- **Bundle ffmpeg with the app**, replacing the third path the `.bat` asks
+  for now (`ffmpeg.exe`, used to decode the Xbox XMA audio). Use an LGPL
+  build with its licence and source offer included.
