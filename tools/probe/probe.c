@@ -1354,6 +1354,46 @@ static int hook_wrap(BYTE *fn, int len, void *hook, void **tramp)
 }
 
 
+/* ---- scripted sequence trace (probe 22) ---------------------------------
+ * A ScriptedEventSequence runs a table-driven state machine
+ * (ScriptedSequenceSM: idle, gotoSS, gotoPos, trackToPos, waitAtSS, faceOrient,
+ * action, done, exit). Its states' checks and actions are numbered handlers
+ * dispatched by one function (retail exe 0x00ECA440, thiscall, handler number
+ * = third argument, 0x0A-0x16). Each handler's result is logged when first
+ * seen and whenever it changes, per state machine, so the log shows which
+ * state a stuck sequence is in and what it waits for. Values only. */
+static const char SIG_SSMHANDLER[] =
+    "55 8B EC 83 E4 F0 83 EC 2C 56 8B F1 8B 4D 10 8D 41 F6 83 F8 0C 0F 87 ?? ?? ?? ?? FF 24 85 ?? ?? ?? ?? "
+    "8A 46 5C 24 01 5E 8B E5 5D C2 10 00";
+typedef DWORD (__attribute__((thiscall)) *ssm_fn)(void *self, DWORD a, DWORD b, DWORD idx, DWORD c);
+static ssm_fn g_ssm_tramp;
+#define SSM_SLOTS 256
+static struct { void *self; DWORD idx, result; } g_ssm[SSM_SLOTS];
+static int g_nssm;
+
+static DWORD __attribute__((thiscall)) hook_ssm(void *self, DWORD a, DWORD b, DWORD idx, DWORD c)
+{
+    static LONG lines;
+    DWORD r = g_ssm_tramp(self, a, b, idx, c);
+    int i;
+    for (i = 0; i < g_nssm; i++)
+        if (g_ssm[i].self == self && g_ssm[i].idx == idx) break;
+    if (i < g_nssm && g_ssm[i].result == r) return r;
+    if (i == g_nssm) {
+        if (g_nssm >= SSM_SLOTS) return r;
+        g_ssm[i].self = self; g_ssm[i].idx = idx; g_nssm++;
+    }
+    g_ssm[i].result = r;
+    if (InterlockedIncrement(&lines) <= 3000) {
+        BYTE *o = (BYTE *)self;
+        log_line("SSM %08lx handler 0x%02lx -> %08lx  [+20]=%08lx [+5c]=%08lx [+88]=%08lx", (DWORD)self, idx, r,
+                 mem_ok(o + 0x20, 4) ? *(DWORD *)(o + 0x20) : 0, mem_ok(o + 0x5c, 4) ? *(DWORD *)(o + 0x5c) : 0,
+                 mem_ok(o + 0x88, 4) ? *(DWORD *)(o + 0x88) : 0);
+    }
+    return r;
+}
+
+
 /* ---- name hash log ------------------------------------------------------
  * The game's name hash (retail exe 0x007423C0: lower-case sdbm of a C
  * string, cdecl) is used for archive lookups among many other things.
@@ -1436,6 +1476,12 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                 BYTE *sg = find_sig(SIG_SGBLOCK, &ng);
                 log_line("simgroup block log: %d match(es) at exe+0x%lx%s", ng, sg ? (DWORD)sg - base : 0,
                          sg && hook_wrap(sg, 6, (void *)hook_sgblock, (void **)&g_sgblock_tramp) ? ", hooked" : "");
+            }
+            {
+                int nq;
+                BYTE *q = find_sig(SIG_SSMHANDLER, &nq);
+                log_line("scripted sequence trace: %d match(es) at exe+0x%lx%s", nq, q ? (DWORD)q - base : 0,
+                         q && hook_wrap(q, 9, (void *)hook_ssm, (void **)&g_ssm_tramp) ? ", hooked" : "");
             }
             {
                 int nm;
@@ -1598,7 +1644,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 21 - process %s", path);
+    log_line("severed probe 22 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
