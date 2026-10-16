@@ -152,33 +152,46 @@ def refresh_simgroups(root, dst, class_hash):
             log('  re-converted %d SimGroup(s) in %s' % (n, os.path.relpath(p, dst)))
 
 
-def refresh_hkx(root, dst, marker):
-    """re-convert the Havok files that contain a class whose conversion was
-    fixed after the files were converted (marker: its name, as bytes)"""
-    from ds2 import convert
+def refresh_assets(root, dst, typ, convert, marker=None):
+    """re-convert the assets of one type whose conversion was fixed after the
+    files were converted (only those containing marker, if given), fixing
+    the TOC sizes of streams that changed size"""
+    sizes = {}
     for d, _, fs in os.walk(dst):
         for f in fs:
             if not f.lower().endswith('.str'):
                 continue
             p = os.path.join(d, f)
             data = open(p, 'rb').read()
-            if marker not in data:
+            if marker is not None and marker not in data:
                 continue
             src = os.path.join(root, os.path.relpath(p, dst))
             if not os.path.exists(src):
                 continue
-            fresh = {(a.name, a.ids): a for a in streamfile.read(open(src, 'rb').read())[1] if a.type == 'HKX'}
+            fresh = {(a.name, a.ids): a for a in streamfile.read(open(src, 'rb').read())[1] if a.type == typ}
+            if not fresh:
+                continue
             w = streamwrite.Writer()
-            n = 0
+            n = total = 0
             for a in streamfile.read(data)[1]:
                 y = a.payload()
-                if a.type == 'HKX' and marker in y and (a.name, a.ids) in fresh:
-                    z = convert.CONVERTERS['HKX'](fresh[(a.name, a.ids)].payload())
-                    if z is not None and len(z) == len(y):
+                if a.type == typ and (marker is None or marker in y) and (a.name, a.ids) in fresh:
+                    z = convert(fresh[(a.name, a.ids)].payload())
+                    if z is not None:
                         y, n = z, n + 1
                 w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+                total += len(y)
             open(p, 'wb').write(w.data())
-            log('  re-converted %d Havok file(s) in %s' % (n, os.path.relpath(p, dst)))
+            sizes[os.path.splitext(os.path.relpath(p, dst))[0].replace('/', '\\')] = total
+            log('  re-converted %d %s asset(s) in %s' % (n, typ, os.path.relpath(p, dst)))
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower().endswith('.toc'):
+                p = os.path.join(d, f)
+                y = open(p, 'rb').read()
+                for name, size in sizes.items():
+                    y = toc.set_size(y, name, size)
+                open(p, 'wb').write(y)
 
 
 def remove(game):
@@ -261,8 +274,14 @@ def main():
             refresh_simgroups(root, dst, h)
         open(os.path.join(work, 'neutral_fix.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'hkx_fix.ok')):
-        refresh_hkx(root, dst, b'hkpStorageExtendedMeshShape')   # level collision (reflection data)
+        from ds2 import convert
+        refresh_assets(root, dst, 'HKX', convert.CONVERTERS['HKX'],
+                       b'hkpStorageExtendedMeshShape')    # level collision (reflection data)
         open(os.path.join(work, 'hkx_fix.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'strip_fix.ok')):
+        log('Re-converting meshes (triangle strips)')
+        refresh_assets(root, dst, 'Mesh', lambda x: build.meshconv.convert(x, build._model('mesh_templates.pkl')))
+        open(os.path.join(work, 'strip_fix.ok'), 'w').write('ok')
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):

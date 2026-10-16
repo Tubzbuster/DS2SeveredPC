@@ -8,7 +8,7 @@ swapped); index buffers u16 swapped; names, bone palettes and other text
 kept as stored.
 """
 import math, struct
-from . import geo, templates as T
+from . import geo, strips, templates as T
 
 
 def _ub(v):
@@ -118,4 +118,92 @@ def convert(x, tmpl):
         if _texty_run(x, i):
             continue
         _swap(out, i)
-    return bytes(out)
+    return restrip(x, a, out)
+
+
+PRIM = 0x3C          # DT1 u16: primitive type (360 strip 6 -> PC strip 5), then u16 index count
+STRIP_360, STRIP_PC = 6, 5
+ALIGN = 0x80
+
+
+GRID = 0x8C          # DT1 pointer: per-table grid
+
+
+def _grid(x, out, t, pmap, n):
+    """the table's spatial grid: 3 vectors (32-bit, converted already), then
+    u16 nx, ny, nz, reference count, cell count, the references (positions
+    of runs in the table's strip) and cell count + 1 offsets into them. The
+    positions are carried through the strip join (the PC files' own grids
+    were rebuilt by their tools with other runs)."""
+    r = struct.unpack_from('>I', x, t.entry + GRID)[0]
+    if not r:
+        return
+    nx, ny, nz, nref, ncell = struct.unpack_from('>5H', x, r + 0x30)
+    if nx * ny * nz != ncell or r + 0x30 + 2 * (5 + nref + ncell + 1) > len(x):
+        return
+    refs = struct.unpack_from('>%dH' % nref, x, r + 0x3A)
+    offs = struct.unpack_from('>%dH' % (ncell + 1), x, r + 0x3A + 2 * nref)
+    refs = [min(pmap.get(v, v), max(n - 3, 0)) for v in refs]
+    struct.pack_into('<%dH' % (5 + nref + ncell + 1), out, r + 0x30, nx, ny, nz, nref, ncell, *refs, *offs)
+
+
+def restrip(x, a, out):
+    """Triangle strips: the 360 restarts them with index 0xFFFF, which the PC
+    cannot draw (it reads vertex 65535). Rebuild each strip table's indices
+    with degenerate joins (strips.join) and the PC strip type. The grown index
+    buffers are placed after the mesh's own data (before any volatile data
+    the mesh itself carries); the volatile pointers
+    (DT2 ptr >= local UV offset, relative to it), the mesh size (0x9C) and
+    the total size (0x0C) move with it."""
+    prim = {id(t): struct.unpack_from('>H', x, t.entry + PRIM)[0] for t in a.tables}
+    if not any(p == STRIP_360 for p in prim.values()):
+        return bytes(out)
+    L = a.local_uv_offset
+    tail = bytearray()
+    moved = {}                                        # DT2 index -> (new ptr, new count)
+    for i, (size, count, flags, ptr) in enumerate(a.dt2):
+        if ptr >= L:
+            continue
+        tabs = [t for t in a.tables if t.face_offset and ptr <= t.face_offset < ptr + size]
+        if not any(prim[id(t)] == STRIP_360 for t in tabs):
+            continue
+        new = []
+        ranges = {}
+        for t in sorted(tabs, key=lambda t: t.face_offset):
+            key = (t.face_offset, t.face_count)
+            if key not in ranges:
+                idx = struct.unpack_from('>%dH' % t.face_count, x, t.face_offset)
+                pmap = None
+                if prim[id(t)] == STRIP_360:
+                    idx, pmap = strips.join_map(idx)
+                ranges[key] = (len(new), len(idx), pmap)
+                new += idx
+            if ranges[key][2] is not None:
+                _grid(x, out, t, ranges[key][2], ranges[key][1])
+            start, n = ranges[key][:2]
+            e = t.entry
+            struct.pack_into('<II', out, e + 0x30, n, start)
+            if prim[id(t)] == STRIP_360:
+                struct.pack_into('<HH', out, e + PRIM, STRIP_PC, n)
+                v = struct.unpack_from('>H', x, e + 0xAE)[0]
+                struct.pack_into('<H', out, e + 0xAE, max(v - 1, 0))
+            struct.pack_into('<I', out, e + 0x88, L + len(tail) + 2 * start)
+        out[ptr:ptr + size] = bytes(size)
+        moved[i] = (L + len(tail), len(new))
+        tail += struct.pack('<%dH' % len(new), *new)
+        tail += bytes(-len(tail) % 16)
+    if not moved:
+        return bytes(out)
+    tail += bytes(-(L + len(tail)) % ALIGN)
+    delta = len(tail)
+    for i, (size, count, flags, ptr) in enumerate(a.dt2):
+        o = a.data_table2 + 16 * i
+        if i in moved:
+            p, n = moved[i]
+            struct.pack_into('<II', out, o, 2 * n, n)
+            struct.pack_into('<I', out, o + 12, p)
+        elif ptr >= L:
+            struct.pack_into('<I', out, o + 12, ptr + delta)
+    struct.pack_into('<I', out, 0x9C, L + delta)
+    struct.pack_into('<I', out, 0x0C, struct.unpack_from('>I', x, 0x0C)[0] + delta)
+    return bytes(out[:L]) + bytes(tail) + bytes(out[L:])     # volatile data some meshes carry

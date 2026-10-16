@@ -876,3 +876,47 @@ stored, arrays followed through the fixups). It reproduces the one base-game
 PC file byte for byte. In all Severed shapes, the array sizes, capacities,
 vertices and indices (all 32-bit, every one below its vertex count) read
 correctly.
+
+## 35. Level geometry: triangle strips (stretched / spiky world)
+
+After the collision fix the intro cutscene played and the level loaded with
+Gabe's suit, the HUD and menus working. All level geometry, though, was
+long stretched spikes. Two causes, both in the mesh draw tables (DT1):
+
+- DT1 +0x3C (the u16 called `lod_type` earlier) is the Direct3D primitive
+  type, followed by a u16 index count. Xbox 360: 4 = triangle list,
+  6 = triangle strip. PC Direct3D 9: 4 = list, 5 = strip, 6 = triangle
+  *fan*. The level meshes (`opt_model*`, `lodmodel`: 26,024 tables in
+  Severed) are strips, and keeping the 6 made the PC draw them as fans.
+- The 360 strips restart with index 0xFFFF. D3D9 has no primitive restart,
+  so the PC read it as vertex 65535. The PC files join the strips with
+  degenerate triangles instead (`ds2/strips.py`). This reproduces all
+  9,150 restart tables of the base-game pairs exactly.
+
+Joined buffers are longer. The tables of a mesh share an index buffer
+(DT2 entry `00020200`; DT1 +0x30 index count, +0x34 start index, +0x88
+pointer to the table's first index). The PC grows the buffer in place
+and moves everything after it. We instead put the rebuilt buffer after
+the mesh's own data and leave the old space zeroed. Only these fields
+depend on the mesh's length:
+- header 0x9C, the mesh size (DT2 pointers into the MeshVolatile are
+  relative to it);
+- header 0x0C, the total size;
+- the DT2 volatile pointers.
+
+DT1 +0xAE becomes the 360 value - 1 (as in the PC files).
+
+DT1 +0x8C points to a per-table grid:
+- 3 vectors (bounds);
+- u16 nx, ny, nz, reference count, cell count;
+- the references (positions of runs in the table's strip);
+- cell count + 1 offsets.
+
+The u16 part was being swapped as 32-bit words. The header, offsets and
+bounds now match the PC files exactly. The references are carried through
+the strip join, but the PC files' grids were rebuilt by their own tools,
+with other runs, so their values are not reproducible.
+
+On the base-game pairs, every converted strip table draws exactly the
+PC's triangles with the PC's winding, and the volatile streams keep their
+places.
