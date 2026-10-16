@@ -61,6 +61,7 @@ and videos.
 | `docs/DESIGN.md` | overall design |
 | `tools/research/ds2/` | the converters, one module per asset type, plus `build.py` (converts a 360 tree) and `convert.py` (`CONVERTERS` table) |
 | `tools/research/*.py` | `score.py <Type>` scores a converter against the paired samples; `learn_*.py` rebuild the learned models |
+| `tools/research/re/`, `simgroup_tools/`, `checks/`, `rpenc.py` | analysis helpers: exe disassembly (`DS2_EXE`), SimGroup inspection, consistency checks (see `tools/research/README.md`) |
 | `tools/research/native/` | `refpack.c` and `xas_enc.c`, built by `build.sh` into `libxasenc.so` (Linux) and `xasenc.dll` (64-bit Windows) |
 | `tools/test/` | `Make-SeveredTest.bat` / `make_severed_test.py`: the user's test build; work folder with `*.ok` step markers |
 | `tools/probe/` | `probe.c`, `build.sh` (Zig: `pip install ziglang==0.13.0`), `bin/dinput8.dll` (committed; force-add, the folder is in .gitignore) |
@@ -82,10 +83,16 @@ and videos.
   each build ("severed probe N"), so the log shows which build ran. Hooks
   are found by byte signatures (`find_sig`), because the exe is
   DRM-wrapped. Parts of the code are decrypted late, so retry signatures.
-- **Static analysis:** of the user's unwrapped exe, with capstone through the
-  scratchpad helper `re/dsx.py` (`dis(addr, n)`, `func_start`, `cstr`). The
-  scratchpad does not survive the session: helpers and the samples export
-  must be recreated or re-uploaded in a new environment.
+- **Static analysis:** of the user's unwrapped exe, with capstone through
+  `tools/research/re/dsx.py` (`dis(addr, n)`, `func_start`, `cstr`; set
+  `DS2_EXE`).
+- **What is not in the repo** (game data, about 9 GB; it lived in the
+  session scratchpad):
+  - the user's unwrapped exe: re-uploaded by the user;
+  - the unpacked add-on and the converted output: rebuilt from the user's
+    add-on with the repo's tools;
+  - the PC/360 sample export (4.3 GB): needed only to re-score or retrain
+    converters; rebuilt with `tools/export`.
 
 ## State (end of this session)
 
