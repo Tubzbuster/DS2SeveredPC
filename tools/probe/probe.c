@@ -1205,6 +1205,8 @@ static void **g_streammgr;
  * message loop (PeekMessage hook). */
 static volatile LONG g_sections_pending;
 static int g_severed_level;
+static void upgrade_schedule(const char *why);
+static void upgrade_on_msg(DWORD h);
 static DWORD g_game_thread;
 static DWORD g_main_thread;            /* the thread that loaded the probe: the game's main thread */
 static const char *g_sections[] = {
@@ -1350,7 +1352,7 @@ static void __cdecl on_level_start(void *self)
     lstrcpynA(name, folder, sizeof name);
     n = lstrlenA(name);
     while (n && (name[n - 1] == '\\' || name[n - 1] == '/')) name[--n] = 0;
-    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) g_severed_level = 1;
+    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) { g_severed_level = 1; upgrade_schedule("Severed level start"); }
     /* Probe 12's experiment loaded a copy of the level's SimGroup as a stream
        sets file. Since probe 23 it is off: every level object then existed
        twice under the same GUID, and messages aimed at the Player (starting
@@ -1518,6 +1520,7 @@ static void __cdecl note_msgsend(const char *arg)
     BYTE *c;
     if (!msg || !mem_ok(msg, 4) || !g_msg_table || !*g_msg_table) return;
     h = msg[0];
+    upgrade_on_msg(h);
     c = &g_msg_count[h & 0xFFFF];
     if (*c >= 3) return;
     (*c)++;
@@ -1528,6 +1531,115 @@ static void __cdecl note_msgsend(const char *arg)
         node = (DWORD *)node[0];
     }
     log_line("MSG %08lx %s", h, listeners > 0 ? "" : listeners == 0 ? "(no listeners - dropped)" : "(unknown - dropped)");
+}
+
+/* ---- Gabe's pre-upgraded Pulse Rifle (probe 34) ---------------------------
+ * On console a Severed-only object (class 2B747EB6, neutralised by the
+ * converter) buys 10 Pulse Rifle nodes on `equip_player_upgrade_nodes`.
+ * The PC keeps the same state in its UpgradeManager (global read from the
+ * Lua getter `GetUpgradeManager`, exe 0x1355D60): weapon trees at +0x18 (an
+ * inline array of pointers, count at +0x18+0xC8), each tree: name hash +0,
+ * node pointers inline from +4, count +0x170; each node: name hash +0,
+ * bought flag +0x2C (what the Lua `DebugFillUpgradeNode`, exe 0x1354C80 ->
+ * 0xB77040, sets). Hashes are sdbm of the lower-case name. The nodes are
+ * set a few seconds after the message, and after each Severed level start
+ * (saves made before probe 34 lack them). */
+static const char SIG_UPGMGR[] =
+    "83 EC 0C 56 8B 74 24 14 8D 44 24 04 50 6A 00 68 ?? ?? ?? ?? 6A 01 56 E8 ?? ?? ?? ?? 83 C4 14 85 C0 74 33 "
+    "8D 4C 24 04 51 6A 02 56 E8 ?? ?? ?? ?? 83 C4 0C 85 C0 74 1F 8B 15 ?? ?? ?? ?? 68";
+static const char SIG_TREEFIND[] =   /* checks the tree array layout */
+    "56 57 8B B9 C8 00 00 00 33 C0 33 F6 85 FF 76 18 53 8B 5C 24 10 8B 14 B1 85 D2 74 06 39 1A 75 02 8B C2 46 3B F7 72 EE";
+static const char SIG_NODEFILL[] =   /* checks the node layout */
+    "8B 81 70 01 00 00 56 33 F6 85 C0 76 2A 57 8B 7C 24 0C 83 C1 04 8B D0 8B 01 85 C0 74 06 39 38 75 02 8B F0 "
+    "83 C1 04 83 EA 01 75 EC 5F 85 F6 74 07 C7 46 2C 01 00 00 00";
+static BYTE **g_upgmgr;
+static DWORD g_upg_due;                    /* tick when to set the nodes, 0 = nothing pending */
+static DWORD g_upg_deadline;
+static const char *const g_rifle_nodes[] = {
+    "capacity", "capacity2", "damage", "damage3", "reload2", "altdamage", "altdamage2", "pr12", "pr21", "pr23"
+};
+
+static DWORD sdbm_lower(const char *s)
+{
+    DWORD h = 0;
+    for (; *s; s++) h = h * 0x1003F + (BYTE)(*s >= 'A' && *s <= 'Z' ? *s + 32 : *s);
+    return h;
+}
+
+/* the UpgradeManager global, from the one getter whose type name is
+   "UpgradeManager" (the same code shape serves other singletons) */
+static BYTE **find_upgmgr(void)
+{
+    BYTE b[256], m[256], *base = (BYTE *)GetModuleHandleA(NULL), *t, *e, *p;
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
+    IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
+    int n = parse_sig(SIG_UPGMGR, b, m), i, c1 = 0, c2 = 0;
+    t = base + sec->VirtualAddress;
+    e = t + sec->Misc.VirtualSize - n;
+    if (!mem_ok(t, sec->Misc.VirtualSize)) return NULL;
+    if (!find_sig(SIG_TREEFIND, &c1) || !find_sig(SIG_NODEFILL, &c2)) return NULL;
+    for (p = t; p < e; p++) {
+        const char *name;
+        if (*p != b[0]) continue;
+        for (i = 1; i < n && (!m[i] || p[i] == b[i]); i++) ;
+        if (i < n) continue;
+        name = *(const char **)(p + 0x10);
+        if (mem_ok(name, 15) && !lstrcmpA(name, "UpgradeManager")) return *(BYTE ***)(p + 0x39);
+    }
+    return NULL;
+}
+
+static void upgrade_rifle(void)
+{
+    BYTE *mgr, *tree = NULL, *node;
+    DWORD i, k, n, rifle = sdbm_lower("pulserifle");
+    int set = 0, had = 0, missing = 0;
+    if (!g_upgmgr || !mem_ok(g_upgmgr, 4) || !(mgr = *g_upgmgr) || !mem_ok(mgr + 0x18, 0xCC)) return;
+    n = *(DWORD *)(mgr + 0x18 + 0xC8);
+    for (i = 0; i < n && i < 50; i++) {
+        BYTE *t = ((BYTE **)(mgr + 0x18))[i];
+        if (t && mem_ok(t, 0x174) && *(DWORD *)t == rifle) tree = t;
+    }
+    if (!tree) {
+        if (GetTickCount() > g_upg_deadline) {
+            log_line("pulse rifle upgrades: no Pulse Rifle tree (%lu trees) - gave up", n);
+            g_upg_due = 0;
+        }
+        return;                            /* the trees may not exist yet: retry */
+    }
+    g_upg_due = 0;
+    n = *(DWORD *)(tree + 0x170);
+    for (k = 0; k < sizeof g_rifle_nodes / sizeof *g_rifle_nodes; k++) {
+        DWORD h = sdbm_lower(g_rifle_nodes[k]);
+        BYTE *found = NULL;
+        for (i = 0; i < n && i < 92; i++) {
+            node = ((BYTE **)(tree + 4))[i];
+            if (node && mem_ok(node, 0x30) && *(DWORD *)node == h) found = node;
+        }
+        if (!found) { missing++; log_line("pulse rifle upgrades: node %s not in the tree", g_rifle_nodes[k]); continue; }
+        if (*(DWORD *)(found + 0x2C) == 1) had++;
+        else { *(DWORD *)(found + 0x2C) = 1; set++; }
+    }
+    log_line("pulse rifle upgrades: %d node(s) set, %d already bought, %d missing (tree %p, %lu nodes)",
+             set, had, missing, tree, n);
+}
+
+static void upgrade_schedule(const char *why)
+{
+    if (!g_upgmgr) return;
+    g_upg_due = GetTickCount() + 3000;
+    g_upg_deadline = g_upg_due + 60000;
+    log_line("pulse rifle upgrades: scheduled (%s)", why);
+}
+
+/* from the message hook, on the game thread */
+static void upgrade_on_msg(DWORD h)
+{
+    static DWORD equip;
+    if (!equip) equip = sdbm_lower("equip_player_upgrade_nodes");
+    if (h == equip && g_severed_level) upgrade_schedule("equip_player_upgrade_nodes");
+    if (g_upg_due && (LONG)(GetTickCount() - g_upg_due) >= 0 && GetCurrentThreadId() == g_game_thread)
+        upgrade_rifle();
 }
 
 /* ---- texture list pass (probe 32) ---------------------------------------
@@ -1734,6 +1846,11 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                     if (mp) g_msg_table = *(DWORD ***)(mp + 0xD);
                     log_line("message trace: %d match(es) at exe+0x%lx, listener table global %p%s", nm3, mp ? (DWORD)mp - base : 0,
                              g_msg_table, mp && hook_log_word(mp, 5, note_msgsend, 4) ? ", hooked" : "");
+                }
+                {
+                    int kk4;
+                    for (kk4 = 0; kk4 < 50 && !(g_upgmgr = find_upgmgr()); kk4++) Sleep(200);
+                    log_line("upgrade manager: global %p%s", g_upgmgr, g_upgmgr ? "" : " (not found: no Pulse Rifle upgrades)");
                 }
                 {
                     int nt = 0, kk;
@@ -2320,7 +2437,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 33 - process %s", path);
+    log_line("severed probe 34 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
