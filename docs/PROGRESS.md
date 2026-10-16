@@ -90,6 +90,18 @@ and is corrected as we play.
 
   Each box has a Browse button. The app then runs the conversion that
   `Make-SeveredTest.bat` does now.
+- **Check the user's add-on before converting.** People's copies can have
+  any file name, so the app identifies the add-on by its contents, not its
+  name:
+  - an MD5 of each file inside the add-on (after unpacking), compared with a
+    shipped list of expected hashes. This works for the add-on file and for
+    an already-unpacked folder alike;
+  - a hash of the whole add-on file is not enough on its own. The package
+    header can differ between copies (licence and signature data), so a
+    correct copy could fail;
+  - the shipped list holds only file names and hashes, no game data;
+  - on a mismatch, the app names the files that differ and stops, rather
+    than building a broken archive.
 - **Bundle ffmpeg with the app**, replacing the third path the `.bat` asks
   for now (`ffmpeg.exe`, used to decode the Xbox XMA audio). Use an LGPL
   build with its licence and source offer included.
