@@ -375,6 +375,11 @@ static void note_read(int a, ULONGLONG pos, DWORD n, void *ret)
         if (ar->ent[mid].off <= pos) { best = mid; lo = mid + 1; } else hi = mid - 1;
     }
     if (best >= 0 && pos < (ULONGLONG)ar->ent[best].off + ar->ent[best].size) {
+        static LONG ours;
+        if (!lstrcmpiA(ar->name, "DS2DAT2.DAT") && ar->seen[best] && ours < 50000) {
+            ours++;     /* every read of the Severed test archive: shows which asset is being loaded */
+            log_line("READ %s #%08lX +0x%llx len %lu", ar->name, ar->ent[best].hash, pos - ar->ent[best].off, n);
+        }
         if (!ar->seen[best]) {
             ar->seen[best] = 1;
             caller_name(ret, cl, sizeof cl);
@@ -1074,6 +1079,56 @@ static void add_severed(void)
     if (mem_ok(global, 4) && (fe = *global)) log_episodes(fe);
 }
 
+
+/* ---- crash report -------------------------------------------------------
+ * A vectored handler logs the first serious exceptions: code, where (module
+ * + offset), the faulting data address, registers and the return addresses
+ * found on the stack (module + offset only, no code is read). */
+static void addr_name(DWORD a, char *out, int n)
+{
+    HMODULE m = NULL;
+    char path[MAX_PATH], *b;
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCSTR)a, &m) && m && GetModuleFileNameA(m, path, sizeof path)) {
+        b = strrchr(path, '\\');
+        wsprintfA(out, "%s+0x%lx", b ? b + 1 : path, a - (DWORD)m);
+    } else wsprintfA(out, "0x%08lx", a);
+    (void)n;
+}
+
+static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
+{
+    static LONG count;
+    EXCEPTION_RECORD *r = e->ExceptionRecord;
+    CONTEXT *c = e->ContextRecord;
+    char where[MAX_PATH + 32], ra[MAX_PATH + 32];
+    DWORD *sp, i, found = 0;
+    if (r->ExceptionCode < 0xC0000000 || r->ExceptionCode == 0xC0000027 /* unwind */ ||
+        r->ExceptionCode == 0xE06D7363 /* C++ throw */ || !g_added /* start-up: the DRM uses exceptions */ ||
+        InterlockedIncrement(&count) > 20)
+        return EXCEPTION_CONTINUE_SEARCH;
+    addr_name((DWORD)r->ExceptionAddress, where, sizeof where);
+    log_line("EXCEPTION 0x%08lx at %s thread %lu%s", r->ExceptionCode, where, GetCurrentThreadId(),
+             r->ExceptionCode == 0xC0000005 ? "" : "");
+    if (r->ExceptionCode == 0xC0000005 && r->NumberParameters >= 2)
+        log_line("  %s address 0x%08lx", r->ExceptionInformation[0] == 0 ? "reading" : r->ExceptionInformation[0] == 1 ? "writing" : "executing",
+                 (DWORD)r->ExceptionInformation[1]);
+    log_line("  eax %08lx ebx %08lx ecx %08lx edx %08lx esi %08lx edi %08lx ebp %08lx esp %08lx",
+             c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp, c->Esp);
+    sp = (DWORD *)c->Esp;
+    for (i = 0; i < 2048 && found < 24 && mem_ok(sp + i, 4); i++) {
+        MEMORY_BASIC_INFORMATION mi;
+        DWORD v = sp[i];
+        if (v < 0x10000 || !VirtualQuery((void *)v, &mi, sizeof mi) || mi.State != MEM_COMMIT ||
+            !(mi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
+            continue;
+        addr_name(v, ra, sizeof ra);
+        log_line("  stack +0x%03lx %s", i * 4, ra);
+        found++;
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
 static DWORD WINAPI hotkey_thread(LPVOID p)
 {
     (void)p;
@@ -1110,7 +1165,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 9 - process %s", path);
+    log_line("severed probe 10 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -1132,6 +1187,7 @@ static void start(HMODULE self)
     log_line("--- hooks installed ---");
     CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL);
     CreateThread(NULL, 0, menu_hook_thread, NULL, 0, NULL);
+    AddVectoredExceptionHandler(1, crash_handler);
     log_line("Severed is added to the episode list when the front end starts; F9 logs the list, F10 for the reflection scan, F11 for the descriptor dump");
 }
 

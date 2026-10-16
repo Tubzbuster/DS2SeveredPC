@@ -82,3 +82,8 @@ the log.
 
 (Probes 7 and 8 called the function from the probe's own thread on F9:
 that hangs the game, its memory allocator is not for foreign threads.)
+
+Probe 10 also logs every read inside `DS2DAT2.DAT` (entry hash and
+offset, so a crash can be tied to one asset of a stream) and, once Severed
+has been added, the first serious exceptions: code, module + offset, the
+faulting address, registers and the return addresses on the stack.
