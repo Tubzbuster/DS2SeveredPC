@@ -1497,6 +1497,39 @@ static void heap_watch(void)
 }
 
 
+/* ---- message trace (probe 33) --------------------------------------------
+ * exe 0x756C60 sends a level message (arg 1: message, hash at +0): it looks
+ * the hash up in the listener table (global at +0xD, buckets by hash &
+ * 0xFFF, nodes: next +0, listeners +4, hash +0x10) and drops the message
+ * when nobody listens. Each distinct hash is logged on its first 3 sends,
+ * with its listener state; names are matched afterwards from the
+ * SimGroups' message fields (hash + string). */
+static const char SIG_MSGSEND[] =
+    "51 8B 54 24 08 8B 0A 56 8B F1 57 8B 3D ?? ?? ?? ?? 81 E6 FF 0F 00 00 8B 34 B7 32 C0 85 F6";
+static DWORD **g_msg_table;
+static BYTE g_msg_count[1 << 16];          /* by low 16 bits of the hash: sends logged (max 3) */
+static volatile LONG g_msg_logs;
+
+static void __cdecl note_msgsend(const char *arg)
+{
+    const DWORD *msg = (const DWORD *)arg;
+    DWORD h, *node;
+    int listeners = -1;
+    BYTE *c;
+    if (!msg || !mem_ok(msg, 4) || !g_msg_table || !*g_msg_table) return;
+    h = msg[0];
+    c = &g_msg_count[h & 0xFFFF];
+    if (*c >= 3) return;
+    (*c)++;
+    if (InterlockedIncrement(&g_msg_logs) > 20000) return;
+    node = (DWORD *)(*g_msg_table)[h & 0xFFF];
+    while (node && mem_ok(node, 0x14)) {
+        if (node[4] == h) { listeners = node[1] ? 1 : 0; break; }
+        node = (DWORD *)node[0];
+    }
+    log_line("MSG %08lx %s", h, listeners > 0 ? "" : listeners == 0 ? "(no listeners - dropped)" : "(unknown - dropped)");
+}
+
 /* ---- texture list pass (probe 32) ---------------------------------------
  * Probe 31 found the bad slot's origin: exe 0x6DAF10 (ecx = render object)
  * binds a list of texture handles (arg 1, count arg 2) using per-shader slot
@@ -1693,6 +1726,14 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                         if (ls) g_streammgr = *(void ***)(ls + 0x52);
                     }
                     if (!g_sendmsg) g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm2);
+                }
+                {
+                    int nm3 = 0, kk3;
+                    BYTE *mp = find_sig(SIG_MSGSEND, &nm3);
+                    for (kk3 = 0; kk3 < 50 && !mp; kk3++) { Sleep(200); mp = find_sig(SIG_MSGSEND, &nm3); }
+                    if (mp) g_msg_table = *(DWORD ***)(mp + 0xD);
+                    log_line("message trace: %d match(es) at exe+0x%lx, listener table global %p%s", nm3, mp ? (DWORD)mp - base : 0,
+                             g_msg_table, mp && hook_log_word(mp, 5, note_msgsend, 4) ? ", hooked" : "");
                 }
                 {
                     int nt = 0, kk;
@@ -2279,7 +2320,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 32 - process %s", path);
+    log_line("severed probe 33 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

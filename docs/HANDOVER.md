@@ -123,11 +123,25 @@ Open, most important first:
      especially `pdlc_quarry_atmo_01-07`. Then fix the conversion.
    - Probably related: the quarry is very dark, with "black smog" (the
      object draws with a leftover texture on that slot).
-2. **Thumping in the opening scene:** absent in the user's last two runs
+2. **Quarry progression blocked:** the door switch shows LOCKED (its
+   disabled panel; on console a blue press-and-hold "OVERRIDE?" starting a
+   60 s security override), and Price is never attacked.
+   - The switch (`AA6A826D` → `SimplePressAndHoldSwitch`) is enabled only
+     by `enable_quarry_switch`, sent by a TriggerAuto in quarry_z01.
+   - The attack chain in quarry_z02: TriggerPhysical `805B0158` arms
+     TriggerLOS `73ECC542`/`338BC582` → `mm_spawn_infection_npcs` → FuncSpawn
+     infector/slasher → AndEventGate → `mm_trigger_price_infection`.
+   - Message send: exe `0x756C60` (hash at msg+0; listener table global;
+     drops when no listener). Hashes are sdbm of the name.
+   - Probe 33 logs `MSG <hash>` lines with their listener state. Match
+     them to names from the SimGroup strings to find the broken link.
+   - The user is also testing F7 with `enable_quarry_switch` in
+     `severed_send.txt`.
+3. **Thumping in the opening scene:** absent in the user's last two runs
    (one without F9). Possibly fixed by the video audio conversion
    (FINDINGS 43); not confirmed. Ruled out: the cutscene audio, corpse
    physics, the video screen, Gabe's animation, the floor collision.
-3. Smaller items in `docs/PROGRESS.md`:
+4. Smaller items in `docs/PROGRESS.md`:
    - stretched slabs in the first view after the terminal;
    - the save station's second use locked up once;
    - saves listed as "Chapter 1";
