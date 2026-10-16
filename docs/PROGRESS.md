@@ -72,7 +72,7 @@ and is corrected as we play.
 | Save stations | partial | first save works; second use locks up; saves are listed as "Chapter 1" (loading one probably starts the base game: do not rely on them) |
 | Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
 | Performance near some lights | partial | frame drops in the drill tunnel |
-| Gabe's pain sounds | untested | possibly Isaac's; whether Severed has its own is not known yet |
+| Gabe's pain sounds | works | Isaac's grunts and damage lines, as on console (the DLC reuses them) |
 | First view after the terminal | broken | stretched slabs in front of the camera (screenshot); a mesh still converted wrongly |
 | Menu text (localised episode name) | partial | English placeholder via the probe |
 

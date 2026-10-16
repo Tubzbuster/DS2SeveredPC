@@ -18,9 +18,12 @@ def score(m, P):
 
 typ = sys.argv[1]
 DEFAULT = {'BNK': 'raw', 'RCB': 'swap'}
+# held-out RCB: names of 8+ characters 108 -> 158/179 exact, bitsets 164;
+# the hash-kind rule makes 166 but more words wrong (99.854% vs 99.949%)
+OPTIONS = {'RCB': dict(text_min=8, bitsets=True)}
 P = [q for q in pairs.load(typ) if len(q[1]) == len(q[2])]
 for name, tr, te in (('held-out', P[::2], P[1::2]), ('all', P, P)):
-    m = reloc.Model(DEFAULT.get(typ, 'raw'))
+    m = reloc.Model(DEFAULT.get(typ, 'raw'), **OPTIONS.get(typ, {}))
     for k, x, p in tr: m.train(x, p)
     m.finish()
     print(typ, name, score(m, te), 'types', len(m.perms))
