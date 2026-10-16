@@ -7,6 +7,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)   /* the DLL exports only what is marked */
+#else
+#define EXPORT __attribute__((visibility("default")))
+#endif
+
 static const double coefs[4][2] = {
     {0.0, 0.0}, {0.9375, 0.0}, {1.796875, -0.8125}, {1.53125, -0.859375}
 };
@@ -74,7 +80,7 @@ void xas_encode_frame(const int16_t *x, uint8_t *frame)
 }
 
 /* many frames: n_frames * 128 samples of one channel (contiguous) */
-void xas_encode(const int16_t *x, int n_frames, uint8_t *out)
+EXPORT void xas_encode(const int16_t *x, int n_frames, uint8_t *out)
 {
     for (int f = 0; f < n_frames; f++)
         xas_encode_frame(x + 128 * f, out + 0x4C * f);
