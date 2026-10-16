@@ -122,17 +122,18 @@ Open, most important first:
      probe 27 run it never switched on: the level-start and batch
      signatures were not found at start-up.
    - Probe 28 retries those signatures and takes the main thread as the
-     game thread. **Waiting for the user's probe 28 log.**
+     game thread. Probe 28's guard still gave up too early (0.19 s), so
+     probe 29 retries it every 2 s. **Waiting for the user's probe 29
+     log.**
 2. **Thumping in the opening scene**, from the end of the RIG call until the
-   scene ends; it stays fixed relative to the camera.
+   scene ends; it stays fixed relative to the camera. It is intermittent: it
+   was absent in the run where the user pressed F9 about 10 s into the
+   intro. F9 makes the probe request all the start sections at once;
+   normally the level streams them in.
    - Ruled out: corpse physics, the video screen, Gabe's animation bank,
-     the floor collision.
-   - The video audio was rewritten from big-endian EA ADPCM r3 to the PC
-     layout (FINDINGS 43); the thump stayed in the next run, but whether the
-     user's run included that rebuild is not confirmed.
-   - The cutscene audio `pdlc1_igc_01_01` (5.1) has loud, clean, front-only
-     low hits at 47.2-51.5 s. A clip was sent to the user. **The user will
-     record the thump** to compare with the clip and the console video.
+     the floor collision, the cutscene audio itself.
+   - Theory: a physics body waiting on a section's collision.
+   - **To test:** an intro without F9, then one with F9.
 3. Smaller items in `docs/PROGRESS.md`:
    - stretched slabs in the first view after the terminal;
    - the save station's second use locked up once;
