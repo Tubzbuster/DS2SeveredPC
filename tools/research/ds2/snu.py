@@ -8,6 +8,27 @@ import struct
 from . import eaaudio as A
 
 
+# channel counts the PC plays as EA-XAS: the base game's XAS streams have 1,
+# 2, 4 or 8 channels; its 6-channel (5.1) streams are all EALayer3. A
+# 6-channel XAS stream never reports "primed", so the cutscene waiting on it
+# never starts. Such streams get silent extra channels (5.1 -> 8, the first
+# six unchanged).
+XAS_CHANNELS = (1, 2, 4, 8)
+
+
+def pad_channels(pcm, channels):
+    """interleaved int16 PCM -> (PCM, channel count the PC's XAS supports)"""
+    want = next(c for c in XAS_CHANNELS if c >= channels)
+    if want == channels:
+        return pcm, channels
+    import array
+    n = len(pcm) // channels
+    out = array.array('h', bytes(2 * n * want))
+    for c in range(channels):
+        out[c::want] = pcm[c::channels]
+    return out, want
+
+
 def convert(x, ffmpeg=None):
     if len(x) < 0x20 or x[0] != 3:
         return None
@@ -16,14 +37,15 @@ def convert(x, ffmpeg=None):
     if h['codec'] != A.CODEC_EAXMA:
         return None
     pcm = A.decode_eaxma(A.blocks(x, data), h['channels'], h['rate'], h['samples'], ffmpeg)
+    pcm, channels = pad_channels(pcm, h['channels'])
     loop_start = h.get('loop_start') if h['loop'] else None
-    body = A.xas_blocks(pcm, h['channels'])
+    body = A.xas_blocks(pcm, channels)
     loop_offset = None
     if loop_start is not None:
         # offset (from the first block) of the block holding the loop start
         per = 27 * 128
-        loop_offset = (loop_start // per) * (8 + 27 * 0x4C * h['channels'])
-    hdr = A.make_header(A.CODEC_XAS1, h['channels'], h['rate'], h['samples'], type_=h['type'],
+        loop_offset = (loop_start // per) * (8 + 27 * 0x4C * channels)
+    hdr = A.make_header(A.CODEC_XAS1, channels, h['rate'], h['samples'], type_=h['type'],
                         loop_start=loop_start, loop_offset=loop_offset, version=h['version'])
     start = 0x10 + len(hdr)
     start = (start + 3) // 4 * 4 if start > 0x20 else 0x20
@@ -31,7 +53,7 @@ def convert(x, ffmpeg=None):
     # and the audio (u32 at 0x0C = its offset; PC streams have the same
     # kind of block, different content). Not decoded yet: dropped, giving
     # the plain PC layout (0x0C = 0).
-    out = bytearray(x[0:4]) + struct.pack('<III', unk, start, 0)
+    out = bytearray(x[0:3]) + bytes([channels]) + struct.pack('<III', unk, start, 0)
     out += hdr
     out += bytes(start - len(out))
     return bytes(out) + body

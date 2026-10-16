@@ -194,6 +194,27 @@ def refresh_assets(root, dst, typ, convert, marker=None):
                 open(p, 'wb').write(y)
 
 
+def refresh_snu_channels(root, dst):
+    """re-encode the audio streams whose channel count the PC cannot play as
+    XAS (6-channel cutscene audio: snu.pad_channels)"""
+    n = 0
+    for d, _, fs in os.walk(root):
+        for f in fs:
+            if not f.lower().endswith('.snu'):
+                continue
+            p = os.path.join(d, f)
+            x = open(p, 'rb').read(0x20)
+            if len(x) < 0x20 or (x[0x11] >> 2) + 1 in snu.XAS_CHANNELS:
+                continue
+            q = os.path.join(dst, os.path.relpath(p, root))
+            y = snu.convert(open(p, 'rb').read())
+            if y is not None:
+                os.makedirs(os.path.dirname(q), exist_ok=True)
+                open(q, 'wb').write(y)
+                n += 1
+    log('  re-encoded %d multichannel audio stream(s) with 8 channels' % n)
+
+
 def remove(game):
     target = os.path.join(game, SLOT)
     marker = target + '.severedtest'
@@ -282,6 +303,10 @@ def main():
         log('Re-converting meshes (triangle strips, relocation table)')
         refresh_assets(root, dst, 'Mesh', lambda x: build.meshconv.convert(x, build._model('mesh_templates.pkl')))
         open(os.path.join(work, 'strip_fix2.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'snu_channels.ok')):
+        log('Re-encoding the 6-channel cutscene audio')
+        refresh_snu_channels(root, dst)
+        open(os.path.join(work, 'snu_channels.ok'), 'w').write('ok')
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):

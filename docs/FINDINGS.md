@@ -985,3 +985,35 @@ ended, so the camera and control were never handed back.
 
 Messages are broadcast by name through exe 0x84F5A0 (cdecl: name, unused,
 payload; behind Lua's SendMessage). Probe 19 sends the hand-over on F8.
+
+## 38. 6-channel cutscene audio; first gameplay run
+
+With the audio at its PC paths, the terminal dialogue played. Gabe's get-up
+scene still never started. The probe showed its stream
+(`pdlc1_igc_01_01`) being primed (the first ~780 KB read) but never played.
+
+The stream has 6 channels (5.1). Of the base game's PC streams (archive
+scan, SNR header):
+- XAS (codec 4): 1, 2, 4 or 8 channels only;
+- EALayer3 (codec 7): all 77 of the 6-channel streams.
+
+Our 6-channel XAS stream evidently never reports "primed", so the scripted
+sequence waiting on it never starts. 27 Severed streams are 6-channel: the
+main cutscenes of both chapters and their translations.
+- `snu.pad_channels` now writes them with 8 channels, the last two silent.
+  Decoded back, the first six channels are identical.
+- The SNU container's byte 3 is the channel count, and is set to match.
+
+F8 (probe 20) worked as the fallback:
+- `ses_player_01_01_end` popped the camera, added the objective and
+  started the next dialogue;
+- the player could walk the drill tunnel.
+
+Health: the intro's HealthComponentTuningRelay sets Gabe to 50 health on
+purpose.
+
+The next crash was on picking up the Flamethrower. The base Flamethrower
+weapon stream (DS2DAT9) loaded, then the `grinder_room` section, then the
+game crashed in the CPU skinning job: exe 0x7C2CB0 locks a vertex buffer
+through a garbage handle (exe+0xFD284E). Probe 21 now names the meshes
+reachable from the crash registers.
