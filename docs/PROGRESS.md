@@ -30,8 +30,8 @@ and is corrected as we play.
 | drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | something collides constantly off camera during the opening scene (sound) |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
-| bomb_run: grinder_hall_z01/z02, grinder_room | untested | grinder_room loads when picking up the Flamethrower |
-| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | untested | |
+| bomb_run: grinder_hall_z01/z02, grinder_room | works | |
+| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash in Direct3D a few seconds after quarry_z01 loaded, while drawing the frame's dynamic geometry (particles / decals); probe 24 names the code that queued it |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | untested | scene `igc_01_05`; end of chapter 1 |
@@ -68,9 +68,9 @@ and is corrected as we play.
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
 | Necromorph AI | broken | enemies attack but run in place (navigation data, likely the converted NAV meshes) |
-| Crash loading a later area | broken | which area and the log still to come |
+| Crash in the quarry | broken | see bomb_run |
 | Save stations | partial | first save works; second use locks up; saves are listed as "Chapter 1" (loading one probably starts the base game: do not rely on them) |
-| Stores, benches | works | shop lists base-game suits as well |
+| Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
 | Performance near some lights | partial | frame drops in the drill tunnel |
 | Gabe's pain sounds | untested | possibly Isaac's; whether Severed has its own is not known yet |
 | First view after the terminal | broken | stretched slabs in front of the camera (screenshot); a mesh still converted wrongly |

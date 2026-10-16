@@ -1103,8 +1103,16 @@ static void __cdecl log_stream_request(const char *path)
     log_line("STREAM request %s", path && mem_ok(path, 1) ? path : "(null)");
 }
 
-/* fn starts with `len` bytes of position-independent code */
+/* fn starts with `len` bytes of position-independent code; cb gets the
+   stack word at `off` from the entry stack pointer (0 = return address,
+   4 = first argument) */
+static int hook_log_word(BYTE *fn, int len, void (__cdecl *cb)(const char *), int off);
 static int hook_log_arg1(BYTE *fn, int len, void (__cdecl *cb)(const char *))
+{
+    return hook_log_word(fn, len, cb, 4);
+}
+
+static int hook_log_word(BYTE *fn, int len, void (__cdecl *cb)(const char *), int off)
 {
     BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
     DWORD old;
@@ -1112,7 +1120,7 @@ static int hook_log_arg1(BYTE *fn, int len, void (__cdecl *cb)(const char *))
     q = t;
     *q++ = 0x60;                                   /* pushad */
     *q++ = 0x9C;                                   /* pushfd */
-    *q++ = 0xFF; *q++ = 0x74; *q++ = 0x24; *q++ = 0x28;   /* push [esp+0x28] = first argument */
+    *q++ = 0xFF; *q++ = 0x74; *q++ = 0x24; *q++ = (BYTE)(0x24 + off);   /* push [entry esp + off] */
     *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
     *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
     *q++ = 0x9D;                                   /* popfd */
@@ -1370,6 +1378,24 @@ static int hook_wrap(BYTE *fn, int len, void *hook, void **tramp)
 }
 
 
+/* ---- dynamic geometry batches (probe 24) ---------------------------------
+ * Particles, decals and other geometry built each frame go through one batch
+ * (retail exe 0x013D2CE0 starts a batch; the batch is drawn at the end of
+ * the frame, so a crash there has no useful stack). The return addresses
+ * of the latest batch starts are kept and printed with a crash. */
+static const char SIG_BATCHBEGIN[] =
+    "8B 44 24 14 53 8B 5C 24 14 56 57 81 FB 00 00 00 80 74 04 8B 44 24 14 8B 7C 24 18 8B 15 ?? ?? ?? ?? "
+    "0F AF C7 83 C0 0F C1 E8 04 40 C1 E0 04 8B F0";
+static volatile DWORD g_batch_ring[16];
+static volatile LONG g_batch_pos;
+
+static void __cdecl note_batch(const char *ret)
+{
+    LONG i = InterlockedIncrement(&g_batch_pos);
+    g_batch_ring[i & 15] = (DWORD)ret;
+}
+
+
 /* ---- scripted sequence trace (probe 22) ---------------------------------
  * A ScriptedEventSequence runs a table-driven state machine
  * (ScriptedSequenceSM: idle, gotoSS, gotoPos, trackToPos, waitAtSS, faceOrient,
@@ -1494,6 +1520,12 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                          sg && hook_wrap(sg, 6, (void *)hook_sgblock, (void **)&g_sgblock_tramp) ? ", hooked" : "");
             }
             {
+                int nb;
+                BYTE *bb = find_sig(SIG_BATCHBEGIN, &nb);
+                log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s", nb, bb ? (DWORD)bb - base : 0,
+                         bb && hook_log_word(bb, 9, note_batch, 0) ? ", hooked" : "");
+            }
+            {
                 int nq;
                 BYTE *q = find_sig(SIG_SSMHANDLER, &nq);
                 log_line("scripted sequence trace: %d match(es) at exe+0x%lx%s", nq, q ? (DWORD)q - base : 0,
@@ -1597,6 +1629,16 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
                  (DWORD)r->ExceptionInformation[1]);
     log_line("  eax %08lx ebx %08lx ecx %08lx edx %08lx esi %08lx edi %08lx ebp %08lx esp %08lx",
              c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp, c->Esp);
+    {
+        LONG k, last = g_batch_pos;
+        char who[MAX_PATH + 32];
+        for (k = 0; k < 16 && last - k > 0; k++) {
+            DWORD a = g_batch_ring[(last - k) & 15];
+            if (!a) continue;
+            addr_name(a, who, sizeof who);
+            log_line("  geometry batch %ld started from %s", (long)k, who);
+        }
+    }
     log_meshes_near("eax", c->Eax); log_meshes_near("ebx", c->Ebx); log_meshes_near("ecx", c->Ecx);
     log_meshes_near("edx", c->Edx); log_meshes_near("esi", c->Esi); log_meshes_near("edi", c->Edi);
     log_meshes_near("ebp", c->Ebp);
@@ -1660,7 +1702,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 23 - process %s", path);
+    log_line("severed probe 24 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
