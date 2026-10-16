@@ -52,3 +52,13 @@ def convert(x, sizes=None):
             struct.pack_into('<I', out, o + 4, sizes[p['stream_names'][i]])
     _swap(x, out, 0x10 + 20 * p['n'], p['text'])
     return bytes(out)
+
+
+def set_size(y, name, size):
+    """PC TOC bytes with one stream's size replaced"""
+    p = parse(y, '<')
+    out = bytearray(y)
+    for i, n in enumerate(p['stream_names']):
+        if n.lower() == name.lower():
+            struct.pack_into('<I', out, 0x10 + 20 * i + 4, size)
+    return bytes(out)

@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'research'))
 
 try:
-    from ds2 import bigarchive, build, eaaudio, stfs, streamfile, streamwrite   # noqa: E402
+    from ds2 import bigarchive, build, eaaudio, stfs, streamfile, streamwrite, toc   # noqa: E402
 except ImportError:
     raise SystemExit('Run this from the repository\'s tools\\test folder: it needs tools\\research next to it '
                      '(copy the whole repository, not just this file).')
@@ -81,6 +81,43 @@ def patched_global_assets(pc, sev):
         src = s or a
         w.add(src.type_hash, src.flags, src.ids, src.name, src.path, src.type, src.payload())
     return w.data(), swapped, len(lua)
+
+
+def strip_dropped(dst):
+    """remove asset types the PC cannot load (build.DROP) from streams
+    converted by an earlier version, fixing the TOC sizes"""
+    changed = {}
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if not f.lower().endswith('.str'):
+                continue
+            p = os.path.join(d, f)
+            data = open(p, 'rb').read()
+            if not any(t.encode() in data for t in build.DROP):
+                continue
+            _, assets = streamfile.read(data)
+            if not any(a.type in build.DROP for a in assets):
+                continue
+            w = streamwrite.Writer()
+            total = 0
+            for a in assets:
+                if a.type in build.DROP:
+                    log('  leaving out %s %s' % (a.type, a.name))
+                    continue
+                y = a.payload()
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+                total += len(y)
+            open(p, 'wb').write(w.data())
+            changed[os.path.splitext(os.path.relpath(p, dst))[0].replace('/', '\\')] = total
+    if changed:
+        for d, _, fs in os.walk(dst):
+            for f in fs:
+                if f.lower().endswith('.toc'):
+                    p = os.path.join(d, f)
+                    y = open(p, 'rb').read()
+                    for name, size in changed.items():
+                        y = toc.set_size(y, name, size)
+                    open(p, 'wb').write(y)
 
 
 def remove(game):
@@ -144,16 +181,17 @@ def main():
     if not os.path.exists(os.path.join(work, 'converted.ok')):
         log('Converting (this takes a while: about an hour)')
         report = build.build(root, dst, log=log)
-        left_out = {k: v for k, v in report.items() if not k.startswith('converted')}
+        left_out = {k: v for k, v in report.items() if not k.startswith(('converted', 'dropped'))}
         for k, v in sorted(report.items()):
             log('  %-45s %d' % (k, len(v)))
-            if not k.startswith('converted'):
+            if not k.startswith(('converted', 'dropped')):
                 for n in v[:10]:
                     log('      ' + n)
         open(os.path.join(work, 'converted.ok'), 'w').write('ok')
     else:
         log('Using the files converted by an earlier run (delete %s to convert again)' % os.path.join(work, 'converted.ok'))
 
+    strip_dropped(dst)
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):

@@ -743,3 +743,19 @@ So the menu hook only has to make that one call (probe 7: F9). The
 episode's display text (`$weller1_*`) is in Severed's
 `dlc_support\level_select.str`, which the console loads in the front end
 through `weller1.lds` (load mask 1 = front end).
+
+## 33. Severed from the episode select (probes 9-10)
+
+Probe 9 hooks the front end constructor in memory (found by byte pattern
+once the Steam wrapper has decrypted the code) and calls AddEpisode on the
+game's thread right after the built-in entry: "Dead Space 2: Severed"
+appears in the episode select. (Calling it from the probe's own thread, as
+probes 7/8 did, hangs the game.) Choosing it loads Severed's own files from
+the test archive: `pdlc1_ch01_mng\pdlc1_ch01_mng.toc`,
+`pdlc1_ch01_mng_global.str` and all of `pdlc1_ch01_mng.str`, then the
+game crashed in the routine that registers a loaded asset (null pointer:
+the asset's type info). The only asset type in that stream the PC never
+uses is PNG: `weller1_ch1.png` / `weller1_ch2.png` from
+`shared\ui\icons\xenon\`, the Xbox save game icons. They are now left out
+of the PC streams (`build.DROP`; the test script strips them from earlier
+output and fixes the TOC sizes).

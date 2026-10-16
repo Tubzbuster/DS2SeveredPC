@@ -38,6 +38,11 @@ def _volatile(g, x):
     return volslots.convert(_model('volatile_table.pkl'), g, x)
 
 
+# asset types the PC engine has no handler for; registering one crashes the
+# game (null type info), and they are not needed on PC
+DROP = {'PNG': 'Xbox 360 save game icons'}
+
+
 def convert_stream(data, report):
     """360 stream bytes -> (PC stream bytes, total uncompressed size)"""
     _, assets = streamfile.read(data)
@@ -45,6 +50,9 @@ def convert_stream(data, report):
     total = 0
     mesh = None                       # a MeshVolatile follows its Mesh
     for a in assets:
+        if a.type in DROP:
+            report['dropped: %s (%s)' % (a.type, DROP[a.type])].append(a.name)
+            continue
         x = a.payload()
         name, ids = a.name, a.ids
         try:
@@ -121,6 +129,6 @@ if __name__ == '__main__':
     r = build(sys.argv[1], sys.argv[2])
     for k in sorted(r):
         print('%-50s %d' % (k, len(r[k])))
-        if not k.startswith('converted'):
+        if not k.startswith(('converted', 'dropped')):
             for n in r[k][:20]:
                 print('    ', n)
