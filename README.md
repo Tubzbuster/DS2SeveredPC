@@ -22,7 +22,7 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed (Xbox 360 add-on, your own copy)
   Platform ..... Windows (PC)
-  Version ...... 0.1.0 (pre-alpha, test builds only)
+  Version ...... 0.2.0 (pre-alpha, test builds only)
   Author ....... tubzbuster & DS2SeveredPC contributors
   Updated ...... 2026-10-16
 ================================================================================
@@ -53,6 +53,23 @@ Use Ctrl+F with the codes below to jump to a section.
 [SV00]                         VERSION HISTORY
 ================================================================================
 ```
+
+**v0.2.0 (2026-10-16)**: Chapter 1 plays from the opening through the
+drill tunnel, saferoom, grinder, the quarry and its door encounter, the
+cargo lift, and on into the mining camp's quarantine lockdown. Fixes in this
+round:
+- Necromorphs move and chase (navmesh checksums recomputed)
+- the quarry no longer crashes or goes black: Severed's colour-grading LUTs
+  are now converted to the PC's 3D form
+- the quarry's scripted chain (Price, the override terminal, the door
+  encounter) runs as on console
+- video audio, animation banks and rig files converted more accurately
+- saving and loading work
+
+Known problems: Gabe's upgraded Pulse Rifle is missing (makes the fights
+hard), one quarry door draws solid black, Twitchers can stunlock Gabe,
+stomping during the tentacle grab puts Gabe in the ceiling, saves show as
+"Chapter 1". See `docs/PROGRESS.md`.
 
 **v0.1.0 (2026-10-16)**: First playable test. Severed is in the episode
 select (main menu > single player). The intro terminal cutscene plays with
@@ -110,15 +127,17 @@ How it works:
 | Area | Status |
 |---|---|
 | Severed in the episode select | Works (via the probe DLL) |
-| Intro terminal cutscene | Works, with subtitles |
-| Drill tunnel level: geometry, textures, lighting | Works |
-| Collision | Works |
-| Playing as Gabe (security suit) | Works |
-| Dialogue / streamed audio | Fixed in v0.1.0, awaiting a test |
-| RIG call scene and hand-over (Gabe gets up, control returns) | Waiting on the audio fix; F8 forces the hand-over |
-| Gabe's starting weapons | Given at the hand-over (F8 too); the Pulse Rifle pre-upgrades are not done yet |
+| Intro terminal cutscene, RIG call scene, hand-over | Works, with subtitles |
+| Level geometry, textures, lighting, collision | Works in the areas reached (one quarry door draws black) |
+| Playing as Gabe (security suit), HUD, inventory | Works |
+| Dialogue, audio logs, videos | Works |
+| Necromorph AI | Works (Twitchers can stunlock Gabe) |
+| Drill tunnel, saferoom, grinder, quarry, cargo lift | Works |
+| Mining camp | Reached; the quarantine lockdown starts |
+| Stores, benches, save stations | Work (saves show as "Chapter 1") |
+| Gabe's starting weapons | Given; the Pulse Rifle pre-upgrades are not done yet |
 | Performance near some lights | Drops; not investigated yet |
-| Chapter 2, stores, save stations, ending | Not reached yet |
+| Elevator, docking station, chapter 2, ending | Not reached yet |
 | One-click installer | Not yet (the test script does the job for now) |
 
 ```text
