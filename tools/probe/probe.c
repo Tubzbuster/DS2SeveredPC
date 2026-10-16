@@ -1035,6 +1035,8 @@ static volatile LONG g_added;
  * type, ...}; typeinfo for arrays (0x13) {count, element type, class*}, for
  * structs (0x16) {.., .., class*}. Used for classes whose field list the
  * earlier descriptor dump missed (Uniform). */
+static int g_uniform_logged;
+
 static void log_class_fields(DWORD va, DWORD hash)
 {
     DWORD *w = (DWORD *)va, i, n;
@@ -1044,6 +1046,7 @@ static void log_class_fields(DWORD va, DWORD hash)
     fa = (BYTE *)w[10];
     log_line("CLASS %s hash 0x%08lx version %lu size %lu fields %lu",
              mem_ok((void *)w[1], 1) ? (const char *)w[1] : "?", w[2], w[3], w[16] >> 16, n);
+    if (n && fa) g_uniform_logged = 1;
     for (i = 0; i < n && mem_ok(fa + 16 * i, 16); i++) {
         DWORD *e = (DWORD *)(fa + 16 * i), *fd = (DWORD *)e[1], *ti = (DWORD *)e[0];
         WORD off = *(WORD *)(fa + 16 * i + 8);
@@ -1185,6 +1188,8 @@ static unsigned char __cdecl hook_sgblock(DWORD *blk)
 {
     static LONG n;
     unsigned char r = g_sgblock_tramp(blk);
+    if (!g_uniform_logged && mem_ok((void *)0x02098B78, 18 * 4) && (((DWORD *)0x02098B78)[17] & 0xFFFF))
+        log_class_fields(0x02098B78, 0x0575C2F4);    /* field list is filled in lazily */
     if (InterlockedIncrement(&n) <= 3000 && mem_ok(blk, 0x18))
         log_line("SIMGROUP block %08lx size 0x%lx records %lu -> %s", blk[0], blk[1], blk[4], r ? "ok" : "FAILED");
     return r;
@@ -1267,6 +1272,7 @@ static void add_severed(void)
     void **global = (void **)0x0201C0E4, *fe;
     (void)ctor; (void)nc;
     log_line("F9: Severed added %ld time(s) by the menu hook", g_added);
+    log_class_fields(0x02098B78, 0x0575C2F4);
     if (mem_ok(global, 4) && (fe = *global)) log_episodes(fe);
 }
 
@@ -1356,7 +1362,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 14 - process %s", path);
+    log_line("severed probe 15 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
