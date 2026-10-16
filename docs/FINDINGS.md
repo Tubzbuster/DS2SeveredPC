@@ -852,3 +852,27 @@ That group also holds the 5 records of the 3 Severed-only classes the PC
 lacks (2B747EB6 Pulse Rifle pre-upgrade x3, 8F917978, 742ECD09). They now
 become blank `NavFolder` objects (`simgroup.NEUTRAL`); the test script
 re-converts the affected SimGroups.
+
+## 34. Level collision: hkpStorageExtendedMeshShape (crash after sections streamed)
+
+With the Severed-only SimGroup classes neutralised, sections streamed and the
+game then crashed in Havok (exe+0x1096884, an hkArray append into a null data
+pointer, called from hkObjectInspector). Every Severed level collision file
+(599 HKX objects) is an `hkpStorageExtendedMeshShape` with
+`...MeshSubpartStorage` / `...ShapeSubpartStorage` objects, and the export
+held only one PC/360 pair of that class, too few for the learned model, so
+they were converted with the generic template (bytes and u16 fields swapped
+as words).
+
+These classes are now converted from Havok's own reflection data. The
+class registrations in `.text` (`push name; mov ecx, cls; call 0x4F85D0`,
+after pushes of numMembers, members, 0,0,0,0, objectSize, parent) lead to the
+static hkClassMember tables: 24 bytes each, {name*, class*, enum*, u8 type,
+u8 subtype, i16 cArraySize, u16 flags, u16 offset, attributes*} (every
+name resolves). The layouts, with parents and the structs they use, are in
+`tools/research/ds2/hkx_classes.json`. `hkx.convert` walks those objects
+member by member (u16/u32/u64 by type, enums by storage type, bytes as
+stored, arrays followed through the fixups). It reproduces the one base-game
+PC file byte for byte. In all Severed shapes, the array sizes, capacities,
+vertices and indices (all 32-bit, every one below its vertex count) read
+correctly.

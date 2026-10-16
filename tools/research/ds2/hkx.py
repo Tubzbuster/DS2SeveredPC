@@ -10,6 +10,8 @@ Byte orders are learned per block type (ds2/blockmodel.py): objects by class
 name, pointed-to blocks by (parent type, pointer offset).
 """
 import bisect
+import json
+import os
 import struct
 from .blockmodel import Layout, Model
 
@@ -129,4 +131,110 @@ def convert(model, x):
                     break
                 out[q:q + 4] = x[q:q + 4][::-1]
                 q = e + 1
+    _reflected(x, out)
     return bytes(out)
+
+
+# Classes the learned model has no samples for are converted from their
+# reflection data instead (ds2/hkx_classes.json: name -> size, parent and
+# members [name, type, subtype, C array size, offset, class], read from the
+# hkClass tables in the PC executable). Member types are Havok's
+# hkClassMember::Type.
+_CLASSES = None
+REFLECTED = {'hkpStorageExtendedMeshShape', 'hkpStorageExtendedMeshShapeMeshSubpartStorage',
+             'hkpStorageExtendedMeshShapeShapeSubpartStorage'}
+_SIZE = {1: 1, 2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8, 10: 8, 11: 4, 12: 16, 13: 16,
+         14: 48, 15: 48, 16: 48, 17: 64, 18: 64, 20: 4, 21: 4, 22: 12, 26: 8, 29: 4, 30: 4}
+_WORDS = {7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 29, 30}   # 32-bit units
+
+
+def _classes():
+    global _CLASSES
+    if _CLASSES is None:
+        _CLASSES = json.load(open(os.path.join(os.path.dirname(__file__), 'hkx_classes.json')))
+    return _CLASSES
+
+
+def _fixups(x):
+    """objects {abs offset: class name}, pointers {abs offset: abs target}"""
+    secs = _sections(x)
+    names = {}
+    objs, ptrs = {}, {}
+    for idx, (name, o, f) in enumerate(secs):
+        start, loc, glob, virt, exp = f[:5]
+        if name == '__classnames__':
+            q = start
+            while q + 5 <= start + loc and x[q:q + 4] != b'\xff\xff\xff\xff':
+                e = x.find(b'\0', q + 5, start + loc)
+                if e < 0:
+                    break
+                names[(idx, q + 5 - start)] = x[q + 5:e].decode('latin1')
+                q = e + 1
+        if name != '__data__':
+            continue
+        for q in range(start + loc, start + glob - 7, 8):
+            a, b = struct.unpack_from('>II', x, q)
+            if a != 0xFFFFFFFF:
+                ptrs[start + a] = start + b
+        for q in range(start + glob, start + virt - 11, 12):
+            a, sec, b = struct.unpack_from('>III', x, q)
+            if a != 0xFFFFFFFF and sec == idx:
+                ptrs[start + a] = start + b
+        for q in range(start + virt, start + exp - 11, 12):
+            a, sec, b = struct.unpack_from('>III', x, q)
+            if a != 0xFFFFFFFF:
+                objs[start + a] = names.get((sec, b), '?')
+    return objs, ptrs
+
+
+def _value(x, out, o, ty, st, cls, ptrs):
+    C = _classes()
+    if ty in (5, 6):
+        out[o:o + 2] = x[o:o + 2][::-1]
+    elif ty in (9, 10):
+        out[o:o + 8] = x[o:o + 8][::-1]
+    elif ty in _WORDS:
+        for w in range(o, o + _SIZE[ty], 4):
+            out[w:w + 4] = x[w:w + 4][::-1]
+    elif ty in (24, 31):                      # enum / flags stored as subtype
+        n = _SIZE.get(st, 1)
+        out[o:o + n] = x[o:o + n][::-1]
+    elif ty == 25:
+        _struct(x, out, o, cls, ptrs)
+    elif ty in (22, 26):                      # hkArray / simple array
+        n = 12 if ty == 22 else 8
+        for w in range(o, o + n, 4):
+            out[w:w + 4] = x[w:w + 4][::-1]
+        size = struct.unpack_from('>I', x, o + 4)[0]
+        data = ptrs.get(o)
+        if data is None or not size:
+            return
+        es = C[cls]['size'] if st == 25 else _SIZE.get(st)
+        if es is None:
+            raise ValueError('array of member type %d' % st)
+        out[data:data + es * size] = x[data:data + es * size]     # padding as stored
+        for i in range(size):
+            _value(x, out, data + es * i, st, 0, cls, ptrs)
+    elif ty in (1, 2, 3, 4, 19):
+        pass
+    else:
+        raise ValueError('member type %d' % ty)
+
+
+def _struct(x, out, o, name, ptrs):
+    c = _classes()[name]
+    if c['parent']:
+        _struct(x, out, o, c['parent'], ptrs)
+    for _, ty, st, n, off, cls in c['members']:
+        es = _classes()[cls]['size'] if ty == 25 else _SIZE.get(ty, 0)
+        for i in range(max(n, 1)):
+            _value(x, out, o + off + es * i, ty, st, cls, ptrs)
+
+
+def _reflected(x, out):
+    objs, ptrs = _fixups(x)
+    for o, name in objs.items():
+        if name in REFLECTED:
+            n = _classes()[name]['size']
+            out[o:o + n] = x[o:o + n]
+            _struct(x, out, o, name, ptrs)
