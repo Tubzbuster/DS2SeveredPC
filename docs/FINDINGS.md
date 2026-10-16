@@ -1143,3 +1143,23 @@ change by 0-4 words each; Gabe's helmet and the mines doors not at all, so
 RCB is not behind the opening's collision sound or the quarry crash. The
 test build re-converts RCB and BNK once (`reloc_fix.ok`), leaving the PC
 copies as they are.
+
+## 43. Video audio (EA ADPCM revision 3)
+
+Severed's two video calls (`movies/<lang>/pdlc1_vt_0x_01.vp6`, EA VP6
+640x480) were copied unchanged. Their audio is EA ADPCM revision 3, the
+big-endian form ('SCHl' version tag 0x80 = 3). Each 'SCDl' chunk starts
+with its sample count and per-channel data offsets as big-endian words,
+and 'SCCl' holds the chunk count big-endian. Revision 2 is the same audio
+with those words little-endian; the frames are identical.
+
+`ds2/vp6.py` rewrites the audio layout (version, chunk words, count).
+ffmpeg reads the result as `adpcm_ea_r2` and decodes sample-for-sample
+the same audio, and converting back restores the original bytes. The test
+build reads the layout from the PC game's own videos (the first `.vp6` in
+its movies folder) and converts Severed's to match, logging both.
+
+Suspected effect: the thumping during the opening's RIG call. It starts
+near the end of the call, comes from the call screen's position
+(`VidScreen`, `CMD_SetMaterialAudio3D` = 1) and stops when the scene ends.
+

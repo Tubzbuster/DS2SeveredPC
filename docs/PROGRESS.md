@@ -27,11 +27,11 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | a body thumping the ground, ragdoll-style, only while the opening scene plays; stops the moment control is handed over. Not the corpses (none twitch). Checked and fine: the video screen attached to Gabe (no physics), Gabe's intro animation bank (all blocks converted with full templates; the long animation data is stored as on the 360, which the PC pairs confirm), the converted floor collision (finite vertices, indices in range, no welding data). Next: a probe hook that names the object behind each impact sound |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | fix pending for the thumping in the opening scene. It starts near the end of the RIG video call and comes from the call screen's position, then stops when the scene ends. The call video's soundtrack is in the 360's big-endian EA ADPCM form (revision 3); the test build now rewrites it to the PC videos' layout, read from the PC game's own movies (exact: ffmpeg decodes identical samples) |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
-| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, 4 s after quarry_z01 (38 MB) finished loading. Inside a Windows heap function called by Direct3D while drawing a full-screen post-processing pass, with garbage in the registers: heap corruption from earlier. Probe 26 checks the heaps every 2 s to date it |
+| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, 4-5 s after quarry_z01 finished loading, in the frame's last full-screen pass. Probe 26: no heap corruption (heap checks clean, also at the crash). Both crashes read through the same bogus pointer, 0x15FFCF8F, so it is likely a value from the data used as a pointer (a texture of a post-processing effect?) |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | untested | scene `igc_01_05`; end of chapter 1 |
@@ -69,7 +69,7 @@ and is corrected as we play.
 | Weapons, kinesis | works | |
 | Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
 | Crash in the quarry | broken | see bomb_run |
-| Save stations | partial | first save works; second use locks up; saves are listed as "Chapter 1" (loading one probably starts the base game: do not rely on them) |
+| Save stations | partial | saving and loading a save work; the second use of a save station locked up once (recheck); saves are listed as "Chapter 1" |
 | Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
 | Performance near some lights | partial | frame drops in the drill tunnel |
 | Gabe's pain sounds | works | Isaac's grunts and damage lines, as on console (the DLC reuses them) |

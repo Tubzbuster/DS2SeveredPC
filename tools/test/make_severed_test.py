@@ -198,6 +198,44 @@ def refresh_assets(root, dst, typ, convert, marker=None, rename=None, keep=None)
                 open(p, 'wb').write(y)
 
 
+def pc_video_layout(game):
+    """the audio layout of the PC game's own videos (ds2/vp6.layout), from
+    the first one found in its movies folder"""
+    from ds2 import vp6
+    for d, _, fs in os.walk(os.path.join(game, 'movies')):
+        for f in sorted(fs):
+            if f.lower().endswith('.vp6'):
+                p = os.path.join(d, f)
+                with open(p, 'rb') as fh:
+                    lay = vp6.layout(fh.read(4 << 20))     # the audio header comes first
+                if lay:
+                    return lay, f
+    return None, None
+
+
+def refresh_videos(game, dst):
+    """rewrite Severed's video audio to the PC videos' layout (EA ADPCM
+    revision 3, big-endian, on the 360); unchanged if they already match"""
+    from ds2 import vp6
+    pc, name = pc_video_layout(game)
+    if pc is None:
+        log('  no PC video found to compare with: Severed videos left as they are')
+        return
+    log('  PC video %s: audio version %d, chunk words %s-endian, chunk count %s' %
+        (name, pc[0], 'little' if pc[1] else 'big',
+         'little-endian' if pc[2] else 'big-endian' if pc[2] is not None else 'absent'))
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower().endswith('.vp6'):
+                p = os.path.join(d, f)
+                x = open(p, 'rb').read()
+                before = vp6.layout(x)
+                y = vp6.convert(x, pc)
+                if y != x:
+                    open(p, 'wb').write(y)
+                    log('  %s: audio %s -> %s' % (os.path.relpath(p, dst), before, vp6.layout(y)))
+
+
 def refresh_snu_channels(root, dst):
     """re-encode the audio streams whose channel count the PC cannot play as
     XAS (6-channel cutscene audio: snu.pad_channels)"""
@@ -413,6 +451,8 @@ def main():
         log('Taking the assets the PC game already has from its archives')
         take_pc_assets(dst, idx, os.path.join(work, 'pc_cache'))
         open(os.path.join(work, 'pc_assets.ok'), 'w').write('ok')
+    log('Checking the video audio against the PC game\'s own videos')
+    refresh_videos(a.game, dst)
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):
