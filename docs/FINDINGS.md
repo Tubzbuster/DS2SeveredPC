@@ -675,3 +675,28 @@ videos are platform-neutral.
 base game's with updated Lua audio scripts. On PC the installer should
 patch the PC's own copy (swap in Severed's Lua assets, identical bytecode
 on both platforms) rather than replace the file.
+
+## 31. First in-game test (chapter 1 override)
+
+The test archive loaded: the game opened DS2DAT2.DAT (424 entries) and
+read our `ch01_hos\ch01_hos.toc` (Severed's TOC) and patched
+`global_assets\global_assets_global.str`, but New Game played chapter 1's
+intro (Isaac in the chair) and the player fell into the void. Probe log:
+the PC loads a level from `<level>\<level>.toc` plus
+`<level>\<level>_streamsets.str` (a SimGroup, e.g.
+`{54B1E16B-0001-7400-5354-5245414D5345}` from
+`levels\ch01_hos\ch01_hos\streams\ch01_hos_streamsets.simgroup.bin`) and
+the episode files `ds_2\ds_2.toc`, `ds_2\ds_2.str`,
+`ds_2\ds_2_global.str`; chapter 1's own stream sets then streamed chapter
+1's sections (DS2DAT9) and none of Severed's streams were read. The level
+list (#E4529CFE) was not read at all in that session, so its override did
+nothing. Severed ships no stream sets file (neither its streams nor its
+package contain one); the console DLC path (`.lds .lvl .key .pid .dlm
+.add`, all names present in the PC exe) loads without it.
+
+The exe's code section is encrypted on disk (Steam wrapper), so no code
+references to those strings can be found statically; the loader path has
+to be found at runtime (file activity, return addresses) without dumping
+code.
+
+Next test: chapter 1's stream sets replaced by an empty stream.

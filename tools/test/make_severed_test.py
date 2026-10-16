@@ -3,6 +3,8 @@
 Builds DS2DAT2.DAT in the Dead Space 2 folder from your own Severed addon
 file:
   - every Severed file converted to the PC formats, at its own path;
+  - chapter 1's stream sets file replaced by an empty stream (Severed has
+    none);
   - the game's level list with the chapter 1 entry ('ch01_hos') pointing
     at Severed's level (folder, stream list, checkpoints), and Severed's
     TOCs also under chapter 1's TOC names, so New Game should start
@@ -167,6 +169,9 @@ def main():
     toc_dir = os.path.join(dst, 'pdlc1_ch01_mng')
     files.append(('ch01_hos\\ch01_hos.toc', os.path.join(toc_dir, 'pdlc1_ch01_mng.toc')))
     files.append(('ch01_hos\\ch01_hos_global.toc', os.path.join(toc_dir, 'pdlc1_ch01_mng_global.toc')))
+    # Severed has no stream sets file (the console DLC loads without one);
+    # chapter 1's would stream chapter 1's own sections, so blank it.
+    files.append(('ch01_hos\\ch01_hos_streamsets.str', streamwrite.Writer().data()))
 
     log('Writing', target)
     tmp = target + '.tmp'
