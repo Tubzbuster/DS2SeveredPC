@@ -13,7 +13,7 @@ def score(model, P):
 
 P = [q for q in pairs.load('BNK') if len(q[1]) == len(q[2])]
 for name, tr, te in (('held-out', P[::2], P[1::2]), ('all', P, P)):
-    m = reloc.Model()
+    m = reloc.Model(text_min=8, bitsets=True, hash_kind=True)   # held-out 38 -> 52/73 exact
     for k, x, p in tr: m.train(x, p)
     m.finish()
     print(name, score(m, te), 'types', len(m.perms))

@@ -354,11 +354,11 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | MeshVolatile | 3,412 | 84% exact or within rounding of 2,780 matched pairs | all 851 |
 | MetaModel | 1,978 | 100% exact | all 584 |
 | SimGroup | (no PC example of the Severed format) | converted with the PC engine's own class layouts; output re-validated (all 21,712 message strings, all 1,435 group hashes) | all 160; 27 records of 8 classes the PC exe lacks |
-| BNK (animation banks) | 147 | 99.99% of words right on held-out files (38/73 files exact); remaining misses are rare node layouts | all 100 |
+| BNK (animation banks) | 147 | 99.99% of words right on held-out files (52/73 files exact, section 42); remaining misses are rare node layouts | all 100 |
 | NAV (navigation) | 770 (paired by name: .xen/.win) | exact (770/770 since the header sums are recomputed, section 41) | all 101 |
 | HKX (Havok physics) | 1,684 | 832/842 held-out files byte-exact (rest: PC re-exported with other values) | all 515 |
 | SBK (sound banks) | 80 (second export) | metadata 78/80 exact (other 2: different sample sets); sdat rebuild exact; samples EA-XMA -> EA-XAS (26-60 dB SNR) | all 531 |
-| RCB | 358 | 108/179 held-out files exact, 99.91% of words (relocation-table blocks, swap default) | all 54 |
+| RCB | 358 | 164/179 held-out files exact (354/358 all), 99.95% of words (relocation-table blocks, swap default; section 42) | 12 of 54 (the rest are PC copies) |
 | SMB | 167 | 158 exact (32-bit + 0x0016 record headers as u16 pairs + names) | all 31 |
 | LH2 (string tables) | (structure check) | header/IDs/offsets 32-bit, text raw; a converted 360 table parses on PC layout, 6,649/6,873 shared strings identical | both (menu text, Severed text) |
 | ANIM | 51 | 99.93% of words held-out (position template) | 1 |
@@ -1118,3 +1118,28 @@ word sum.) The sums verify on all 177 PC and 181 360 headers sampled.
 `nav.checksums` recomputes them, innermost header first. All 770 pairs now
 convert byte-exact, and all 96 Severed headers are found. The test build
 re-converts the NAV assets once (`nav_sums.ok`).
+
+## 42. RCB and BNK: names, bitsets, hash-led blocks
+
+Every wrong RCB word in the pairs (243) was a choice between swapping and
+keeping as stored. Three rules, as options of `reloc.Model`:
+- **Names of 8+ characters only** (`text_min=8`): four printable bytes
+  and a NUL were kept as a name, but are mostly hashes (213 of the 218
+  wrongly kept words, e.g. `38594a76` = "8YJv").
+- **Byte-array bitsets kept as stored** (`bitsets`): a pointer to the
+  word after next, the word between a bit count C (`fe03` for C = 10 is
+  bits 1-9). They are told apart from word bitsets (swapped) by which
+  reading leaves no bit at or above C. 24 matches in the pairs, all right.
+- **Blocks that start with a hash share a type** (`hash_kind`): their
+  first byte is random, so the old kind key scattered them. It helps BNK;
+  on RCB it adds 2 exact files but more wrong words, so RCB leaves it off.
+
+Held-out results:
+- RCB: 108 -> 164 of 179 files exact (99.913% -> 99.949% of words).
+- BNK: 38 -> 52 of 73 (99.990% -> 99.992%).
+
+Only 12 of Severed's 54 RCBs are converted; the rest are PC copies. They
+change by 0-4 words each; Gabe's helmet and the mines doors not at all, so
+RCB is not behind the opening's collision sound or the quarry crash. The
+test build re-converts RCB and BNK once (`reloc_fix.ok`), leaving the PC
+copies as they are.

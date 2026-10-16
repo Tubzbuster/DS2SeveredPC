@@ -152,11 +152,12 @@ def refresh_simgroups(root, dst, class_hash):
             log('  re-converted %d SimGroup(s) in %s' % (n, os.path.relpath(p, dst)))
 
 
-def refresh_assets(root, dst, typ, convert, marker=None, rename=None):
+def refresh_assets(root, dst, typ, convert, marker=None, rename=None, keep=None):
     """re-convert the assets of one type whose conversion was fixed after the
     files were converted (only those containing marker, if given), fixing
     the TOC sizes of streams that changed size. rename maps a source asset's
-    (name, ids) to the converted one's, for types renamed on conversion"""
+    (name, ids) to the converted one's, for types renamed on conversion;
+    keep(asset) True leaves an asset as it is (the PC game's own copies)"""
     sizes = {}
     for d, _, fs in os.walk(dst):
         for f in fs:
@@ -177,7 +178,8 @@ def refresh_assets(root, dst, typ, convert, marker=None, rename=None):
             n = total = 0
             for a in streamfile.read(data)[1]:
                 y = a.payload()
-                if a.type == typ and (marker is None or marker in y) and (a.name, a.ids) in fresh:
+                if a.type == typ and (marker is None or marker in y) and (a.name, a.ids) in fresh \
+                        and not (keep and keep(a)):
                     z = convert(fresh[(a.name, a.ids)].payload())
                     if z is not None:
                         y, n = z, n + 1
@@ -397,6 +399,14 @@ def main():
         refresh_assets(root, dst, 'NAV', convert.CONVERTERS['NAV'],
                        rename=lambda k: (nav.pc_name(k[0]), nav.pc_ids(k[0], k[1])))
         open(os.path.join(work, 'nav_sums.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'reloc_fix.ok')):
+        log('Re-converting the RCB and BNK assets (names, bitsets)')
+        from ds2 import convert, pcassets
+        own = pcassets.load()
+        for typ in ('RCB', 'BNK'):
+            refresh_assets(root, dst, typ, convert.CONVERTERS[typ],
+                           keep=lambda a: pcassets.key(a.type, a.name, a.ids) in own)
+        open(os.path.join(work, 'reloc_fix.ok'), 'w').write('ok')
     # last of the steps on the converted files: later re-conversions must
     # leave the PC game's own assets alone
     if not os.path.exists(os.path.join(work, 'pc_assets.ok')):
