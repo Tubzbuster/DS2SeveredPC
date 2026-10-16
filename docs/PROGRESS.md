@@ -67,7 +67,7 @@ and is corrected as we play.
 | Gabe's Pulse Rifle and RIG upgrades | missing | Severed-only object type, to be redone |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
-| Necromorph AI | broken | enemies attack but run in place (navigation data, likely the converted NAV meshes) |
+| Necromorph AI | fix pending | enemies ran in place: the game rejected every converted navigation mesh (checksum); the checksums are now recomputed |
 | Crash in the quarry | broken | see bomb_run |
 | Save stations | partial | first save works; second use locks up; saves are listed as "Chapter 1" (loading one probably starts the base game: do not rely on them) |
 | Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |

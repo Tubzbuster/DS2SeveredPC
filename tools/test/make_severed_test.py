@@ -152,10 +152,11 @@ def refresh_simgroups(root, dst, class_hash):
             log('  re-converted %d SimGroup(s) in %s' % (n, os.path.relpath(p, dst)))
 
 
-def refresh_assets(root, dst, typ, convert, marker=None):
+def refresh_assets(root, dst, typ, convert, marker=None, rename=None):
     """re-convert the assets of one type whose conversion was fixed after the
     files were converted (only those containing marker, if given), fixing
-    the TOC sizes of streams that changed size"""
+    the TOC sizes of streams that changed size. rename maps a source asset's
+    (name, ids) to the converted one's, for types renamed on conversion"""
     sizes = {}
     for d, _, fs in os.walk(dst):
         for f in fs:
@@ -168,7 +169,8 @@ def refresh_assets(root, dst, typ, convert, marker=None):
             src = os.path.join(root, os.path.relpath(p, dst))
             if not os.path.exists(src):
                 continue
-            fresh = {(a.name, a.ids): a for a in streamfile.read(open(src, 'rb').read())[1] if a.type == typ}
+            fresh = {(rename or (lambda k: k))((a.name, a.ids)): a
+                     for a in streamfile.read(open(src, 'rb').read())[1] if a.type == typ}
             if not fresh:
                 continue
             w = streamwrite.Writer()
@@ -389,6 +391,12 @@ def main():
         log('Re-encoding the 5.1 cutscene audio as stereo')
         refresh_snu_channels(root, dst)
         open(os.path.join(work, 'snu_channels2.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'nav_sums.ok')):
+        log('Re-converting the navigation meshes (blob checksums)')
+        from ds2 import convert, nav
+        refresh_assets(root, dst, 'NAV', convert.CONVERTERS['NAV'],
+                       rename=lambda k: (nav.pc_name(k[0]), nav.pc_ids(k[0], k[1])))
+        open(os.path.join(work, 'nav_sums.ok'), 'w').write('ok')
     # last of the steps on the converted files: later re-conversions must
     # leave the PC game's own assets alone
     if not os.path.exists(os.path.join(work, 'pc_assets.ok')):

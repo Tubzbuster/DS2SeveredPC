@@ -355,7 +355,7 @@ with the real PC asset, or within rounding for re-packed vertex data.
 | MetaModel | 1,978 | 100% exact | all 584 |
 | SimGroup | (no PC example of the Severed format) | converted with the PC engine's own class layouts; output re-validated (all 21,712 message strings, all 1,435 group hashes) | all 160; 27 records of 8 classes the PC exe lacks |
 | BNK (animation banks) | 147 | 99.99% of words right on held-out files (38/73 files exact); remaining misses are rare node layouts | all 100 |
-| NAV (navigation) | 770 (paired by name: .xen/.win) | exact except one per-collection hash the PC computes from data we lack (kept; referenced nowhere else) | all 101 |
+| NAV (navigation) | 770 (paired by name: .xen/.win) | exact (770/770 since the header sums are recomputed, section 41) | all 101 |
 | HKX (Havok physics) | 1,684 | 832/842 held-out files byte-exact (rest: PC re-exported with other values) | all 515 |
 | SBK (sound banks) | 80 (second export) | metadata 78/80 exact (other 2: different sample sets); sdat rebuild exact; samples EA-XMA -> EA-XAS (26-60 dB SNR) | all 531 |
 | RCB | 358 | 108/179 held-out files exact, 99.91% of words (relocation-table blocks, swap default) | all 54 |
@@ -598,9 +598,8 @@ Names end in `.xen` (360) / `.win` (PC), so the asset IDs differ: id1-3 =
 borrow case). Payload: 32-bit throughout except a constant 128-byte table
 (identical in all 825 occurrences; kept), unused pointer slots
 (0xFFFFFFFF followed by 2 or 0x1B -> 0; 1,607/1,607) and a per-collection
-hash in each (nested) header (`00000002 <size> <hash>`) that is computed
-from something not in the file (not CRC/sdbm/MD5 of the file); it is
-referenced nowhere else, so the 360 value is kept. `ds2/nav.py`.
+sum in each (nested) header (`00000002 <size> <sum>`), recomputed on
+conversion (section 41). `ds2/nav.py`.
 
 ## 27. Audio decoding and encoding
 
@@ -1099,3 +1098,23 @@ Probe 23 no longer requests the copy. A file `severed_streamsets.on` in the
 game folder brings it back, in case the level needs it after all: since the
 Severed-only classes are neutralised, sections stream without it as far as
 we know.
+
+## 41. NAV blob checksums (AI running in place)
+
+Necromorphs attacked but ran in place. The NAV loader (handler 0x1363220,
+load callback 0x1363860) passes each blob of a collection to 0x5BBC30,
+which adds it to the nav world through 0x5BB980. That function reads the
+blob's 0x18-byte header (u32 endian marker, version 2, size, sum, flags)
+and drops the blob, adding nothing, when:
+- the version is not 2;
+- flag bit 0 is set;
+- the sum of the `size` bytes after the header, read as big-endian 32-bit
+  words (0x5BADE0), differs from the header's sum.
+
+The PC sum is over the little-endian converted bytes, so the 360 value never
+matched: every Severed blob was dropped and the AI had no navigation. (The
+earlier hash search tried CRC, Adler, FNV, sdbm and djb2, never a plain
+word sum.) The sums verify on all 177 PC and 181 360 headers sampled.
+`nav.checksums` recomputes them, innermost header first. All 770 pairs now
+convert byte-exact, and all 96 Severed headers are found. The test build
+re-converts the NAV assets once (`nav_sums.ok`).
