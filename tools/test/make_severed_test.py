@@ -1,4 +1,4 @@
-"""First in-game test of the converted Severed files.
+r"""First in-game test of the converted Severed files.
 
 Builds DS2DAT2.DAT in the Dead Space 2 folder from your own Severed addon
 file:
