@@ -68,18 +68,17 @@ fixes memory lost at region edges and long field lists cut short.
 
 `build.sh` cross-compiles it with Zig (`pip install ziglang==0.13.0`).
 
-## F9: add Severed to the episode list (probe 8)
+## Severed in the episode list (probe 9)
 
 With the Severed test archive installed (`tools/test`, without
-`--hijack-ch01`), press **F9** once on the title screen or main menu
-(before opening Single Player). Windows plays its "asterisk" sound and the
-log shows the episode list before and after. Then Single Player -> New
-Game should offer the episode select with "Dead Space 2: Severed". F9 calls
-the game's own add-episode function (the one the console's DLC `.lvl`
-handler uses) with the values from Severed's `weller1.lvl`; it changes
-nothing on disk.
+`--hijack-ch01`), probe 9 adds "Dead Space 2: Severed" to the episode list
+by itself: it waits for the Steam wrapper to decrypt the game's code, finds
+the front end constructor and the game's add-episode function by byte
+pattern, and hooks the constructor in memory (nothing on disk). Right
+after the game adds its own episode, on the game's thread, the probe adds
+Severed with the values from Severed's `weller1.lvl`, the same call the
+console's DLC `.lvl` handler makes. **F9** only writes the episode list to
+the log.
 
-Probe 8 finds the two game functions by byte pattern in the running game
-(the Steam build's code is not at the retail exe's addresses; probe 7
-called a fixed address and hung). If a pattern is not found exactly once
-the log says so and F9 does nothing.
+(Probes 7 and 8 called the function from the probe's own thread on F9:
+that hangs the game, its memory allocator is not for foreign threads.)

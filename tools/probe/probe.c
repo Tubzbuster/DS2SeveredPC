@@ -1009,30 +1009,69 @@ static void log_episodes(void *fe)
     }
 }
 
+/* Calling AddEpisode from the probe's own thread hangs the game (its
+ * allocator is not for foreign threads), and by the title screen the list
+ * has already been consumed. So the front end constructor is hooked in
+ * memory (nothing on disk): right after it adds the built-in episode, on
+ * the game's own thread, Severed is added the same way. The constructor
+ * starts with push ebx / push ebp / push esi / mov esi, ecx (5 bytes, no
+ * relative operands), which the trampoline re-runs before jumping back. */
+typedef void *(__attribute__((thiscall)) *ctor_fn)(void *self);
+static ctor_fn g_ctor_tramp;
+static add_episode_fn g_add;
+static volatile LONG g_added;
+
+static void *__attribute__((thiscall)) hook_frontend_ctor(void *self)
+{
+    void *r = g_ctor_tramp(self);
+    log_line("front end constructed (thread %lu)", GetCurrentThreadId());
+    log_episodes(self);
+    g_add(self, "Dead Space 2: Severed", "Gabe Weller's story (converted from the Xbox 360 DLC)",
+          "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
+    InterlockedIncrement(&g_added);
+    log_line("added Severed to the episode list");
+    log_episodes(self);
+    return r;
+}
+
+static DWORD WINAPI menu_hook_thread(LPVOID p)
+{
+    int na = 0, nc = 0, tries;
+    BYTE *add = NULL, *ctor = NULL, *t;
+    DWORD old, base = (DWORD)GetModuleHandleA(NULL);
+    (void)p;
+    /* the Steam wrapper decrypts the code shortly after start: wait for it */
+    for (tries = 0; tries < 6000; tries++) {
+        add = find_sig(SIG_ADD, &na);
+        ctor = find_sig(SIG_CTOR, &nc);
+        if (add && ctor) break;
+        Sleep(10);
+    }
+    log_line("menu hook: AddEpisode %d match(es) at exe+0x%lx, front end constructor %d match(es) at exe+0x%lx",
+             na, add ? (DWORD)add - base : 0, nc, ctor ? (DWORD)ctor - base : 0);
+    if (!add || !ctor) { log_line("menu hook: functions not found - Severed not added"); return 0; }
+    t = (BYTE *)VirtualAlloc(NULL, 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!t) return 0;
+    memcpy(t, ctor, 5);
+    t[5] = 0xE9; *(DWORD *)(t + 6) = (DWORD)(ctor + 5) - (DWORD)(t + 10);
+    g_ctor_tramp = (ctor_fn)t;
+    g_add = (add_episode_fn)add;
+    if (!VirtualProtect(ctor, 5, PAGE_EXECUTE_READWRITE, &old)) { log_line("menu hook: cannot patch"); return 0; }
+    ctor[0] = 0xE9; *(DWORD *)(ctor + 1) = (DWORD)hook_frontend_ctor - (DWORD)(ctor + 5);
+    VirtualProtect(ctor, 5, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), ctor, 5);
+    log_line("menu hook: installed after %d ms", tries * 10);
+    return 0;
+}
+
 static void add_severed(void)
 {
-    static int done;
-    int na, nc;
-    BYTE *add = find_sig(SIG_ADD, &na), *ctor = find_sig(SIG_CTOR, &nc);
-    void **global, *fe;
-    DWORD base = (DWORD)GetModuleHandleA(NULL);
-    log_line("F9: AddEpisode %d match(es) at exe+0x%lx, front end constructor %d match(es) at exe+0x%lx",
-             na, add ? (DWORD)add - base : 0, nc, ctor ? (DWORD)ctor - base : 0);
-    if (!add || !ctor) { log_line("F9: functions not found - nothing done"); return; }
-    global = *(void ***)(ctor + 7);
-    log_line("F9: front end global at 0x%08lx", (DWORD)global);
-    if (!mem_ok(global, 4) || !(fe = *global)) {
-        log_line("F9: the front end is not up yet - press F9 on the title screen or main menu");
-        return;
-    }
-    log_episodes(fe);
-    if (done) { log_line("F9: Severed was already added"); return; }
-    ((add_episode_fn)add)(fe, "Dead Space 2: Severed", "Gabe Weller's story (converted from the Xbox 360 DLC)",
-        "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
-    done = 1;
-    log_line("F9: added Severed to the episode list");
-    log_episodes(fe);
-    MessageBeep(MB_ICONASTERISK);
+    int nc;
+    BYTE *ctor = find_sig(SIG_CTOR, &nc);   /* hooked now: pattern gone */
+    void **global = (void **)0x0201C0E4, *fe;
+    (void)ctor; (void)nc;
+    log_line("F9: Severed added %ld time(s) by the menu hook", g_added);
+    if (mem_ok(global, 4) && (fe = *global)) log_episodes(fe);
 }
 
 static DWORD WINAPI hotkey_thread(LPVOID p)
@@ -1071,7 +1110,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 8 - process %s", path);
+    log_line("severed probe 9 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -1092,7 +1131,8 @@ static void start(HMODULE self)
     install("ReadFile", (void *)h_ReadFile, (void **)&o_ReadFile);
     log_line("--- hooks installed ---");
     CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL);
-    log_line("press F9 to add Severed to the episode list, F10 for the reflection scan, F11 for the descriptor dump");
+    CreateThread(NULL, 0, menu_hook_thread, NULL, 0, NULL);
+    log_line("Severed is added to the episode list when the front end starts; F9 logs the list, F10 for the reflection scan, F11 for the descriptor dump");
 }
 
 /* ---- dinput8 forwarding ----------------------------------------------- */
