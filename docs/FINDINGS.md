@@ -920,3 +920,14 @@ with other runs, so their values are not reproducible.
 On the base-game pairs, every converted strip table draws exactly the
 PC's triangles with the PC's winding, and the volatile streams keep their
 places.
+
+Mesh relocation table (found from the crash in the first strip test): header
+0x48 = count, 0x4C = offset of {u32 field offset, u32 value} pairs, one per
+pointer field (header 0x20 0x4C 0x50 0x54 0x60 0x68 0x6C 0x78 0x7C, DT1 +0x00
++0x20 +0x44 +0x84 +0x88 +0x8C, DT2 +0x0C). The loader (exe 0x7C4B90) writes
+each value back into its field (value < header 0x0C: mesh + value, else
+volatile base + value - header 0x0C). In every 360 and PC mesh, each value
+equals its field. The re-laid-out meshes kept the old values, so the loader
+pointed the tables back at the old (shorter, zeroed) index data, and the
+index buffer copy read past the end of the mesh (crash at exe+0x1044191).
+The values are now refreshed from the converted fields.

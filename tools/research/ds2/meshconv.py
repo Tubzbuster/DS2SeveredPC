@@ -206,4 +206,11 @@ def restrip(x, a, out):
             struct.pack_into('<I', out, o + 12, ptr + delta)
     struct.pack_into('<I', out, 0x9C, L + delta)
     struct.pack_into('<I', out, 0x0C, struct.unpack_from('>I', x, 0x0C)[0] + delta)
+    # relocation table (header 0x48 count, 0x4C offset): {u32 field offset,
+    # u32 value}; the engine writes each value back into its field at load
+    # time, so the values must follow the moved pointers
+    count, table = struct.unpack_from('>II', x, 0x48)
+    for i in range(count):
+        loc = struct.unpack_from('>I', x, table + 8 * i)[0]
+        out[table + 8 * i + 4:table + 8 * i + 8] = out[loc:loc + 4]
     return bytes(out[:L]) + bytes(tail) + bytes(out[L:])     # volatile data some meshes carry

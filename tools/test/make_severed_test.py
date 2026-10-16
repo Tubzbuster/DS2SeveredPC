@@ -278,10 +278,10 @@ def main():
         refresh_assets(root, dst, 'HKX', convert.CONVERTERS['HKX'],
                        b'hkpStorageExtendedMeshShape')    # level collision (reflection data)
         open(os.path.join(work, 'hkx_fix.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'strip_fix.ok')):
-        log('Re-converting meshes (triangle strips)')
+    if not os.path.exists(os.path.join(work, 'strip_fix2.ok')):
+        log('Re-converting meshes (triangle strips, relocation table)')
         refresh_assets(root, dst, 'Mesh', lambda x: build.meshconv.convert(x, build._model('mesh_templates.pkl')))
-        open(os.path.join(work, 'strip_fix.ok'), 'w').write('ok')
+        open(os.path.join(work, 'strip_fix2.ok'), 'w').write('ok')
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):
