@@ -1779,11 +1779,41 @@ static int stage_slot(DWORD st)
     return st < 16 ? (int)st : st >= 257 && st <= 260 ? (int)(st - 257 + 16) : -1;
 }
 
+/* vertex textures (stages 257-260): the 360 reads any format in a vertex
+   shader, PC cards only a few (mostly floating point). Each distinct one is
+   logged with its format; with severed_novtf.on in the game folder they are
+   unbound before every dynamic-geometry draw (from the batch flush). */
+static void *g_vtf_seen[64];
+static int g_nvtf_seen, g_novtf;
+static BYTE *g_flush_draw_ret;         /* return address of the flush's DrawIndexedPrimitive */
+
+static void log_vertex_texture(DWORD st, void *t, void *ret)
+{
+    typedef DWORD (WINAPI *GetType_t)(void *);
+    typedef HRESULT (WINAPI *GetLevelDesc_t)(void *, UINT, DWORD *);
+    DWORD desc[8] = {0}, type;
+    char who[MAX_PATH + 32];
+    int i;
+    for (i = 0; i < g_nvtf_seen; i++) if (g_vtf_seen[i] == t) return;
+    if (g_nvtf_seen < 64) g_vtf_seen[g_nvtf_seen++] = t;
+    type = ((GetType_t)(*(void ***)t)[10])(t);                 /* IDirect3DResource9::GetType */
+    if (type == 3)                                             /* D3DRTYPE_TEXTURE */
+        ((GetLevelDesc_t)(*(void ***)t)[17])(t, 0, desc);      /* IDirect3DTexture9::GetLevelDesc */
+    addr_name((DWORD)ret, who, sizeof who);
+    if (InterlockedIncrement(&g_guard_logs) <= 64)
+        log_line("vertex texture: stage %lu texture %p type %lu format 0x%08lx (%c%c%c%c) %lux%lu, from %s", st, t, type,
+                 desc[0], (char)(desc[0] & 0xFF) >= 32 ? (char)(desc[0] & 0xFF) : '.',
+                 (char)(desc[0] >> 8 & 0xFF) >= 32 ? (char)(desc[0] >> 8 & 0xFF) : '.',
+                 (char)(desc[0] >> 16 & 0xFF) >= 32 ? (char)(desc[0] >> 16 & 0xFF) : '.',
+                 (char)(desc[0] >> 24 & 0xFF) >= 32 ? (char)(desc[0] >> 24 & 0xFF) : '.', desc[6], desc[7], who);
+}
+
 static HRESULT WINAPI g_SetTexture(void *d, DWORD st, void *t)
 {
     void *ret = __builtin_return_address(0);
     int k = stage_slot(st);
     if (!d3d_check("SetTexture", st, t, ret, 1)) t = NULL;
+    if (t && st >= 257 && st <= 260) log_vertex_texture(st, t, ret);
     if (k >= 0) { g_bound[k] = t; g_boundby[k] = ret; }
     return o_SetTexture(d, st, t);
 }
@@ -1792,6 +1822,9 @@ static void check_bound(void *d, void *drawret)
 {
     char who[MAX_PATH + 32], draw[MAX_PATH + 32];
     int k;
+    if (g_novtf && drawret == g_flush_draw_ret)
+        for (k = 16; k < 20; k++)
+            if (g_bound[k]) { o_SetTexture(d, (DWORD)(257 + k - 16), NULL); g_bound[k] = NULL; }
     for (k = 0; k < 20; k++) {
         if (!g_bound[k] || d3d_obj_ok(g_bound[k])) continue;
         if (InterlockedIncrement(&g_guard_logs) <= 64) {
@@ -1957,6 +1990,16 @@ static void d3d_guard(void)
         }
         log_line("D3D guard: batch flush found after %lu tries", tries);
         g_devglobal = *(void ****)(f + 0x79);
+        g_flush_draw_ret = f + 0xBA;    /* after the flush's call [DrawIndexedPrimitive] (exe 0x13D2E7A) */
+        {
+            char path[MAX_PATH], *slash;
+            GetModuleFileNameA(NULL, path, sizeof path);
+            slash = strrchr(path, '\\');
+            if (slash) lstrcpyA(slash + 1, "severed_novtf.on");
+            g_novtf = GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+            log_line("D3D guard: vertex textures %s before dynamic-geometry draws%s", g_novtf ? "UNBOUND" : "left as they are",
+                     g_novtf ? " (severed_novtf.on)" : "");
+        }
         g_guard_state = 1;
     }
     if (!mem_ok(g_devglobal, 4) || !*g_devglobal || !mem_ok(*g_devglobal, 4)) return;

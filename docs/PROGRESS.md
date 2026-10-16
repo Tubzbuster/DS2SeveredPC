@@ -31,7 +31,7 @@ and is corrected as we play.
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
-| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, a few seconds after quarry_z01 loads, inside Direct3D during the frame's last full-screen pass. Ruled out: heap corruption (probe 26), invalid or freed textures, buffers, shaders and targets (probe 29's guard checked every one; all 8 bound textures valid at the crash). 0x15FFCF8F is still in a register. Probe 30 records render, texture stage and sampler state calls and flags out-of-range sampler values (they come from per-texture records, exe 0x13D8540) |
+| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, a few seconds after quarry_z01 loads, inside Direct3D during the frame's last full-screen pass. Ruled out: heap corruption (probe 26), invalid or freed textures, buffers, shaders and targets (probe 29's guard checked every one; all 8 bound textures valid at the crash). 0x15FFCF8F is still in a register. Probe 30 records render, texture stage and sampler state calls and flags out-of-range sampler values (they come from per-texture records, exe 0x13D8540). Suspect: a vertex texture (stage 258) left bound at the crashing pass; the 360 reads any format in a vertex shader, PC cards only a few. Probe 30 logs each vertex texture's format; `severed_novtf.on` unbinds them before dynamic-geometry draws (an experiment) |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | untested | scene `igc_01_05`; end of chapter 1 |
@@ -84,6 +84,9 @@ and is corrected as we play.
   held (Alt+F9 records in the Nvidia overlay).
 - Crash reports name the meshes near the crash (probe 21+).
 - Probe 26+: heap checks every 2 s (`HEAP ... CORRUPT` lines).
+- Probe 30+: `severed_novtf.on` (empty file in the game folder) unbinds
+  vertex textures before dynamic-geometry draws; an experiment for the
+  quarry crash.
 - Probe 27+: Direct3D guard (`D3D GUARD` lines); crash reports list the
   bound textures and who set them.
 

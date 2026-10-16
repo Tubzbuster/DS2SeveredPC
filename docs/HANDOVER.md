@@ -123,7 +123,14 @@ Open, most important first:
      and flags out-of-range sampler values. The sampler values come from
      per-texture records (exe `0x13D8540`: byte fields +0x24-0x28 → states
      7, 6, 5, 10, 1-3; dword +0x2C).
-   - **Waiting for the user's probe 30 log.**
+   - Suspect raised by the user: at the crash a texture is still bound on
+     stage 258 (vertex texture sampler 1; the game maps its sampler index
+     17 there). The 360 reads any format in a vertex shader; PC cards only
+     a few. Probe 30 logs each vertex texture's format (`vertex texture:`
+     lines), and `severed_novtf.on` unbinds stages 257-260 before every draw
+     from the batch flush (return `exe+0xFD2E7A`). If the crash goes away
+     with the file, find which asset binds the vertex texture.
+   - **Waiting for the user's probe 30 logs, with and without the file.**
 2. **Thumping in the opening scene:** absent in the user's last two runs
    (one without F9). Possibly fixed by the video audio conversion
    (FINDINGS 43); not confirmed. Ruled out: the cutscene audio, corpse
