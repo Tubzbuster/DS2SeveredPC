@@ -1026,10 +1026,45 @@ static ctor_fn g_ctor_tramp;
 static add_episode_fn g_add;
 static volatile LONG g_added;
 
+
+/* ---- class layout log ---------------------------------------------------
+ * Logs one class's field list from its descriptor in .data (read-only):
+ * descriptor words w[2] = name hash, w[3] = version, w[10] = field array,
+ * w[16] >> 16 = size, w[17] & 0xFFFF = field count; field entries are 16
+ * bytes {typeinfo*, fielddesc*, u16 offset, ...}; fielddesc {name*, hash,
+ * type, ...}; typeinfo for arrays (0x13) {count, element type, class*}, for
+ * structs (0x16) {.., .., class*}. Used for classes whose field list the
+ * earlier descriptor dump missed (Uniform). */
+static void log_class_fields(DWORD va, DWORD hash)
+{
+    DWORD *w = (DWORD *)va, i, n;
+    BYTE *fa;
+    if (!mem_ok(w, 18 * 4) || w[2] != hash) { log_line("CLASS 0x%08lx: no descriptor at 0x%08lx", hash, va); return; }
+    n = w[17] & 0xFFFF;
+    fa = (BYTE *)w[10];
+    log_line("CLASS %s hash 0x%08lx version %lu size %lu fields %lu",
+             mem_ok((void *)w[1], 1) ? (const char *)w[1] : "?", w[2], w[3], w[16] >> 16, n);
+    for (i = 0; i < n && mem_ok(fa + 16 * i, 16); i++) {
+        DWORD *e = (DWORD *)(fa + 16 * i), *fd = (DWORD *)e[1], *ti = (DWORD *)e[0];
+        WORD off = *(WORD *)(fa + 16 * i + 8);
+        const char *name = fd && mem_ok(fd, 20) && mem_ok((void *)fd[0], 1) ? (const char *)fd[0] : "?";
+        DWORD type = fd && mem_ok(fd, 20) ? fd[2] : 0xFFFFFFFF;
+        DWORD a = 0, b = 0, c = 0, x = fd && mem_ok(fd, 20) ? fd[3] : 0;
+        if (x && mem_ok((void *)x, 12)) x = ((DWORD *)x)[2];        /* struct class hash */
+        if (ti && mem_ok(ti, 12)) {
+            a = ti[0]; b = ti[1]; c = ti[2];
+            if (c && mem_ok((void *)c, 12)) c = ((DWORD *)c)[2];   /* element / struct class hash */
+        }
+        log_line("  FIELD %u 0x%lx %s ti %lx %lx %lx x %lx", off, type, name, a, b, c, x);
+    }
+}
+
 static void *__attribute__((thiscall)) hook_frontend_ctor(void *self)
 {
     void *r = g_ctor_tramp(self);
+    static int classes_logged;
     log_line("front end constructed (thread %lu)", GetCurrentThreadId());
+    if (!classes_logged) { classes_logged = 1; log_class_fields(0x02098B78, 0x0575C2F4); }
     log_episodes(self);
     g_add(self, "Dead Space 2: Severed", "Gabe Weller's story",
           "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
@@ -1321,7 +1356,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 13 - process %s", path);
+    log_line("severed probe 14 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

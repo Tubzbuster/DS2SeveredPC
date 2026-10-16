@@ -798,3 +798,14 @@ exe does handle the packed SimGroup block (dispatcher 0x0085D090: 0x011795D9
 -> 0x0085C110, 0x91C8773C -> 0x0085D020, anything else int3). Probe 13
 logs each block load and whether the loader accepted it, to see whether
 Severed's converted SimGroups are rejected.
+
+Probe 13: every SimGroup block loads "ok", Severed's too (main level
+1,598 records twice, global 20 records). Base vs Severed after level
+start: the base game reads a 7 MB stream (#A1BA05E4) before
+`player_bnk.str` and then streams sections; Severed stops after
+`player_bnk.str`. Severed's global SimGroup holds its player suits: 11
+`Uniform` objects (+ UniformRegistry, PlayerDecompressionInfo, ...). The
+Uniform class (version 9, 1,056 bytes, 133 fields, descriptor 0x02098B78)
+is in the PC exe but its field list was not in the descriptor dump, so
+those records were converted by guesswork; a wrong suit (e.g. its stream
+GUID) would leave no player and an idle level. Probe 14 logs the layout.

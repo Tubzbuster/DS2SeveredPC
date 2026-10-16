@@ -101,3 +101,9 @@ Severed's level SimGroup under that name).
 Probe 13 logs every SimGroup data block the game loads ("SIMGROUP block
 <magic> size records -> ok/FAILED") from a wrapper around the block
 dispatcher (packed 0x011795D9 / property tree 0x91C8773C).
+
+Probe 14 writes the field list of the `Uniform` class (player suits) to
+the log when the front end starts ("CLASS Uniform ..." and "FIELD" lines,
+read-only from the class descriptor at 0x02098B78): the earlier
+descriptor dump missed it, so Severed's 11 Uniform records were converted
+without a layout.
