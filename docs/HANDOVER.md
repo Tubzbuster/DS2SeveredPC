@@ -106,31 +106,23 @@ and grinder area. Works:
 
 Open, most important first:
 
-1. **Quarry crash** (`bomb_run/quarry_z01`): a few seconds after the 38 MB
-   `quarry_z01` stream loads, inside `d3d9.dll`, during the frame's last
-   full-screen pass. The game draws it from exe `0x6DF737` → quad
-   `0x6F1300` → flush `0x13D2DC0` → `DrawIndexedPrimitive`.
-   - Ruled out:
-     - heap corruption (probe 26);
-     - invalid or freed objects: probe 29's guard checked every texture,
-       buffer, shader, declaration and target, and all 8 bound textures
-       were valid at the crash;
-     - texture sizes, the quarry's RCB/BNK, the particle templates;
-     - Severed data containing the value.
-   - `0x15FFCF8F` is in a register in every crash.
-   - Probe 30 records render, texture stage and sampler state calls (a
-     ring printed at the crash, plus calls whose value matches a register)
-     and flags out-of-range sampler values. The sampler values come from
-     per-texture records (exe `0x13D8540`: byte fields +0x24-0x28 → states
-     7, 6, 5, 10, 1-3; dword +0x2C).
-   - Suspect raised by the user: at the crash a texture is still bound on
-     stage 258 (vertex texture sampler 1; the game maps its sampler index
-     17 there). The 360 reads any format in a vertex shader; PC cards only
-     a few. Probe 30 logs each vertex texture's format (`vertex texture:`
-     lines), and `severed_novtf.on` unbinds stages 257-260 before every draw
-     from the batch flush (return `exe+0xFD2E7A`). If the crash goes away
-     with the file, find which asset binds the vertex texture.
-   - **Waiting for the user's probe 30 logs, with and without the file.**
+1. **Quarry crash** (`bomb_run/quarry_z01`), cause found by probe 30.
+   - Just before the crash the game sets sampler states on stage **417**:
+     its texture apply (exe `0x13D8540`) adds 0xF1 to slots >= 16, so slot
+     176 was asked for.
+   - Direct3D 9 has stages 0-15 and 256-260 only; an unchecked stage
+     writes past its internal tables. That explains the same garbage
+     (`0x15FFCF8F`) and the crash surfacing later in an innocent
+     full-screen pass.
+   - "Set texture on slot N" (exe `0x13C8070`) also writes past the game's
+     own 20-entry slot table (`0x211C6DC`).
+   - Probe 31 refuses SetTexture/SetSamplerState on invalid stages and logs
+     the exe call chain (`D3D GUARD: ... is not a Direct3D stage`).
+   - **Next:** from the chain, find which asset asks for slot 176 (likely
+     a converted Material/VFX sampler index in `quarry_z01`) and fix its
+     conversion.
+   - Ruled out earlier: heap corruption, invalid or freed objects, the
+     vertex texture (R32F; unbinding it changed nothing).
 2. **Thumping in the opening scene:** absent in the user's last two runs
    (one without F9). Possibly fixed by the video audio conversion
    (FINDINGS 43); not confirmed. Ruled out: the cutscene audio, corpse

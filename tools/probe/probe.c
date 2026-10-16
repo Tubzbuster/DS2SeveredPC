@@ -1808,10 +1808,49 @@ static void log_vertex_texture(DWORD st, void *t, void *ret)
                  (char)(desc[0] >> 24 & 0xFF) >= 32 ? (char)(desc[0] >> 24 & 0xFF) : '.', desc[6], desc[7], who);
 }
 
+/* Probe 30's crash: sampler states on stage 417 just before it. The game's
+   texture apply (exe 0x13D8540) adds 0xF1 to slots >= 16, so slot 176 was
+   asked for; Direct3D 9 has stages 0-15 and 256-260 only, and an
+   unchecked stage writes past its tables (the corruption seen in every
+   crash). Such calls are refused here and logged once per call chain. */
+static DWORD g_badstage_seen[32];
+static int g_nbadstage;
+
+static int stage_valid(DWORD st)
+{
+    return st < 16 || (st >= 256 && st <= 260);
+}
+
+static void log_bad_stage(const char *method, DWORD st, DWORD state, void *ret)
+{
+    DWORD *sp = (DWORD *)__builtin_frame_address(0), exe = (DWORD)GetModuleHandleA(NULL), key = 0;
+    DWORD chain[8];
+    char who[MAX_PATH + 32], line[1024];
+    int i, n = 0, len;
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(exe + ((IMAGE_DOS_HEADER *)exe)->e_lfanew);
+    DWORD end = exe + nt->OptionalHeader.SizeOfImage;
+    for (i = 0; i < 256 && n < 8; i++) {           /* exe return addresses on the stack */
+        DWORD v;
+        if (!mem_ok(sp + i, 4)) break;
+        v = sp[i];
+        if (v > exe + 0x1000 && v < end && mem_ok((void *)(v - 5), 5) && ((BYTE *)v)[-5] == 0xE8)
+            chain[n++] = v;
+    }
+    for (i = 0; i < n && i < 4; i++) key = key * 31 + chain[i];
+    for (i = 0; i < g_nbadstage; i++) if (g_badstage_seen[i] == key) return;
+    if (g_nbadstage < 32) g_badstage_seen[g_nbadstage++] = key;
+    if (InterlockedIncrement(&g_guard_logs) > 64) return;
+    addr_name((DWORD)ret, who, sizeof who);
+    len = wsprintfA(line, "D3D GUARD: %s stage %lu (state %lu) is not a Direct3D stage - refused; from %s, chain", method, st, state, who);
+    for (i = 0; i < n && len < 900; i++) len += wsprintfA(line + len, " exe+0x%lx", chain[i] - exe);
+    log_line("%s", line);
+}
+
 static HRESULT WINAPI g_SetTexture(void *d, DWORD st, void *t)
 {
     void *ret = __builtin_return_address(0);
     int k = stage_slot(st);
+    if (!stage_valid(st)) { log_bad_stage("SetTexture", st, 0, ret); return 0x8876086C; /* D3DERR_INVALIDCALL */ }
     if (!d3d_check("SetTexture", st, t, ret, 1)) t = NULL;
     if (t && st >= 257 && st <= 260) log_vertex_texture(st, t, ret);
     if (k >= 0) { g_bound[k] = t; g_boundby[k] = ret; }
@@ -1880,6 +1919,7 @@ static HRESULT WINAPI g_SetSamplerState(void *d, DWORD stage, DWORD st, DWORD v)
 {
     void *ret = __builtin_return_address(0);
     note_state(3, stage, st, v, ret);
+    if (!stage_valid(stage)) { log_bad_stage("SetSamplerState", stage, st, ret); return 0x8876086C; }
     if (!sampler_value_ok(st, v)) {
         char who[MAX_PATH + 32];
         LONG i, n = g_guard_nseen < 64 ? g_guard_nseen : 64;
@@ -2180,7 +2220,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 30 - process %s", path);
+    log_line("severed probe 31 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
