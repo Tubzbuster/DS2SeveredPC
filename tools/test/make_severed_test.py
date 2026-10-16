@@ -227,6 +227,10 @@ def main():
     if not os.path.exists(os.path.join(work, 'uniform_fix.ok')):
         refresh_simgroups(root, dst, 0x0575C2F4)       # Uniform layout added (probe 15)
         open(os.path.join(work, 'uniform_fix.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'neutral_fix.ok')):
+        for h in sorted(simgroup.NEUTRAL):               # Severed-only classes -> blank NavFolder
+            refresh_simgroups(root, dst, h)
+        open(os.path.join(work, 'neutral_fix.ok'), 'w').write('ok')
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):

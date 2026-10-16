@@ -841,3 +841,14 @@ after the main level SimGroup, then crashed in ZoneRender setup (null zone,
 exe+0x3EE6A1 called from the CMD_SetFilterMask/ZoneRenderFlags handler):
 the sections came before the main level stream was set up. Probe 18 queues
 the request on F9 in the black level and runs it on the game thread.
+
+Probe 18: requesting the start sections from the game thread after the
+level was up crashed the same way. The null is the global zone manager
+(0x0204D554, list at +0x5C/+0x60/+0x64), which the level's `ZoneWorld`
+object (class with m_MaxManagedZones, fog, clip distances) sets up.
+Severed's main SimGroup has its ZoneWorld, but it never activated - nor did
+its StreamSets: the objects of the main level group are not being set up.
+That group also holds the 5 records of the 3 Severed-only classes the PC
+lacks (2B747EB6 Pulse Rifle pre-upgrade x3, 8F917978, 742ECD09). They now
+become blank `NavFolder` objects (`simgroup.NEUTRAL`); the test script
+re-converts the affected SimGroups.

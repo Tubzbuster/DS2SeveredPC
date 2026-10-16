@@ -26,6 +26,14 @@ TYPES = {
     0x0C: (16, 4), 0x0D: (12, 4), 0x0E: (16, 4), 0x0F: (64, 4),
     0x10: (4, 4), 0x11: (12, 4),
 }
+# Severed-only classes with no PC equivalent: their objects become blank
+# NavFolder objects (a field-less grouping class), because an unknown class
+# in a group appears to stop the whole group from being set up on PC (the
+# level's ZoneWorld and StreamSets never activated). 2B747EB6 is the
+# Pulse Rifle pre-upgrade (to be redone in Lua), 8F917978 / 742ECD09 are
+# unidentified (one hash / one u32 each).
+NEUTRAL = {0x2B747EB6, 0x8F917978, 0x742ECD09}
+NEUTRAL_AS = 'NavFolder'
 M = 0xFFFFFFFF
 _SCHEMA = None
 
@@ -150,7 +158,11 @@ def convert(x, stats=None):
     for i in range((toff - hs) // 8):
         h, ver = struct.unpack_from('>II', x, B + hs + 8 * i)
         orig.append(h)
-        if h not in sch and h in REMAP:
+        if h in NEUTRAL and h not in sch:
+            nh, c = by_name[NEUTRAL_AS]
+            stats['neutralised'] = stats.get('neutralised', 0) + 1
+            h, ver = nh, c['version']
+        elif h not in sch and h in REMAP:
             nh, c = by_name[REMAP[h]]
             stats['remapped'] = stats.get('remapped', {})
             stats['remapped'][REMAP[h]] = stats['remapped'].get(REMAP[h], 0) + 1
@@ -170,6 +182,9 @@ def convert(x, stats=None):
         cls = sch.get(h)
         if cls is not None and cls['version'] != ver:
             raise Unknown('%s version %d, PC has %d' % (cls['name'], ver, cls['version']))
+        if orig[b] in NEUTRAL and orig[b] not in sch:
+            out[B + ro:B + ro + ln] = bytes(ln)      # blank NavFolder
+            continue
         _record(out, x, B + ro, ln, cls, stats)
     # group hashes: sdbm over the members' class-name hashes, PC byte order
     if o10:
