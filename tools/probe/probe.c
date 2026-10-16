@@ -930,18 +930,29 @@ static void desc_dump(void)
 
 
 /* ---- F9: add Severed to the episode list --------------------------------
- * Same build as the unwrapped retail exe (fixed base 0x400000):
- *   frontend singleton   [0x0201C0E4], set by its constructor (0x00AA09E0)
- *   episode list         frontend + 0x980: vector {begin, end, cap} of
- *                        0x68-byte entries (strings of 16 bytes, text
- *                        pointer first): +0x00 name, +0x10 description,
- *                        +0x20 folder, +0x30 stream list, +0x40 extra,
- *                        +0x50 start checkpoint GUID, +0x60 flags,
- *                        +0x64 unlock key
- *   AddEpisode           0x00A93520, thiscall, 8 arguments (ret 0x20); the
- *                        console DLC path (.lvl) calls it with weller1.lvl's
- *                        fields.
+ * Found in a retail build of the exe without the Steam wrapper (same data
+ * layout; the Steam build's code may sit at other addresses, so the two
+ * functions are located by byte pattern in the running game's code, ??
+ * = relative call targets / absolute addresses):
+ *   front end constructor: stores `this` in the front end global
+ *     (`mov [imm32], esi` at +5, address at +7) and builds the episode
+ *     list at this + 0x980: vector {begin, end, cap} of 0x68-byte entries
+ *     (16-byte strings, text pointer first): +0x00 name, +0x10
+ *     description, +0x20 folder, +0x30 stream list, +0x40 extra, +0x50 start
+ *     checkpoint GUID, +0x60 flags, +0x64 unlock key
+ *   AddEpisode: thiscall, 8 arguments (ret 0x20); the console DLC path
+ *     (.lvl) calls it with weller1.lvl's fields.
+ * Only addresses are logged; no code is copied out.
  */
+static const char SIG_ADD[] =
+    "56 81 C1 80 09 00 00 E8 ?? ?? ?? ?? 8B F0 8B 44 24 08 50 8B CE E8 ?? ?? ?? ?? 8B 4C 24 0C 51 8D 4E 10 "
+    "E8 ?? ?? ?? ?? 8B 54 24 10 52 8D 4E 20 E8 ?? ?? ?? ?? 8B 44 24 14 50 8D 4E 30 E8 ?? ?? ?? ?? 8B 4C 24 24 "
+    "51 8D 4E 40 E8 ?? ?? ?? ?? 8B 54 24 18 52 8D 4E 50 E8 ?? ?? ?? ?? 8B 44 24 1C 8B 4C 24 20 89 46 60 89 4E "
+    "64 5E C2 20 00";
+static const char SIG_CTOR[] =
+    "53 55 56 8B F1 89 35 ?? ?? ?? ?? C7 46 04 ?? ?? ?? ?? 33 DB 89 5E 0C 57 8D 7E 04 BD 01 00 00 00 89 6F 04 "
+    "C7 06 ?? ?? ?? ?? C7 07 ?? ?? ?? ?? 89 5E 30 89 5E 38 8D 4E 48 89 5E 3C 89 5E 40 89 5E 44";
+
 typedef void (__attribute__((thiscall)) *add_episode_fn)(void *self, const char *name, const char *desc,
         const char *folder, const char *streams, const char *checkpoint, int flags, int unlock, const char *extra);
 
@@ -951,6 +962,39 @@ static int mem_ok(const void *p, SIZE_T n)
     if (!p || !VirtualQuery(p, &mi, sizeof mi) || mi.State != MEM_COMMIT || (mi.Protect & (PAGE_GUARD | PAGE_NOACCESS)))
         return 0;
     return (BYTE *)p + n <= (BYTE *)mi.BaseAddress + mi.RegionSize;
+}
+
+static int parse_sig(const char *s, BYTE *b, BYTE *m)
+{
+    int n = 0;
+    while (*s) {
+        if (*s == ' ') { s++; continue; }
+        if (s[0] == '?') { b[n] = 0; m[n++] = 0; s += 2; continue; }
+        {
+            int hi = s[0] <= '9' ? s[0] - '0' : s[0] - 'A' + 10, lo = s[1] <= '9' ? s[1] - '0' : s[1] - 'A' + 10;
+            b[n] = (BYTE)(hi * 16 + lo); m[n++] = 1; s += 2;
+        }
+    }
+    return n;
+}
+
+/* the one match of a pattern in the exe's .text, or NULL (none / several) */
+static BYTE *find_sig(const char *sig, int *count)
+{
+    BYTE b[256], m[256], *base = (BYTE *)GetModuleHandleA(NULL), *t, *e, *p, *hit = NULL;
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
+    IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
+    int n = parse_sig(sig, b, m), i;
+    *count = 0;
+    t = base + sec->VirtualAddress;
+    e = t + sec->Misc.VirtualSize - n;
+    if (!mem_ok(t, sec->Misc.VirtualSize)) return NULL;
+    for (p = t; p < e; p++) {
+        if (*p != b[0]) continue;
+        for (i = 1; i < n && (!m[i] || p[i] == b[i]); i++) ;
+        if (i == n) { (*count)++; hit = p; }
+    }
+    return *count == 1 ? hit : NULL;
 }
 
 static void log_episodes(void *fe)
@@ -968,14 +1012,22 @@ static void log_episodes(void *fe)
 static void add_severed(void)
 {
     static int done;
-    void *fe;
-    if (!mem_ok((void *)0x0201C0E4, 4) || !(fe = *(void **)0x0201C0E4)) {
+    int na, nc;
+    BYTE *add = find_sig(SIG_ADD, &na), *ctor = find_sig(SIG_CTOR, &nc);
+    void **global, *fe;
+    DWORD base = (DWORD)GetModuleHandleA(NULL);
+    log_line("F9: AddEpisode %d match(es) at exe+0x%lx, front end constructor %d match(es) at exe+0x%lx",
+             na, add ? (DWORD)add - base : 0, nc, ctor ? (DWORD)ctor - base : 0);
+    if (!add || !ctor) { log_line("F9: functions not found - nothing done"); return; }
+    global = *(void ***)(ctor + 7);
+    log_line("F9: front end global at 0x%08lx", (DWORD)global);
+    if (!mem_ok(global, 4) || !(fe = *global)) {
         log_line("F9: the front end is not up yet - press F9 on the title screen or main menu");
         return;
     }
     log_episodes(fe);
     if (done) { log_line("F9: Severed was already added"); return; }
-    ((add_episode_fn)0x00A93520)(fe, "Dead Space 2: Severed", "Gabe Weller's story (converted from the Xbox 360 DLC)",
+    ((add_episode_fn)add)(fe, "Dead Space 2: Severed", "Gabe Weller's story (converted from the Xbox 360 DLC)",
         "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
     done = 1;
     log_line("F9: added Severed to the episode list");
@@ -1019,7 +1071,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 7 - process %s", path);
+    log_line("severed probe 8 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
