@@ -212,7 +212,7 @@ def refresh_snu_channels(root, dst):
                 os.makedirs(os.path.dirname(q), exist_ok=True)
                 open(q, 'wb').write(y)
                 n += 1
-    log('  re-encoded %d multichannel audio stream(s) with 8 channels' % n)
+    log('  re-encoded %d multichannel audio stream(s)' % n)
 
 
 def take_pc_assets(dst, idx, cache_dir):
@@ -385,10 +385,10 @@ def main():
         log('Re-converting meshes (triangle strips, relocation table)')
         refresh_assets(root, dst, 'Mesh', lambda x: build.meshconv.convert(x, build._model('mesh_templates.pkl')))
         open(os.path.join(work, 'strip_fix2.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'snu_channels.ok')):
-        log('Re-encoding the 6-channel cutscene audio')
+    if not os.path.exists(os.path.join(work, 'snu_channels2.ok')):
+        log('Re-encoding the 5.1 cutscene audio as stereo')
         refresh_snu_channels(root, dst)
-        open(os.path.join(work, 'snu_channels.ok'), 'w').write('ok')
+        open(os.path.join(work, 'snu_channels2.ok'), 'w').write('ok')
     # last of the steps on the converted files: later re-conversions must
     # leave the PC game's own assets alone
     if not os.path.exists(os.path.join(work, 'pc_assets.ok')):

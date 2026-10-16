@@ -9,20 +9,37 @@ from . import eaaudio as A
 
 
 # channel counts the PC plays as EA-XAS: the base game's XAS streams have 1,
-# 2, 4 or 8 channels; its 6-channel (5.1) streams are all EALayer3. A
-# 6-channel XAS stream never reports "primed", so the cutscene waiting on it
-# never starts. Such streams get silent extra channels (5.1 -> 8, the first
-# six unchanged).
+# 2, 4 or 8 channels; its 6-channel (5.1) streams are all EALayer3. Severed's
+# 5.1 cutscene audio as 6-channel (or padded 8-channel) XAS never let the
+# scripted sequence waiting on it start, so it is mixed down to stereo, the
+# layout of the streams that play. Severed's 5.1 order (by channel energy:
+# dialogue in channel 1, channel 5 silent): L, C, R, Ls, Rs, LFE.
 XAS_CHANNELS = (1, 2, 4, 8)
+_DOWNMIX_51 = ((0, 1.0), (1, 0.7071), (3, 0.7071)), ((2, 1.0), (1, 0.7071), (4, 0.7071))
 
 
 def pad_channels(pcm, channels):
-    """interleaved int16 PCM -> (PCM, channel count the PC's XAS supports)"""
+    """interleaved int16 PCM -> (PCM, channel count the PC's XAS plays):
+    5.1 mixed down to stereo, other unusual counts padded with silence"""
+    import array
+    n = len(pcm) // channels
+    if channels == 6:
+        mix = [[0.0] * n for _ in range(2)]
+        for o, terms in enumerate(_DOWNMIX_51):
+            m = mix[o]
+            for c, g in terms:
+                src = pcm[c::channels]
+                for i in range(n):
+                    m[i] += g * src[i]
+        peak = max(1.0, max(max(abs(v) for v in m) for m in mix))
+        scale = min(1.0, 32767.0 / peak)
+        out = array.array('h', bytes(4 * n))
+        out[0::2] = array.array('h', (int(round(v * scale)) for v in mix[0]))
+        out[1::2] = array.array('h', (int(round(v * scale)) for v in mix[1]))
+        return out, 2
     want = next(c for c in XAS_CHANNELS if c >= channels)
     if want == channels:
         return pcm, channels
-    import array
-    n = len(pcm) // channels
     out = array.array('h', bytes(2 * n * want))
     for c in range(channels):
         out[c::want] = pcm[c::channels]

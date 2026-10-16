@@ -1055,3 +1055,23 @@ fallback.
 
 The RIG health display ("not there at all") likely has the same cause as the
 kiosk.
+
+Follow-up to section 38: the 8-channel version did not start the scene
+either. The probe again showed only the prime reads.
+
+The scene's settings decode against the engine's own enum names:
+- MoveType 0 = RWS_MOVETYPE_NONE;
+- PrimeType 0 = SES_PRIMETYPE_BEFORE;
+- flags 0x4827 = REPEATABLE | NO_INTERRUPT | NO_GRAVITY_COLLISION |
+  NO_DAMAGE | NO_CAMERA_RESET_WHEN_DONE | 0x4000.
+
+So the action starts as soon as the audio is primed. 5.1 streams are now
+mixed down to stereo, the layout of every stream that has played so far.
+
+Severed's 5.1 channel order, from channel energy: L, C (the dialogue, the
+loudest), R, Ls, Rs, LFE (silent). Mix:
+- L' = L + 0.707 C + 0.707 Ls
+- R' = R + 0.707 C + 0.707 Rs
+- scaled down only if it would clip.
+
+Working list of in-game progress: docs/PROGRESS.md.
