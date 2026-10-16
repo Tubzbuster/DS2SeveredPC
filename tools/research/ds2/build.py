@@ -10,7 +10,7 @@ platform-neutral files are copied. A report lists any asset that could not
 be converted (it is left out of the PC stream).
 """
 import os, pickle, struct, sys, collections
-from . import streamfile, streamwrite, convert, toc, nav, geo, meshconv, templates as T, vfx
+from . import streamfile, streamwrite, convert, toc, nav, geo, meshconv, templates as T, vfx, lut
 
 HERE = os.path.dirname(__file__)
 _MODELS = {}
@@ -49,6 +49,7 @@ def convert_stream(data, report):
     w = streamwrite.Writer()
     total = 0
     mesh = None                       # a MeshVolatile follows its Mesh
+    luts = set()                      # LUT textures: header, then data (ds2/lut.py)
     for a in assets:
         if a.type in DROP:
             report['dropped: %s (%s)' % (a.type, DROP[a.type])].append(a.name)
@@ -56,7 +57,12 @@ def convert_stream(data, report):
         x = a.payload()
         name, ids = a.name, a.ids
         try:
-            if a.type == 'Mesh':
+            if a.type == 'tg4h' and lut.is_lut_header(x):
+                y = lut.header(x)
+                luts.add(a.name)
+            elif a.type == 'tg4d' and a.name in luts:
+                y = lut.data(x)               # D3D byte order; the test build re-checks it against the PC
+            elif a.type == 'Mesh':
                 y = meshconv.convert(x, _model('mesh_templates.pkl'))
                 mesh = geo.parse(x, True)
             elif a.type == 'MeshVolatile':

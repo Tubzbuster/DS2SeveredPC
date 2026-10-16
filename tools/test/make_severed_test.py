@@ -236,6 +236,70 @@ def refresh_videos(game, dst):
                     log('  %s: audio %s -> %s' % (os.path.relpath(p, dst), before, vp6.layout(y)))
 
 
+def refresh_luts(root, dst):
+    """colour-grading LUTs (ds2/lut.py): re-convert Severed's own LUT
+    textures, with the byte order read from the PC game's identity LUT
+    (lutcolor_default, taken from the PC archives); PC copies untouched"""
+    from ds2 import lut, pcassets
+    own = pcassets.load()
+    order, src_name = None, None
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if order is None and f.lower().endswith('.str'):
+                data = open(os.path.join(d, f), 'rb').read()
+                if b'lutcolor_default' not in data:
+                    continue
+                for a in streamfile.read(data)[1]:
+                    if a.type == 'tg4d' and a.name == 'lutcolor_default':
+                        order = lut.order_from_identity(a.payload())
+                        src_name = f
+    if order is None:
+        order = lut.X8R8G8B8
+        log('  no PC identity LUT found: assuming X8R8G8B8 byte order')
+    else:
+        log('  PC identity LUT (in %s): byte order %s' % (src_name, order))
+    sizes = {}
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if not f.lower().endswith('.str'):
+                continue
+            p = os.path.join(d, f)
+            data = open(p, 'rb').read()
+            if b'lut' not in data:
+                continue
+            src = os.path.join(root, os.path.relpath(p, dst))
+            if not os.path.exists(src):
+                continue
+            fresh = {(a.type, a.name): a for a in streamfile.read(open(src, 'rb').read())[1]
+                     if a.type in ('tg4h', 'tg4d') and a.name.startswith('lut')}
+            luts = {n for (t, n), a in fresh.items() if t == 'tg4h' and lut.is_lut_header(a.payload())}
+            if not luts:
+                continue
+            w = streamwrite.Writer()
+            n = total = 0
+            for a in streamfile.read(data)[1]:
+                y = a.payload()
+                if a.name in luts and (a.type, a.name) in fresh:
+                    x = fresh[(a.type, a.name)].payload()
+                    z = lut.header(x) if a.type == 'tg4h' else lut.data(x, order)
+                    if z is not None and pcassets.key(a.type, a.name, a.ids) not in own:
+                        y, n = z, n + 1               # PC copies are left as they are
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+                total += len(y)
+            if n:
+                open(p, 'wb').write(w.data())
+                sizes[os.path.splitext(os.path.relpath(p, dst))[0].replace('/', '\\')] = total
+                log('  re-converted %d LUT asset(s) in %s' % (n, os.path.relpath(p, dst)))
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower().endswith('.toc'):
+                p = os.path.join(d, f)
+                y = open(p, 'rb').read()
+                for name, size in sizes.items():
+                    y = toc.set_size(y, name, size)
+                open(p, 'wb').write(y)
+
+
 def refresh_snu_channels(root, dst):
     """re-encode the audio streams whose channel count the PC cannot play as
     XAS (6-channel cutscene audio: snu.pad_channels)"""
@@ -451,6 +515,10 @@ def main():
         log('Taking the assets the PC game already has from its archives')
         take_pc_assets(dst, idx, os.path.join(work, 'pc_cache'))
         open(os.path.join(work, 'pc_assets.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'lut_fix.ok')):
+        log('Converting the colour-grading LUTs to the PC\'s 3D form')
+        refresh_luts(root, dst)
+        open(os.path.join(work, 'lut_fix.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

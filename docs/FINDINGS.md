@@ -1181,3 +1181,34 @@ brightness setting. The quarry's black haze is separate: probably the object
 whose texture list overruns its shader (probe 31 refuses the extra
 texture).
 
+## 45. Colour-grading LUTs (the quarry's black screen)
+
+The quarry turned the whole screen dark the moment its door opened (off
+again when it closed). The frame's grading pass (exe `0x6DEAA0` fills a
+list of LUT textures weighted by region volumes; exe `0x6DAF10` binds them)
+uses colour-grading lookup textures, and the 360 and PC store them
+differently:
+
+| | 360 | PC |
+|---|---|---|
+| Form | 2D `A8` texture, 768x128 | 3D `RGBX8` texture, 32x32x32, attribute `3d` |
+| Size | 98,304 bytes | 131,072 bytes |
+
+The 360 layout is three 256x128 planes (R, G, B output); entry (r, g, b) at
+x = r + 32 (b % 8), y = g + 32 (b // 8) of each plane. Verified on the 360
+identity LUT `lutcolor_default`: all 98,304 bytes. The texture converter
+treated LUTs like any texture, so the PC got a flat A8 texture where the
+shader samples a 3D one. All 39 LUT header pairs had been "wrong" in the
+texture scores.
+
+`ds2/lut.py` converts both:
+- header: exact on all 37 LUT header pairs;
+- data: rearranged into the 3D volume. The test build reads the PC's
+  byte order from the PC game's own identity LUT (`lutcolor_default`, a PC
+  copy) and falls back to X8R8G8B8.
+
+Severed's own LUTs: `lut_pdlc1_quarry`, `lut_pdlc1_elev_fall`,
+`lut_pdlc1_hos_entrance`; the rest are PC copies. Probably also behind
+probe 31's bad texture slot: when more grading volumes are active than the
+shader has LUT slots, the list overruns.
+
