@@ -117,8 +117,8 @@ How it works:
 | Collision | Works |
 | Playing as Gabe (security suit) | Works |
 | Dialogue / streamed audio | Fixed in v0.1.0, awaiting a test |
-| Mouse look, camera while walking | Broken: camera stuck low and zooms in |
-| Gabe's starting weapons (pre-upgraded Pulse Rifle) | Missing |
+| RIG call scene and hand-over (Gabe gets up, control returns) | Waiting on the audio fix; F8 forces the hand-over |
+| Gabe's starting weapons | Given at the hand-over (F8 too); the Pulse Rifle pre-upgrades are not done yet |
 | Performance near some lights | Drops; not investigated yet |
 | Chapter 2, stores, save stations, ending | Not reached yet |
 | One-click installer | Not yet (the test script does the job for now) |
@@ -160,6 +160,9 @@ How it works:
    move it somewhere safe first.
 4. Start the game as normal. Go to **Single Player > Episode Select** and
    pick **Dead Space 2: Severed**.
+5. If Gabe's RIG call scene doesn't hand control back, press **F8**. This
+   sends the scene's own "finished" message: you get the normal camera,
+   control and Gabe's starting gear. You'll hear the Windows asterisk sound.
 
 ```text
 ================================================================================

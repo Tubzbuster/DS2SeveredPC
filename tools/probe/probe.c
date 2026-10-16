@@ -1152,9 +1152,78 @@ static const char *g_sections[] = {
     "pdlc1_ch01_mng\\pdlc1_ch01_mng\\shared\\design\\mini-global\\doors_mng\\doors_mng_folderstream.str",
 };
 
+/* ---- F8 / F7: send level messages on the game's thread -----------------
+ * The engine's message broadcast (retail exe 0x0084F5A0, behind Lua's
+ * SendMessage): cdecl (message name, unused, payload); it hashes the name
+ * and hands the message to every object listening for it - the same way
+ * Severed's own level objects (MultiManagers, scripted sequences) talk.
+ * F8 sends Severed's intro hand-over: the end of the RIG call scene
+ * (ses_player_01_01_end: pops the scene camera, adds the objective, sets
+ * the post-intro checkpoint) and Gabe's starting equipment. F7 sends each
+ * line of severed_send.txt in the game folder. */
+static const char SIG_SENDMSG[] =
+    "83 EC 14 8B 54 24 18 33 C0 66 89 44 24 04 52 8D 44 24 04 33 C9 50 C7 44 24 08 00 00 00 00 66 89 4C 24 0E "
+    "E8 ?? ?? ?? ?? 8B 4C 24 08 8B 54 24 28 8D 44 24 10 6A 00 50 89 4C 24 18 C6 44 24 1C 00 89 54 24 20 "
+    "E8 ?? ?? ?? ?? 8D 4C 24 10 51 E8 ?? ?? ?? ?? 83 C4 28 C3";
+typedef void (__cdecl *send_msg_fn)(const char *name, const char *unused, void *payload);
+static send_msg_fn g_sendmsg;
+static const char *g_handover[] = {
+    "pop_cam_pole_initial",
+    "ses_player_01_01_end",
+    "equip_command_player_initial",
+};
+#define MAX_MSGS 32
+static char g_msgs[MAX_MSGS][96];
+static volatile LONG g_msgs_pending;
+static int g_nmsgs;
+
+static void queue_messages(const char **names, int n)
+{
+    int i;
+    if (g_msgs_pending) return;
+    for (i = 0; i < n && i < MAX_MSGS; i++) lstrcpynA(g_msgs[i], names[i], sizeof g_msgs[i]);
+    g_nmsgs = i;
+    InterlockedExchange(&g_msgs_pending, 1);
+    log_line("messages: %d queued for the game thread", g_nmsgs);
+}
+
+static void queue_message_file(void)
+{
+    char path[MAX_PATH], *slash, buf[4096], *line, *names[MAX_MSGS];
+    HANDLE f;
+    DWORD got = 0;
+    int n = 0;
+    GetModuleFileNameA(NULL, path, sizeof path);
+    slash = strrchr(path, '\\');
+    if (slash) lstrcpyA(slash + 1, "severed_send.txt");
+    f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) { log_line("F7: no severed_send.txt in the game folder"); return; }
+    ReadFile(f, buf, sizeof buf - 1, &got, NULL);
+    CloseHandle(f);
+    buf[got] = 0;
+    for (line = strtok(buf, "\r\n"); line && n < MAX_MSGS; line = strtok(NULL, "\r\n")) {
+        while (*line == ' ' || *line == '\t') line++;
+        if (*line && *line != '#') names[n++] = line;
+    }
+    queue_messages((const char **)names, n);
+}
+
+static void run_pending_messages(void)
+{
+    int i;
+    if (!g_msgs_pending || GetCurrentThreadId() != g_game_thread || !g_sendmsg) return;
+    if (InterlockedExchange(&g_msgs_pending, 0) == 0) return;
+    for (i = 0; i < g_nmsgs; i++) {
+        log_line("send message %s", g_msgs[i]);
+        g_sendmsg(g_msgs[i], NULL, NULL);
+    }
+    MessageBeep(MB_ICONASTERISK);
+}
+
 static void run_pending_sections(void)
 {
     int i;
+    run_pending_messages();
     if (!g_sections_pending || GetCurrentThreadId() != g_game_thread || !g_streamreq || !g_streammgr || !*g_streammgr)
         return;
     if (InterlockedExchange(&g_sections_pending, 0) == 0) return;
@@ -1336,6 +1405,11 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                 log_line("simgroup block log: %d match(es) at exe+0x%lx%s", ng, sg ? (DWORD)sg - base : 0,
                          sg && hook_wrap(sg, 6, (void *)hook_sgblock, (void **)&g_sgblock_tramp) ? ", hooked" : "");
             }
+            {
+                int nm;
+                g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm);
+                log_line("message send: %d match(es) at exe+0x%lx", nm, g_sendmsg ? (DWORD)g_sendmsg - base : 0);
+            }
             log_line("level start: %d match(es) at exe+0x%lx, stream manager global 0x%08lx%s", nl,
                      ls ? (DWORD)ls - base : 0, (DWORD)g_streammgr,
                      ls && hook_call_ecx(ls, 6, on_level_start) ? ", hooked" : "");
@@ -1418,6 +1492,16 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
             add_severed();
             while (GetAsyncKeyState(VK_F9) & 0x8000) Sleep(100);
         }
+        if (GetAsyncKeyState(VK_F8) & 0x8000) {
+            if (!g_game_thread) log_line("F8: game thread not known yet (start a level first)");
+            else queue_messages(g_handover, (int)(sizeof g_handover / sizeof g_handover[0]));
+            while (GetAsyncKeyState(VK_F8) & 0x8000) Sleep(100);
+        }
+        if (GetAsyncKeyState(VK_F7) & 0x8000) {
+            if (!g_game_thread) log_line("F7: game thread not known yet (start a level first)");
+            else queue_message_file();
+            while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
+        }
         if (GetAsyncKeyState(VK_F10) & 0x8000) {
             reflect_scan();
             while (GetAsyncKeyState(VK_F10) & 0x8000) Sleep(100);
@@ -1445,7 +1529,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 18 - process %s", path);
+    log_line("severed probe 19 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

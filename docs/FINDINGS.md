@@ -945,3 +945,43 @@ pairs) hash as `audiostreams\<name[4:12]>\<name>.exa.snu`. The other 55, all
 names of 8 characters, sit flat in `audiostreams\`. Localised streams add the
 language first (`audiostreams\fr\<name[4:12]>\<name>.exa.snu`, 979 hits).
 `snu.pc_path` renames Severed's streams this way in the archive.
+
+## 37. The intro hand-over (RIG call scene)
+
+Console footage (1-3 min) shows the drill tunnel opening:
+1. Gabe sits against the rock, helmet off.
+2. The RIG call from the nurse plays on a video screen.
+3. Gabe gets up, puts his helmet on, and play starts with the Pulse Rifle.
+
+In our run Gabe stood, the camera stayed stuck and there was no weapon.
+
+The chain, from the level SimGroups:
+- **Start sequence.** `mm_pdlc1_ch01_initial_streamset` (MultiManager in
+  the main SimGroup) sends, in order:
+  - `opening_audio_and_vfx`
+  - `equip_player_upgrade_nodes` (the neutralised Pulse Rifle class)
+  - `push_cam_pole_initial` (0.1 s)
+  - `equip_command_player_initial` (EquipCommand on the Player:
+    8 items, all base-game item objects defined in
+    `global_assets\global_assets.str`)
+  - `mm_equip_tutorials_reverse_order`
+  - `mm_sync_igc_01_01` (39 s)
+- **RIG call scene.** `mm_sync_igc_01_01` (drill_tunnel_02):
+  - starts `ses_player_01_01`, a ScriptedEventSequence on the Player with an
+    action animation from `pdlc1_igc_01_01_player.bnk` and an audio file;
+  - starts the video screen;
+  - pops the pole camera and pushes `push_camera_01_01`.
+- **Hand-over.** When the sequence ends it sends `ses_player_01_01_end`.
+  That message:
+  - pops that camera;
+  - adds the objective;
+  - sets the post-intro checkpoint, whose MultiManager equips
+    `equip_command_player_initial` again;
+  - plays the follow-up audio log.
+
+The sequence starts its action when its audio is primed. With the audio
+streams missing (section 36) it never started (Gabe never got up) and never
+ended, so the camera and control were never handed back.
+
+Messages are broadcast by name through exe 0x84F5A0 (cdecl: name, unused,
+payload; behind Lua's SendMessage). Probe 19 sends the hand-over on F8.

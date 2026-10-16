@@ -126,3 +126,24 @@ Probe 18: the start sections are no longer requested at level start
 crashed on its missing zone). Instead press **F9** in the black Severed
 level: the request is queued and the game's main thread runs it from its
 message loop (PeekMessage hook).
+
+## Level messages: F8 / F7 (probe 19)
+
+Severed's level objects talk to each other by named messages (a
+MultiManager sends `push_cam_pole_initial`, a scripted sequence sends
+`ses_player_01_01_end` when it finishes, ...). Probe 19 finds the engine's
+own message broadcast (the function behind Lua's `SendMessage`, retail exe
+0x0084F5A0) by byte pattern and can send messages on the game's thread:
+
+- **F8** (in the Severed level) sends Severed's intro hand-over, as if the
+  RIG call scene had finished:
+  - `pop_cam_pole_initial`
+  - `ses_player_01_01_end`, which pops the scene camera, adds the first
+    objective and sets the post-intro checkpoint
+  - `equip_command_player_initial`, Gabe's starting equipment
+
+  Use it if the scene doesn't end by itself. The Windows "asterisk" sound
+  confirms the messages were sent.
+- **F7** sends every line of `severed_send.txt` from the Dead Space 2 folder
+  (one message name per line; `#` starts a comment), for trying other
+  triggers without a new build.
