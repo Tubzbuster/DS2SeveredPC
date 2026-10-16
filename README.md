@@ -308,6 +308,9 @@ DRM or any other technical protection. It only converts files you supply
 from **your own legitimate copy** of the Severed add-on, for use with **your
 own legitimate copy** of Dead Space 2 for PC.
 
+DS2SeveredPC is and will stay **free and non-commercial**. Nothing here is
+sold, and the header image is used with permission on that basis.
+
 It is provided **"AS IS", WITHOUT WARRANTY OF ANY KIND**. You use it at your
 own risk. Back up your saves.
 
