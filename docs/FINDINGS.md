@@ -700,3 +700,13 @@ to be found at runtime (file activity, return addresses) without dumping
 code.
 
 Next test: chapter 1's stream sets replaced by an empty stream.
+
+Second run (chapter 1 stream sets blanked): a level loaded and was
+playable (prologue Isaac, enemies, an audio log), but only three entries
+came from our archive (TOC, empty stream sets, global assets); every
+level stream came from the base archives, so it was base content. The
+PC's level entries appear to be built into the exe (the level list file
+#E4529CFE was never read; the chapter 1 entry's episode files
+`ds_2\ds_2.toc/.str/_global.str` were). Next test: Severed's own
+top-level files (`pdlc1_ch01_mng\pdlc1_ch01_mng.toc/.str/_global.*`) also
+under the `ds_2\ds_2.*` names.

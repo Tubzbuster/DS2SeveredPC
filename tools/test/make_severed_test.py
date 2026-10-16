@@ -5,6 +5,8 @@ file:
   - every Severed file converted to the PC formats, at its own path;
   - chapter 1's stream sets file replaced by an empty stream (Severed has
     none);
+  - Severed's top-level stream list and TOCs also under the episode names
+    ds_2\ds_2.* that the PC's chapter 1 entry loads;
   - the game's level list with the chapter 1 entry ('ch01_hos') pointing
     at Severed's level (folder, stream list, checkpoints), and Severed's
     TOCs also under chapter 1's TOC names, so New Game should start
@@ -172,6 +174,11 @@ def main():
     # Severed has no stream sets file (the console DLC loads without one);
     # chapter 1's would stream chapter 1's own sections, so blank it.
     files.append(('ch01_hos\\ch01_hos_streamsets.str', streamwrite.Writer().data()))
+    # The PC's chapter 1 entry (built into the exe) uses the episode folder
+    # ds_2\ with stream list ds_2.str; Severed's entry uses its own
+    # pdlc1_ch01_mng\pdlc1_ch01_mng.str. Put Severed's under the ds_2 names.
+    for n in ('.toc', '_global.toc', '.str', '_global.str'):
+        files.append(('ds_2\\ds_2' + n, os.path.join(toc_dir, 'pdlc1_ch01_mng' + n)))
 
     log('Writing', target)
     tmp = target + '.tmp'
