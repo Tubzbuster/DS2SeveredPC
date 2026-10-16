@@ -156,6 +156,20 @@ Not yet played: the mining camp onwards, and all of chapter 2.
 
 ## Next steps
 
+0. **State at the last update:** the quarry plays through Price's scene,
+   the override switch and the door encounter (probe 33's message trace:
+   the whole chain fired). The black screen is fixed in the converter
+   (colour-grading LUTs, FINDINGS 45); waiting for a rebuild and test.
+   Next feature: **Gabe's upgraded Pulse Rifle**.
+   - Severed-only class `2B747EB6`, neutralised, on message
+     `equip_player_upgrade_nodes`; 10 nodes, listed in FINDINGS "Severed-only
+     classes".
+   - The exe's Lua bindings: name strings `GetUpgradeManager` 0x1B90FD8,
+     `Upgrade` 0x1B90FD0, `Connect` 0x1B90FC8, `UpgradeValue` 0x1B90FAC,
+     `DebugFillUpgradeNode` 0x1B90F94, registered around exe `0x1355E89`.
+   - Plan: find the native functions behind them, then have the probe
+     apply the 10 nodes when the message fires.
+
 1. **Read the user's probe 28 log.** Check for:
    - `game thread:`, `D3D guard: device`, `geometry batch tracker: 1
      match(es)`;
