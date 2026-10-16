@@ -1206,6 +1206,7 @@ static void **g_streammgr;
 static volatile LONG g_sections_pending;
 static int g_severed_level;
 static DWORD g_game_thread;
+static DWORD g_main_thread;            /* the thread that loaded the probe: the game's main thread */
 static const char *g_sections[] = {
     "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_01\\drill_tunnel_01.str",
     "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_02\\drill_tunnel_02.str",
@@ -1312,6 +1313,10 @@ static void d3d_guard(void);
 static void run_pending_sections(void)
 {
     int i;
+    if (!g_game_thread && g_main_thread && GetCurrentThreadId() == g_main_thread) {
+        g_game_thread = g_main_thread;            /* without the level start hook */
+        log_line("game thread: %lu (the main thread)", g_game_thread);
+    }
     run_pending_messages();
     heap_watch();
     d3d_guard();
@@ -1616,12 +1621,6 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                          sg && hook_wrap(sg, 6, (void *)hook_sgblock, (void **)&g_sgblock_tramp) ? ", hooked" : "");
             }
             {
-                int nb;
-                BYTE *bb = find_sig(SIG_BATCHBEGIN, &nb);
-                log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s", nb, bb ? (DWORD)bb - base : 0,
-                         bb && hook_log_sp(bb, 9, note_batch) ? ", hooked" : "");
-            }
-            {
                 int nq;
                 BYTE *q = find_sig(SIG_SSMHANDLER, &nq);
                 log_line("scripted sequence trace: %d match(es) at exe+0x%lx%s", nq, q ? (DWORD)q - base : 0,
@@ -1631,6 +1630,24 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                 int nm;
                 g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm);
                 log_line("message send: %d match(es) at exe+0x%lx", nm, g_sendmsg ? (DWORD)g_sendmsg - base : 0);
+            }
+            {
+                /* parts of the code are decrypted later than others (probe
+                   27's run found neither of these at 0.6 s): retry them
+                   every 200 ms for a minute */
+                int nb = 0, nm2 = 0, k;
+                BYTE *bb = find_sig(SIG_BATCHBEGIN, &nb);
+                for (k = 0; k < 300 && (!bb || !ls); k++) {
+                    Sleep(200);
+                    if (!bb) bb = find_sig(SIG_BATCHBEGIN, &nb);
+                    if (!ls) {
+                        ls = find_sig(SIG_LEVELSTART, &nl);
+                        if (ls) g_streammgr = *(void ***)(ls + 0x52);
+                    }
+                    if (!g_sendmsg) g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm2);
+                }
+                log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s (after %d retries)", nb,
+                         bb ? (DWORD)bb - base : 0, bb && hook_log_sp(bb, 9, note_batch) ? ", hooked" : "", k);
             }
             log_line("level start: %d match(es) at exe+0x%lx, stream manager global 0x%08lx%s", nl,
                      ls ? (DWORD)ls - base : 0, (DWORD)g_streammgr,
@@ -2004,6 +2021,7 @@ static void start(HMODULE self)
 
     InitializeCriticalSection(&g_cs);
     InitializeCriticalSection(&g_acs);
+    g_main_thread = GetCurrentThreadId();
     g_tls = TlsAlloc();
     g_tick0 = GetTickCount();
     GetModuleFileNameA(NULL, path, sizeof path);
@@ -2012,7 +2030,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 27 - process %s", path);
+    log_line("severed probe 28 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

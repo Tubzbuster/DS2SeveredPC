@@ -27,7 +27,7 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | fix pending for the thumping in the opening scene. It starts near the end of the RIG video call and comes from the call screen's position, then stops when the scene ends. The call video's soundtrack is in the 360's big-endian EA ADPCM form (revision 3); the test build now rewrites it to the PC videos' layout, read from the PC game's own movies (exact: ffmpeg decodes identical samples) |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | thumping during the opening scene: from the end of the RIG call until the scene ends, fixed relative to the camera. The cutscene audio (`pdlc1_igc_01_01`, 5.1) has loud, clean front-only low hits at 47.2-51.5 s, after the dialogue: authored content, so possibly as on console; to compare with the console video. The downmix channel order is confirmed (LFE silent, dialogue in centre) |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
