@@ -156,10 +156,18 @@ Not yet played: the mining camp onwards, and all of chapter 2.
 
 ## Next steps
 
-0. **State at the last update:** the quarry plays through Price's scene,
-   the override switch and the door encounter (probe 33's message trace:
-   the whole chain fired). The black screen is fixed in the converter
-   (colour-grading LUTs, FINDINGS 45); waiting for a rebuild and test.
+0. **State at the last update:** the LUT fix worked (no black screen, no
+   `D3D GUARD` lines). Played through the quarry, the cargo lift and into
+   the mining camp's quarantine lockdown (3 terminals). New issues:
+   - one quarry door draws solid black; suspect `door_inner_01_am`
+     (doors_mng folderstream), the only mining door built by our mesh
+     converter;
+   - stomp during the upside-down tentacle grab put Gabe in the ceiling;
+   - Twitchers sometimes repeat one attack and stunlock Gabe;
+   - save picture: the load menu (exe 0xBAE170) looks up `ch%02d` by the
+     save's chapter number in a table (global 0x208BE88, 0x14-byte entries);
+     Severed saves are chapter 1. Severed's only save art is the 64x64 Xbox
+     dashboard PNGs `weller1_ch1/ch2.png`.
    Next feature: **Gabe's upgraded Pulse Rifle**.
    - Severed-only class `2B747EB6`, neutralised, on message
      `equip_player_upgrade_nodes`; 10 nodes, listed in FINDINGS "Severed-only
