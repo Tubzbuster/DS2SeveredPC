@@ -18,13 +18,13 @@ DS2DAT2.DAT.severedtest next to it).
     py -3 make_severed_test.py --severed <addon file> --game "<Dead Space 2 folder>" [--ffmpeg <ffmpeg.exe>] [--work <folder>]
     py -3 make_severed_test.py --game "<Dead Space 2 folder>" --remove
 """
-import argparse, glob, os, shutil, sys, time
+import argparse, glob, os, shutil, struct, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'research'))
 
 try:
-    from ds2 import bigarchive, build, eaaudio, stfs, streamfile, streamwrite, toc   # noqa: E402
+    from ds2 import bigarchive, build, eaaudio, simgroup, stfs, streamfile, streamwrite, toc   # noqa: E402
 except ImportError:
     raise SystemExit('Run this from the repository\'s tools\\test folder: it needs tools\\research next to it '
                      '(copy the whole repository, not just this file).')
@@ -120,6 +120,38 @@ def strip_dropped(dst):
                     open(p, 'wb').write(y)
 
 
+def refresh_simgroups(root, dst, class_hash):
+    """re-convert the SimGroups of streams that use a class whose layout was
+    added to the schema after the files were converted"""
+    key = struct.pack('<I', class_hash)
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if not f.lower().endswith('.str'):
+                continue
+            p = os.path.join(d, f)
+            data = open(p, 'rb').read()
+            if key not in data:
+                continue
+            _, assets = streamfile.read(data)
+            if not any(a.type == 'SimGroup' and key in a.payload() for a in assets):
+                continue
+            src = os.path.join(root, os.path.relpath(p, dst))
+            if not os.path.exists(src):
+                continue
+            fresh = {(a.name, a.ids): a for a in streamfile.read(open(src, 'rb').read())[1] if a.type == 'SimGroup'}
+            w = streamwrite.Writer()
+            n = 0
+            for a in assets:
+                y = a.payload()
+                if a.type == 'SimGroup' and (a.name, a.ids) in fresh:
+                    z = simgroup.convert(fresh[(a.name, a.ids)].payload())
+                    if z is not None and len(z) == len(y):
+                        y, n = z, n + 1
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+            open(p, 'wb').write(w.data())
+            log('  re-converted %d SimGroup(s) in %s' % (n, os.path.relpath(p, dst)))
+
+
 def remove(game):
     target = os.path.join(game, SLOT)
     marker = target + '.severedtest'
@@ -192,6 +224,9 @@ def main():
         log('Using the files converted by an earlier run (delete %s to convert again)' % os.path.join(work, 'converted.ok'))
 
     strip_dropped(dst)
+    if not os.path.exists(os.path.join(work, 'uniform_fix.ok')):
+        refresh_simgroups(root, dst, 0x0575C2F4)       # Uniform layout added (probe 15)
+        open(os.path.join(work, 'uniform_fix.ok'), 'w').write('ok')
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):

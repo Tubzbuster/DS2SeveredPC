@@ -809,3 +809,13 @@ Uniform class (version 9, 1,056 bytes, 133 fields, descriptor 0x02098B78)
 is in the PC exe but its field list was not in the descriptor dump, so
 those records were converted by guesswork; a wrong suit (e.g. its stream
 GUID) would leave no player and an idle level. Probe 14 logs the layout.
+
+Probe 15 logged the Uniform layout (133 fields, now in
+`simgroup_schema.json`). Severed's 11 suits now convert by layout ("PDLC
+Weller Suit", "Security Suit", ...); the earlier guesswork differed only in
+three bool fields per record (stream GUID etc. were right). A suit's
+`CMD_SetUniformStreamGUID` (interface reference) equals header word 0x2C of
+its suit stream's SimGroup (Weller suit 0xBDD2DA83 ->
+`uni_pdlcsecurityweller.str`); not an sdbm of the stream name. Probe 16
+logs every file name the game hashes, to find what Severed's level start
+asks for that is missing.

@@ -1211,6 +1211,37 @@ static int hook_wrap(BYTE *fn, int len, void *hook, void **tramp)
     return 1;
 }
 
+
+/* ---- name hash log ------------------------------------------------------
+ * The game's name hash (retail exe 0x007423C0: lower-case sdbm of a C
+ * string, cdecl) is used for archive lookups among many other things.
+ * Path-like names (containing '\' or '/', or a file extension) are logged
+ * once each, so a run shows every file name the game looks for. */
+static const char SIG_NAMEHASH[] =
+    "8B 54 24 04 33 C0 85 D2 74 25 8A 0A 84 C9 74 1F 56 0F B6 C9 8D 71 BF 42 83 FE 19 77 03 83 C1 20 69 C0 3F 00 01 00";
+
+#define SEEN_BITS (1 << 20)
+static BYTE g_nameseen[SEEN_BITS / 8];
+
+static void __cdecl log_name_hash(const char *n)
+{
+    static LONG count;
+    DWORD h = 0, i;
+    int pathy = 0;
+    if (!n || !mem_ok(n, 1)) return;
+    for (i = 0; n[i] && i < 260; i++) {
+        BYTE c = (BYTE)n[i];
+        if (c == '\\' || c == '/') pathy = 1;
+        if (c >= 'A' && c <= 'Z') c += 32;
+        h = h * 65599 + c;
+    }
+    if (!pathy && !(i > 4 && (n[i - 4] == '.' || n[i - 3] == '.'))) return;
+    if (g_nameseen[(h >> 3) & (SEEN_BITS / 8 - 1)] & (1 << (h & 7))) return;
+    g_nameseen[(h >> 3) & (SEEN_BITS / 8 - 1)] |= (BYTE)(1 << (h & 7));
+    if (InterlockedIncrement(&count) > 20000) return;
+    log_line("NAME #%08lX %s", h, n);
+}
+
 static DWORD WINAPI menu_hook_thread(LPVOID p)
 {
     int na = 0, nc = 0, tries;
@@ -1251,6 +1282,12 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                hooked entry still works (it just logs) */
             g_streamreq = (stream_req_fn)sr;
             if (ls) g_streammgr = *(void ***)(ls + 0x52);
+            {
+                int nh;
+                BYTE *nhf = find_sig(SIG_NAMEHASH, &nh);
+                log_line("name hash log: %d match(es) at exe+0x%lx%s", nh, nhf ? (DWORD)nhf - base : 0,
+                         nhf && hook_log_arg1(nhf, 6, (void (__cdecl *)(const char *))log_name_hash) ? ", hooked" : "");
+            }
             {
                 int ng;
                 BYTE *sg = find_sig(SIG_SGBLOCK, &ng);
@@ -1362,7 +1399,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 15 - process %s", path);
+    log_line("severed probe 16 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

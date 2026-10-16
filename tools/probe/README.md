@@ -111,3 +111,7 @@ without a layout.
 Probe 15: the Uniform field list is filled in lazily (probe 14 found 0
 fields at the main menu), so it is logged once it exists - after a
 SimGroup block load, or on F9.
+
+Probe 16 logs every path-like name the game hashes ("NAME #hash path",
+once each) from a hook on its name hash function: all the files a run
+looks for, found or not.
