@@ -819,3 +819,18 @@ its suit stream's SimGroup (Weller suit 0xBDD2DA83 ->
 `uni_pdlcsecurityweller.str`); not an sdbm of the stream name. Probe 16
 logs every file name the game hashes, to find what Severed's level start
 asks for that is missing.
+
+Probe 16: the hooked name hash only sees UI names, not file paths. But the
+Severed run played the player's heartbeat and asphyxiation breathing: the
+player spawns, in empty space, because no section streams. A stream's ID
+(the TOC name hash, and what a suit's UniformStreamGUID / StreamSet refers
+to) is word 0x2C of its SimGroup header. SimGroup packed layout detail:
+header 0x08 = object hash list (u32 per object, = record table hash), 0x0C
+= object entries (0x44 bytes: +4 offset of the object's hash in that list,
++8 GUID); so the record of an object is (entry[+4] - 0x3C) / 4. The start
+checkpoint (record 1289, default) points at StreamSet 52CB2218 2E50854E
+(record 1290): Set1-4 + Set24 = drill_tunnel_01, drill_tunnel_02,
+drill_cavern_01, drill_saferoom, doors_mng_folderstream (StreamSet GUIDs
+print as {w0-w1lo-w1hi-...} and match the section SimGroups' names).
+Probe 17 requests those sections directly to see whether converted level
+sections load and render.

@@ -115,3 +115,8 @@ SimGroup block load, or on F9.
 Probe 16 logs every path-like name the game hashes ("NAME #hash path",
 once each) from a hook on its name hash function: all the files a run
 looks for, found or not.
+
+Probe 17 (experiment): when Severed starts, also requests the five
+sections of its start checkpoint's stream set (drill tunnel 01/02, drill
+cavern, drill saferoom, doors) directly as level streams. The name hash
+log of probe 16 is off again (that function only sees UI names).

@@ -1148,6 +1148,23 @@ static void __cdecl on_level_start(void *self)
     wsprintfA(path, "%s\\%s_streamsets.str", name, name);
     log_line("level start: requesting %s in stream-sets mode", path);
     g_streamreq(*g_streammgr, path, 0.0f, 0, 0, 0);
+    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) {
+        /* experiment: the sections of the start checkpoint's stream set
+           (XONTREALPR_CB22182_E50854D -> StreamSet 52CB2218 2E50854E),
+           requested directly as level streams */
+        static const char *sections[] = {
+            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_01\\drill_tunnel_01.str",
+            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_02\\drill_tunnel_02.str",
+            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_cavern_01\\drill_cavern_01.str",
+            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_saferoom\\drill_saferoom.str",
+            "pdlc1_ch01_mng\\pdlc1_ch01_mng\\shared\\design\\mini-global\\doors_mng\\doors_mng_folderstream.str",
+        };
+        int i;
+        for (i = 0; i < (int)(sizeof sections / sizeof sections[0]); i++) {
+            log_line("level start: requesting section %s", sections[i]);
+            g_streamreq(*g_streammgr, sections[i], 0.0f, 2, 0, 0);
+        }
+    }
 }
 
 /* stub: pushad/pushfd, call cb(ecx), restore, run the original first
@@ -1285,8 +1302,9 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
             {
                 int nh;
                 BYTE *nhf = find_sig(SIG_NAMEHASH, &nh);
-                log_line("name hash log: %d match(es) at exe+0x%lx%s", nh, nhf ? (DWORD)nhf - base : 0,
-                         nhf && hook_log_arg1(nhf, 6, (void (__cdecl *)(const char *))log_name_hash) ? ", hooked" : "");
+                /* probe 16's name hash log: only UI names go through this
+                   function, not file paths - left off (it slows the game) */
+                (void)nhf; (void)nh; (void)log_name_hash;
             }
             {
                 int ng;
@@ -1399,7 +1417,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 16 - process %s", path);
+    log_line("severed probe 17 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
