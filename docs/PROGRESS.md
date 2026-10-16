@@ -27,7 +27,7 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | loud collision sound repeats the whole time Gabe is on the floor in the opening scene (still there with the navmesh fixed); suspects: a physics body stuck in the level collision (two of the section's collision files are our conversions), or Gabe's own body during the animation |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | a body thumping the ground, ragdoll-style, the whole time Gabe is on the floor in the opening scene. The section has two ragdoll corpses (`Corpse_deadpose1`, one impaled, with cloth); their impact sound (`collision_corpse_limb`) fires at 0.01 m/s, so a corpse that never settles thumps constantly. Their ragdoll data is the PC game's own, so the placement or pin (or the converted level collision under them) is the suspect. To check in game: is one of the corpses twitching? |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
