@@ -291,6 +291,9 @@ def main():
             if rel.lower() == 'global_assets\\global_assets_global.str':
                 continue
             files.append((snu.pc_path(rel), p))
+    moved = [n for n, p in files if n.lower().endswith('.exa.snu')]
+    log('  %d audio streams at their PC paths, e.g. %s' % (len(moved), next(
+        (n for n in moved if 'pdlc1_vo_01_01' in n.lower()), moved[0] if moved else '-')))
     pc_ga = read_entry(idx, bigarchive.name_hash('global_assets\\global_assets_global.str'))
     ga, swapped, total = patched_global_assets(pc_ga, open(os.path.join(dst, 'global_assets', 'global_assets_global.str'), 'rb').read())
     log('  global_assets_global.str: %d of %d Severed Lua scripts swapped in' % (swapped, total))

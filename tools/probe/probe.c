@@ -331,6 +331,15 @@ static int load_archive(const char *u8path, HANDLE own)
     ar->dir_end = be32(hdr + 12);
     ar->dir_logged = ar->stray_logged = 0;
     log_line("archive %s: %lu entries, directory read", ar->name, count);
+    {
+        /* which name form Severed's first dialogue streams are stored under */
+        static const DWORD probe_h[4] = { 0xC35FDD3DUL, 0x4E3C38B9UL, 0xB3303B75UL, 0x6BF04984UL };
+        static const char *probe_n[4] = { "360 path vo_01_01", "360 path igc_01_01", "PC path vo_01_01", "PC path igc_01_01" };
+        int k;
+        for (k = 0; k < 4; k++)
+            for (i = 0; i < count; i++)
+                if (ar->ent[i].hash == probe_h[k]) { log_line("archive %s: has %s (#%08lX)", ar->name, probe_n[k], probe_h[k]); break; }
+    }
     return (int)InterlockedIncrement(&g_narch) - 1;
 }
 
@@ -1177,10 +1186,33 @@ static char g_msgs[MAX_MSGS][96];
 static volatile LONG g_msgs_pending;
 static int g_nmsgs;
 
+/* the message function, looked up again on first use (the code may not be
+   ready when the hooks are installed); on failure, where the pattern stops
+   matching at the retail address (a position only, no code bytes) */
+static int find_sendmsg(void)
+{
+    BYTE b[256], m[256], *p;
+    int n, i, nm;
+    if (g_sendmsg) return 1;
+    g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm);
+    if (g_sendmsg) {
+        log_line("message send: found at exe+0x%lx", (DWORD)g_sendmsg - (DWORD)GetModuleHandleA(NULL));
+        return 1;
+    }
+    n = parse_sig(SIG_SENDMSG, b, m);
+    p = (BYTE *)GetModuleHandleA(NULL) + 0x44F5A0;
+    if (!mem_ok(p, n)) { log_line("message send: %d match(es); retail address not readable", nm); return 0; }
+    for (i = 0; i < n && (!m[i] || p[i] == b[i]); i++) ;
+    log_line("message send: %d match(es); at the retail address the pattern %s at byte %d of %d",
+             nm, i == n ? "matches" : "differs", i, n);
+    return 0;
+}
+
 static void queue_messages(const char **names, int n)
 {
     int i;
     if (g_msgs_pending) return;
+    if (!find_sendmsg()) { log_line("messages: the game's message function was not found - nothing sent"); return; }
     for (i = 0; i < n && i < MAX_MSGS; i++) lstrcpynA(g_msgs[i], names[i], sizeof g_msgs[i]);
     g_nmsgs = i;
     InterlockedExchange(&g_msgs_pending, 1);
@@ -1529,7 +1561,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 19 - process %s", path);
+    log_line("severed probe 20 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
