@@ -1079,6 +1079,62 @@ static int hook_log_arg1(BYTE *fn, int len, void (__cdecl *cb)(const char *))
     return 1;
 }
 
+
+/* ---- Severed's stream sets ---------------------------------------------
+ * Level start (retail exe 0x0042C600, this = level start request, +0x28 =
+ * folder string) requests the base chapters' "%s\%s_streamsets.str" in
+ * stream-sets mode (request(path, 0.0f, 0, 0, 0)) - but skips that for
+ * folders containing "pdlc". Severed's StreamSet and checkpoint objects only
+ * come inside its level SimGroup; as an experiment the probe also requests
+ * <folder>\<folder>_streamsets.str (the test archive holds that SimGroup
+ * under this name) in stream-sets mode for "pdlc" levels. */
+static const char SIG_LEVELSTART[] =
+    "81 EC 40 01 00 00 53 55 8B E9 C7 45 18 07 00 00 00 A1 ?? ?? ?? ?? 8B 40 38 D1 E8 24 01 88 44 24 0A 8A 45 1C "
+    "D0 E8 24 01 83 7D 4C 00 56 8D 75 28 88 44 24 0F 8B 06 0F 95 44 24 10 57 85 C0 75 05 B8 ?? ?? ?? ?? 68 ?? ?? ?? ?? "
+    "50 E8 ?? ?? ?? ?? 8B 0D ?? ?? ?? ??";
+typedef void *(__attribute__((thiscall)) *stream_req_fn)(void *mgr, const char *path, float f, int a, int b, int c);
+static stream_req_fn g_streamreq;
+static void **g_streammgr;
+
+static void __cdecl on_level_start(void *self)
+{
+    const char *folder = self && mem_ok((BYTE *)self + 0x28, 4) ? *(const char **)((BYTE *)self + 0x28) : NULL;
+    char name[128], path[300];
+    int n;
+    if (!folder || !mem_ok(folder, 1)) return;
+    log_line("level start: folder %s", folder);
+    if (!strstr(folder, "pdlc") || !g_streamreq || !g_streammgr || !*g_streammgr) return;
+    lstrcpynA(name, folder, sizeof name);
+    n = lstrlenA(name);
+    while (n && (name[n - 1] == '\\' || name[n - 1] == '/')) name[--n] = 0;
+    wsprintfA(path, "%s\\%s_streamsets.str", name, name);
+    log_line("level start: requesting %s in stream-sets mode", path);
+    g_streamreq(*g_streammgr, path, 0.0f, 0, 0, 0);
+}
+
+/* stub: pushad/pushfd, call cb(ecx), restore, run the original first
+ * `len` bytes, jump back */
+static int hook_call_ecx(BYTE *fn, int len, void (__cdecl *cb)(void *))
+{
+    BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
+    DWORD old;
+    if (!t) return 0;
+    q = t;
+    *q++ = 0x60; *q++ = 0x9C;                      /* pushad, pushfd */
+    *q++ = 0x51;                                   /* push ecx */
+    *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
+    *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
+    *q++ = 0x9D; *q++ = 0x61;                      /* popfd, popad */
+    memcpy(q, fn, len); q += len;
+    *q++ = 0xE9; *(DWORD *)q = (DWORD)(fn + len) - (DWORD)(q + 4); q += 4;
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)t - (DWORD)(fn + 5);
+    if (len > 5) memset(fn + 5, 0x90, len - 5);
+    VirtualProtect(fn, len, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, len);
+    return 1;
+}
+
 static DWORD WINAPI menu_hook_thread(LPVOID p)
 {
     int na = 0, nc = 0, tries;
@@ -1111,6 +1167,18 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
         BYTE *sr = find_sig(SIG_STREAMREQ, &ns);
         log_line("stream request log: %d match(es) at exe+0x%lx%s", ns, sr ? (DWORD)sr - base : 0,
                  sr && hook_log_arg1(sr, 6, log_stream_request) ? ", hooked" : "");
+        if (sr) {
+            int nl;
+            BYTE *ls = find_sig(SIG_LEVELSTART, &nl);
+            /* the stub runs the original first bytes, so the request
+               function is called through its trampoline-free entry: the
+               hooked entry still works (it just logs) */
+            g_streamreq = (stream_req_fn)sr;
+            if (ls) g_streammgr = *(void ***)(ls + 0x52);
+            log_line("level start: %d match(es) at exe+0x%lx, stream manager global 0x%08lx%s", nl,
+                     ls ? (DWORD)ls - base : 0, (DWORD)g_streammgr,
+                     ls && hook_call_ecx(ls, 6, on_level_start) ? ", hooked" : "");
+        }
     }
     return 0;
 }
@@ -1211,7 +1279,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 11 - process %s", path);
+    log_line("severed probe 12 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

@@ -779,3 +779,15 @@ level section was read. What the exe shows:
   files.
 
 Probe 11 logs every stream request to see what the StreamSets ask for.
+
+Control run (base New Game, probe 11): the base game does not request its
+level sections through 0x0074BDD0 either; at level start it requests all
+ten `chXX\chXX_streamsets.str` (stream-sets mode: request(path, 0.0, 0, 0,
+0)) and `ds_2\ds_2.str`, then sections stream by another route. In
+Severed only `pdlc1_ch01_mng.str` and `player_bnk.str` were requested and
+no section was ever read. In the base game the checkpoint objects live in
+the stream sets SimGroup (e.g. chapter 1's `initial`
+4BC9C50B C08B592A 'CENT' 'KOWS', stored as 4 swapped words like Severed's
+references); in Severed they are in the level SimGroup. The `.add` values
+equal the TOC's stream name hashes. Experiment: probe 12 requests
+Severed's level SimGroup as a stream sets file at level start.

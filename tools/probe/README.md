@@ -92,3 +92,8 @@ Probe 11 also logs every stream the game requests ("STREAM request
 <path>", from a hook on the loader's stream request function, found by
 byte pattern), and the Severed entry's description is just "Gabe Weller's
 story".
+
+Probe 12 (experiment): at the start of a level whose folder contains
+"pdlc", also requests `<folder>\<folder>_streamsets.str` in stream-sets
+mode, as the game does for the base chapters (the test archive holds
+Severed's level SimGroup under that name).

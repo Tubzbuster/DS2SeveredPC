@@ -205,6 +205,17 @@ def main():
     ga, swapped, total = patched_global_assets(pc_ga, open(os.path.join(dst, 'global_assets', 'global_assets_global.str'), 'rb').read())
     log('  global_assets_global.str: %d of %d Severed Lua scripts swapped in' % (swapped, total))
     files.append(('global_assets\\global_assets_global.str', ga))
+    # Experiment (probe 12): the level's SimGroup, which holds Severed's
+    # StreamSet and checkpoint objects, also as a stream sets file, requested
+    # in stream-sets mode by the probe like the base chapters' ones.
+    main = os.path.join(dst, 'pdlc1_ch01_mng', 'pdlc1_ch01_mng.str')
+    if os.path.exists(main):
+        w = streamwrite.Writer()
+        for x in streamfile.read(open(main, 'rb').read())[1]:
+            if x.type == 'SimGroup':
+                w.add(x.type_hash, x.flags, x.ids, x.name, x.path, x.type, x.payload())
+        files.append(('pdlc1_ch01_mng\\pdlc1_ch01_mng_streamsets.str', w.data()))
+        log('  pdlc1_ch01_mng_streamsets.str: the level SimGroup as a stream sets file')
     extra, raw = [], {}
     if a.hijack_ch01:
         lvl = patched_level_list(read_entry(idx, LEVEL_LIST))
