@@ -1,61 +1,334 @@
-# DS2SeveredPC
+<p align="center">
+  <img src="docs/img/header.jpg" alt="Dead Space 2 Severed PC" width="656">
+</p>
 
-Goal: make the Xbox 360 *Dead Space 2: Severed* DLC launchable from the PC
-version of Dead Space 2, the way it is on console.
+```
+================================================================================
+______ _____  ___ ______   ___________  ___  _____  _____   _____
+|  _  \  ___|/ _ \|  _  \ /  ___| ___ \/ _ \/  __ \|  ___| / __  \
+| | | | |__ / /_\ \ | | | \ `--.| |_/ / /_\ \ /  \/| |__   `' / /'
+| | | |  __||  _  | | | |  `--. \  __/|  _  | |    |  __|    / /
+| |/ /| |___| | | | |/ /  /\__/ / |   | | | | \__/\| |___  ./ /___
+|___/ \____/\_| |_/___/   \____/\_|   \_| |_/\____/\____/  \_____/
 
-Step 1 is working out how the PC and Xbox 360 file formats differ. The
-scanner in `tools/scan/` produces text-only reports for that. **No game
-files go into this repo**, only the scan output.
+ _____ _____ _   _ ___________ ___________  ______  _____
+/  ___|  ___| | | |  ___| ___ \  ___|  _  \ | ___ \/  __ \
+\ `--.| |__ | | | | |__ | |_/ / |__ | | | | | |_/ /| /  \/
+ `--. \  __|| | | |  __||    /|  __|| | | | |  __/ | |
+/\__/ / |___\ \_/ / |___| |\ \| |___| |/ /  | |    | \__/\
+\____/\____/ \___/\____/\_| \_\____/|___/   \_|     \____/
+                                                FAQ / README / Port Guide
+================================================================================
+  Game ......... Dead Space 2 (PC, Steam / Origin retail)
+  DLC .......... Dead Space 2: Severed (Xbox 360 add-on, your own copy)
+  Platform ..... Windows (PC)
+  Version ...... 0.1.0 (pre-alpha, test builds only)
+  Author ....... tubzbuster & DS2SeveredPC contributors
+  Updated ...... 2026-10-16
+================================================================================
 
-Findings so far: [`docs/FINDINGS.md`](docs/FINDINGS.md). Plan: [`docs/DESIGN.md`](docs/DESIGN.md).
-
-## Running the scanner (Windows)
-
-1. Double-click `tools\scan\Scan-DS2Files.bat`, or drag a folder onto it.
-2. Enter the folder to scan, a label, and whether to also extract Xbox 360
-   package contents (answer `y` only if you want the raw files; they go to
-   `tools\scan\extracted\`, which git ignores). When it finishes, the
-   results are in `tools\scan\scans\<Label>\`, next to the scripts.
-
-Or from PowerShell:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\scan\Scan-DS2Files.ps1 -Path "D:\Games\Dead Space 2" -Label PC
+  This document is best viewed in a monospaced font at 80 columns, just like
+  the good old days. Use Ctrl+F with the codes below to jump to a section.
 ```
 
-Add `-SkipHash` if hashing a large install is too slow, and
-`-ExtractTo <folder>` to extract package contents.
+```text
+================================================================================
+                           TABLE OF CONTENTS
+================================================================================
+  [SV00] ........ Version History
+  [SV01] ........ Introduction (READ THIS FIRST)
+  [SV02] ........ What Works / What Doesn't
+  [SV03] ........ What You Need
+  [SV04] ........ Trying the Test Build
+  [SV05] ........ Removing It
+  [SV06] ........ How It Works
+  [SV07] ........ Troubleshooting
+  [SV08] ........ Research Tools
+  [SV09] ........ For Developers
+  [SV10] ........ Disclaimer & Legal
+  [SV11] ........ Credits
+================================================================================
+```
 
-## What to scan
+```text
+================================================================================
+[SV00]                         VERSION HISTORY
+================================================================================
+```
 
-| Label        | Folder                                                                 |
-|--------------|------------------------------------------------------------------------|
-| `PC`         | The PC install folder (the one containing the game `.exe`)             |
-| `Severed360` | A folder holding just the Severed DLC package file                     |
-| `Base360`    | (optional, very useful) the extracted Xbox 360 base game, including `default.xex` |
+**v0.1.0 (2026-10-16)**: First playable test. Severed is in the episode
+select (main menu > single player). The intro terminal cutscene plays with
+subtitles. You load into the drill tunnel as Gabe Weller in his security
+suit, with working level geometry, lighting, collision and HUD. Fixes in
+this round:
+- level collision (Havok `hkpStorageExtendedMeshShape`) is converted from the
+  game's own Havok class descriptions
+- level meshes: Xbox 360 triangle strips are rebuilt for Direct3D 9 (no
+  more spikes and stretched walls)
+- audio streams go where the PC looks for them (untested)
 
-The Severed DLC comes as a single Xbox 360 package file with a long hex name
-(e.g. `29E2FCC04BEF1D2532C48269EC42EF2E3DBFC45845`). Put it in a folder on its
-own and scan that folder. The scanner reads the package directly: its header,
-its full file listing, and a fingerprint of every file inside it (listed in
-the manifest as `<package>::<path inside package>`). No extracting needed.
+**v0.0.x (2026-10)**: Research phase. File format scans of both platforms,
+then converters for every asset type Severed uses (see [SV06]). The first
+in-game tests started from chapter 1. Later builds started from the episode
+select.
 
-## Other tools
+```text
+================================================================================
+[SV01]                  INTRODUCTION (READ THIS FIRST)
+================================================================================
+```
 
-- `tools/samples/` exports matched PC/360 sample files (see the script header).
-- `tools/probe/` is a diagnostic `dinput8.dll` that logs the game's file access (see its README).
+*Dead Space 2: Severed* is a two-chapter story DLC starring Gabe Weller. It
+was only ever released for Xbox 360 and PlayStation 3. The PC version of
+Dead Space 2 never got it.
 
-## Output (`tools\scan\scans\<Label>\`)
+DS2SeveredPC converts **your own copy** of the Xbox 360 Severed add-on into
+files the PC game can load. It also adds Severed to the PC episode select,
+so you start it the way you do on console:
 
-| File              | Contents                                                                 |
-|-------------------|--------------------------------------------------------------------------|
-| `summary.txt`     | Totals, per-folder, per-extension and per-format breakdown               |
-| `manifest.csv`    | Every file: relative path, size, SHA-256, magic bytes, format guess, first 64 bytes as hex |
-| `samples.txt`     | 512-byte hex dumps of the smallest and largest file of each extension    |
-| `archives.txt`    | EA BIGH archive directories (PC `DS2DAT*.DAT`, 360 `bigfile*.viv`); entries are in the manifest as `<archive>::#<hash>` |
-| `smallfiles.txt`  | Full contents of small descriptor/config files (`.toc .add .dlm .key .lds .lvl .pid .txt .xml` …) |
-| `packages.txt`    | Decoded Xbox 360 package headers (content type, title ID, name) and the full list of files inside |
-| `executables.txt` | EXE/DLL/XEX details (version, sections) and DLC/content-related strings  |
+```text
+  Main Menu > Single Player > Episode Select
+      Dead Space 2
+      Dead Space 2: Severed      <-- this one
+```
 
-Paths are stored relative to the scanned folder, so your Windows user name
-does not appear in the output. Commit the `tools/scan/scans/` folder and push.
+How it works:
+- The converter writes one extra archive, `DS2DAT2.DAT`, into your Dead
+  Space 2 folder.
+- A small hook DLL adds the menu entry while the game runs.
+- `deadspace2.exe` and the game's own files are never modified.
+- The copy protection is left alone.
+
+> **This is pre-alpha.** You can load in and walk around. It is not yet a
+> playable DLC (see [SV02]). Every test run helps, so please send your log
+> (see [SV07]).
+
+```text
+================================================================================
+[SV02]                    WHAT WORKS / WHAT DOESN'T
+================================================================================
+```
+
+| Area | Status |
+|---|---|
+| Severed in the episode select | Works (via the probe DLL) |
+| Intro terminal cutscene | Works, with subtitles |
+| Drill tunnel level: geometry, textures, lighting | Works |
+| Collision | Works |
+| Playing as Gabe (security suit) | Works |
+| Dialogue / streamed audio | Fixed in v0.1.0, awaiting a test |
+| Mouse look, camera while walking | Broken: camera stuck low and zooms in |
+| Gabe's starting weapons (pre-upgraded Pulse Rifle) | Missing |
+| Performance near some lights | Drops; not investigated yet |
+| Chapter 2, stores, save stations, ending | Not reached yet |
+| One-click installer | Not yet (the test script does the job for now) |
+
+```text
+================================================================================
+[SV03]                          WHAT YOU NEED
+================================================================================
+```
+
+- **Dead Space 2 for PC** (Steam or retail), installed and working.
+- **Your own Severed add-on file** from your Xbox 360: the package file named
+  `29E2FCC04BEF1D2532C48269EC42EF2E3DBFC45845`. **Nothing from the game or the
+  DLC is in this repo, and none ever will be.**
+- **64-bit Python 3** from python.org (with the `py` launcher).
+- **ffmpeg** (`ffmpeg.exe`), used to decode the Xbox audio.
+- About **10 GB** free next to the add-on file, and **3.5 GB** in the game
+  folder.
+
+```text
+================================================================================
+[SV04]                       TRYING THE TEST BUILD
+================================================================================
+```
+
+1. Download this repository as a zip (Code > Download ZIP) and unpack it.
+   Keep the folder structure: the test script needs `tools\research` next
+   to it.
+2. Build the Severed archive. Run this from `tools\test`:
+
+   ```bat
+   Make-SeveredTest.bat "<Severed add-on file>" "<Dead Space 2 folder>" "<ffmpeg.exe>"
+   ```
+
+   The first run unpacks and converts everything (this takes a while).
+   Later runs only redo what changed.
+3. Copy `tools\probe\bin\dinput8.dll` into the Dead Space 2 folder, next to
+   `deadspace2.exe`. If a `dinput8.dll` from another mod is already there,
+   move it somewhere safe first.
+4. Start the game as normal. Go to **Single Player > Episode Select** and
+   pick **Dead Space 2: Severed**.
+
+```text
+================================================================================
+[SV05]                           REMOVING IT
+================================================================================
+```
+
+```bat
+Remove-SeveredTest.bat "<Dead Space 2 folder>"
+```
+
+Then delete `dinput8.dll` from the game folder. Your game is back to normal.
+The script only deletes an archive it created itself. It checks for its
+marker file, `DS2DAT2.DAT.severedtest`.
+
+```text
+================================================================================
+[SV06]                           HOW IT WORKS
+================================================================================
+```
+
+The game is the same engine on both platforms, so the job is mostly
+conversion:
+- byte order: the Xbox 360 is big-endian, the PC little-endian
+- GPU formats: Xenos vs. Direct3D 9
+- audio codecs: EA-XMA vs. EA-XAS
+
+Each converter was checked against thousands of matching PC/360 asset pairs
+from the base game.
+
+| Asset type | What happens |
+|---|---|
+| Stream files (`.str`), tables of contents (`.toc`) | Rebuilt in the PC layout |
+| Textures | Header rebuilt, data byte-swapped |
+| Meshes | Vertices re-encoded (normals, tangents); triangle strips rebuilt without restarts |
+| Materials, VFX, MetaModels, Graphs | Per-format byte-order rules |
+| Havok physics (`.hkx`) | Learned rules, plus Havok's own class descriptions for collision |
+| Level objects (SimGroups) | Converted with the PC engine's class layouts |
+| Navigation meshes, animation banks | Per-format rules |
+| Streamed audio (`.snu`), sound banks | EA-XMA decoded, re-encoded as EA-XAS |
+| Text, Lua scripts | Copied (same on both platforms) |
+
+Then the pieces are assembled:
+- the converted files are packed into `DS2DAT2.DAT`, an archive slot the
+  game already checks, so it loads them on top of its own files;
+- the hook DLL adds the Severed episode by calling the game's own
+  add-episode function, the same call the console makes when it finds the
+  DLC.
+
+The full research log is in [`docs/FINDINGS.md`](docs/FINDINGS.md). The plan
+is in [`docs/DESIGN.md`](docs/DESIGN.md).
+
+```text
+================================================================================
+[SV07]                         TROUBLESHOOTING
+================================================================================
+```
+
+**The game writes a log.** With `dinput8.dll` installed, the game writes
+`severed_probe.log` in the Dead Space 2 folder. Please attach it to any bug
+report. It contains your Windows user name in some paths, so edit those out
+if you like.
+
+**`ModuleNotFoundError: No module named 'ds2'`**: you copied only the test
+script. Download and unpack the whole repository.
+
+**The window closes straight away**: run the `.bat` from a command prompt
+with all three arguments in quotes, so you can read the message.
+
+**Antivirus flags `dinput8.dll`**: it is unsigned and hooks file functions.
+The full source is `tools/probe/probe.c`.
+
+**Severed isn't in the episode list**: check that `dinput8.dll` is next to
+`deadspace2.exe`, and that `DS2DAT2.DAT` exists in the game folder.
+
+```text
+================================================================================
+[SV08]                          RESEARCH TOOLS
+================================================================================
+```
+
+These were used to map the formats. You don't need them to try Severed.
+
+- **`tools/scan/`**: text-only reports of a game folder or 360 package. It
+  lists archive directories, the files inside a package, magic bytes and
+  hashes. Run `Scan-DS2Files.bat`, or from PowerShell:
+
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\tools\scan\Scan-DS2Files.ps1 -Path "D:\Games\Dead Space 2" -Label PC
+  ```
+
+  The labels are `PC` (the install folder), `Severed360` (a folder holding
+  just the add-on file) and `Base360` (the extracted 360 base game). Add
+  `-SkipHash` to skip hashing and `-ExtractTo <folder>` to extract packages.
+  Paths are stored relative to the scanned folder, so your user name stays
+  out of the reports.
+- **`tools/export/`**, **`tools/samples/`**, **`tools/index/`**: export
+  matched PC/360 asset pairs for training and checking the converters.
+  These are EA data, so they stay on your machine and are git-ignored.
+- **`tools/probe/`**: the diagnostic and hook `dinput8.dll` (see its
+  README).
+
+```text
+================================================================================
+[SV09]                          FOR DEVELOPERS
+================================================================================
+```
+
+```text
+  DS2SeveredPC/
+  |-- docs/
+  |   |-- FINDINGS.md ........... formats, engine notes, test results
+  |   `-- DESIGN.md ............. plan
+  |-- tools/
+  |   |-- research/ds2/ ......... the converters (Python), one module per format
+  |   |-- research/native/ ...... EA-XAS encoder (C, built with zig)
+  |   |-- test/ ................. Make-SeveredTest / Remove-SeveredTest
+  |   |-- probe/ ................ dinput8.dll log + hook (C, built with zig)
+  |   |-- scan/ export/ samples/ index/ archive/ ... research scripts
+  `-- src/ ...................... C# port of the core readers (early)
+```
+
+**The house rules:**
+- No EA game files in the repo, ever. This includes extracted samples,
+  executables and logs.
+- `deadspace2.exe` is never modified on disk, and its DRM is never touched.
+- The probe only reads memory, and its logs contain addresses and values,
+  not code.
+
+```text
+================================================================================
+[SV10]                         DISCLAIMER & LEGAL
+================================================================================
+```
+
+DS2SeveredPC is an **unofficial, fan-made project**. It isn't affiliated
+with, endorsed by, sponsored by or approved by Electronic Arts, Visceral
+Games, Motive Studio or Microsoft.
+
+It contains no game code, assets or DLC content, and it doesn't circumvent
+DRM or any other technical protection. It only converts files you supply
+from **your own legitimate copy** of the Severed add-on, for use with **your
+own legitimate copy** of Dead Space 2 for PC.
+
+It is provided **"AS IS", WITHOUT WARRANTY OF ANY KIND**. You use it at your
+own risk. Back up your saves.
+
+```
+================================================================================
+[SV11]                              CREDITS
+================================================================================
+  * Visceral Games ..................... for Dead Space 2 and Severed
+  * Rick (Gibbed) - Gibbed.Visceral ...... archive, stream and SimGroup
+                                           formats (zlib licence)
+  * vgmstream (ISC licence) ............ EA audio format reference
+  * 4Kodda - DS1-3 Modding Toolkit ..... mesh format reference (no code used)
+  * Havok .............................. for shipping class descriptions
+  * GameFAQs FAQ writers of the 2000s .. for the vibes
+================================================================================
+        This document Copyright (c) 2026 tubzbuster & DS2SeveredPC contributors
+                  Make us whole again. Twinkle twinkle, little star.
+================================================================================
+```
+
+<br>
+
+<p align="center"><sub><sup>
+Dead Space, Dead Space 2 and Dead Space 2: Severed are trademarks of Electronic Arts Inc.
+Xbox 360 is a trademark of Microsoft Corporation.
+All other trademarks are the property of their respective owners and are used here for identification purposes only.
+DS2SeveredPC is not affiliated with, endorsed by, or sponsored by any of these companies.
+</sup></sub></p>
