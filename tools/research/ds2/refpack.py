@@ -2,6 +2,42 @@
 
 
 def decompress(src, pos=0):
+    fast = _native(src, pos)
+    if fast is not None:
+        return fast
+    return decompress_py(src, pos)
+
+
+_NATIVE = []
+
+
+def _native(src, pos):
+    """native/xasenc.dll (or libxasenc.so) refpack_decompress, if present"""
+    if not _NATIVE:
+        try:
+            from . import eaaudio
+            lib = eaaudio._lib()
+            lib.refpack_decompress.restype = __import__('ctypes').c_long
+            _NATIVE.append(lib)
+        except Exception:                     # noqa: BLE001 - fall back to Python
+            _NATIVE.append(None)
+    lib = _NATIVE[0]
+    if lib is None:
+        return None
+    import ctypes
+    flags = src[pos]
+    n = 4 if flags & 0x80 else 3
+    i = pos + 2 + (n if flags & 1 else 0)
+    usize = int.from_bytes(src[i:i + n], 'big')
+    data = bytes(src[pos:])
+    out = ctypes.create_string_buffer(max(usize, 1))
+    got = lib.refpack_decompress(data, len(data), out, usize)
+    if got != usize:
+        raise ValueError('RefPack data could not be decoded')
+    return out.raw[:usize]
+
+
+def decompress_py(src, pos=0):
     flags = src[pos]
     if src[pos + 1] != 0xFB:
         raise ValueError('not RefPack (no 0xFB marker)')

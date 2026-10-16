@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'research'))
 
 try:
-    from ds2 import bigarchive, build, eaaudio, simgroup, snu, stfs, streamfile, streamwrite, toc   # noqa: E402
+    from ds2 import bigarchive, build, eaaudio, pcassets, simgroup, snu, stfs, streamfile, streamwrite, toc   # noqa: E402
 except ImportError:
     raise SystemExit('Run this from the repository\'s tools\\test folder: it needs tools\\research next to it '
                      '(copy the whole repository, not just this file).')
@@ -215,6 +215,88 @@ def refresh_snu_channels(root, dst):
     log('  re-encoded %d multichannel audio stream(s) with 8 channels' % n)
 
 
+def take_pc_assets(dst, idx, cache_dir):
+    """replace converted assets the PC game already has by the PC's own
+    (ds2/pcassets.py), read from the game's archives (each PC stream once,
+    the wanted assets kept in cache_dir); fixes the TOC sizes"""
+    import hashlib, pickle
+    table = pcassets.load()
+    streams = []
+    wanted = {}                                   # PC entry -> keys
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower().endswith('.str') and f.lower() != 'global_assets_global.str':
+                p = os.path.join(d, f)
+                assets = streamfile.read(open(p, 'rb').read())[1]
+                plan = pcassets.plan(assets, table)
+                if plan:
+                    streams.append(p)
+                    for i, entry in plan.items():
+                        a = assets[i]
+                        wanted.setdefault(entry, set()).add(pcassets.key(a.type, a.name, a.ids))
+    os.makedirs(cache_dir, exist_ok=True)
+
+    def cache_path(k):
+        return os.path.join(cache_dir, hashlib.sha1(k.encode('latin1')).hexdigest() + '.bin')
+
+    for n, (entry, keys) in enumerate(sorted(wanted.items())):
+        if all(os.path.exists(cache_path(k)) for k in keys) or int(entry, 16) not in idx:
+            continue
+        log('  reading PC stream %d of %d (#%s)' % (n + 1, len(wanted), entry))
+        for a in streamfile.read(read_entry(idx, int(entry, 16)))[1]:
+            k = pcassets.key(a.type, a.name, a.ids)
+            if k in keys and not os.path.exists(cache_path(k)):
+                with open(cache_path(k) + '.tmp', 'wb') as f:
+                    pickle.dump((a.type_hash, a.flags, a.ids, a.name, a.path, a.type, a.payload()), f)
+                os.replace(cache_path(k) + '.tmp', cache_path(k))
+
+    def cached(k):
+        q = cache_path(k)
+        return pickle.load(open(q, 'rb')) if os.path.exists(q) else None
+
+    sizes, taken = {}, 0
+    for p in streams:
+        assets = streamfile.read(open(p, 'rb').read())[1]
+        plan = pcassets.plan(assets, table)
+        found = {}
+        for i in plan:
+            a = assets[i]
+            c = cached(pcassets.key(a.type, a.name, a.ids))
+            if c is not None:
+                found[i] = c
+        for i in list(found):                     # pairs: both or neither
+            t = assets[i].type
+            if t in pcassets.PAIRS and i + 1 in plan and i + 1 not in found:
+                del found[i]
+            elif t in pcassets.PAIRS.values() and i - 1 in plan and i - 1 not in found:
+                del found[i]
+        if not found:
+            continue
+        w = streamwrite.Writer()
+        total = 0
+        for i, a in enumerate(assets):
+            if i in found:
+                w.add(*found[i])
+                total += len(found[i][6])
+            else:
+                y = a.payload()
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+                total += len(y)
+        open(p, 'wb').write(w.data())
+        taken += len(found)
+        sizes[os.path.splitext(os.path.relpath(p, dst))[0].replace('/', '\\')] = total
+        log('  %s: %d of %d assets from the PC game' % (os.path.relpath(p, dst), len(found), len(assets)))
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower().endswith('.toc'):
+                p = os.path.join(d, f)
+                y = open(p, 'rb').read()
+                for name, size in sizes.items():
+                    y = toc.set_size(y, name, size)
+                open(p, 'wb').write(y)
+    log('  %d assets taken from the PC game' % taken)
+
+
 def remove(game):
     target = os.path.join(game, SLOT)
     marker = target + '.severedtest'
@@ -307,6 +389,12 @@ def main():
         log('Re-encoding the 6-channel cutscene audio')
         refresh_snu_channels(root, dst)
         open(os.path.join(work, 'snu_channels.ok'), 'w').write('ok')
+    # last of the steps on the converted files: later re-conversions must
+    # leave the PC game's own assets alone
+    if not os.path.exists(os.path.join(work, 'pc_assets.ok')):
+        log('Taking the assets the PC game already has from its archives')
+        take_pc_assets(dst, idx, os.path.join(work, 'pc_cache'))
+        open(os.path.join(work, 'pc_assets.ok'), 'w').write('ok')
     log('Preparing the test entries')
     files = []
     for d, _, fs in os.walk(dst):

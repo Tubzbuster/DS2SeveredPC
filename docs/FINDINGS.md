@@ -1017,3 +1017,41 @@ weapon stream (DS2DAT9) loaded, then the `grinder_room` section, then the
 game crashed in the CPU skinning job: exe 0x7C2CB0 locks a vertex buffer
 through a garbage handle (exe+0xFD284E). Probe 21 now names the meshes
 reachable from the crash registers.
+
+## 39. Using the PC game's own copies of reused assets
+
+The next crash (probe 21 named the meshes) was drawing
+`kiosk_public01_am`, the base game's store / save kiosk, with the skinning
+job locking a vertex buffer through a garbage handle.
+
+The PC version of that mesh was exported with another vertex layout, not
+just byte-swapped:
+- DT1 +0x27 (bytes per vertex of the table's second stream) is 0x14 on PC,
+  against 0x08 / 0x0C on the 360;
+- the DT1 +7 flags byte is 00 on PC, where the 360 has 06 / 02;
+- the MeshVolatile is 119,808 bytes on PC, against 54,400 converted.
+
+This holds for about 10% of the base game's triangle-list tables (the
+"re-exported" pairs of section 20).
+
+Severed reuses many base-game assets. 13,256 of its assets have the same
+type, name and ids as a PC asset, the key that pairs the base game's PC and
+360 files. They are in 379 PC streams (DS2DAT6-9) and include:
+- 850 meshes and 671 MeshVolatiles;
+- 4,243 textures;
+- materials, VFX, MetaModels, Havok files, animation banks;
+- Gabe's RIG health bar meshes and materials.
+
+The test script now takes these from the user's own PC archives:
+- `ds2/pcassets.py`;
+- the index `ds2/pc_assets.json` (names and entry hashes only), built by
+  `learn_pc_assets.py` from the asset listings;
+- meshes are taken with their MeshVolatile, and texture headers with their
+  data, together or not at all.
+
+The PC streams' RefPack chunks are now decoded natively (`native/refpack.c`,
+in the same library as the XAS encoder). The Python decoder remains as a
+fallback.
+
+The RIG health display ("not there at all") likely has the same cause as the
+kiosk.
