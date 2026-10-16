@@ -10,7 +10,7 @@ platform-neutral files are copied. A report lists any asset that could not
 be converted (it is left out of the PC stream).
 """
 import os, pickle, struct, sys, collections
-from . import streamfile, streamwrite, convert, toc, nav, geo, meshconv, templates as T, vfx, lut
+from . import streamfile, streamwrite, convert, toc, nav, geo, meshconv, templates as T, vfx, lut, uvwide
 
 HERE = os.path.dirname(__file__)
 _MODELS = {}
@@ -43,12 +43,40 @@ def _volatile(g, x):
 DROP = {'PNG': 'Xbox 360 save game icons'}
 
 
+def stream_lm_ids(assets):
+    """ids of the stream's materials that use the PC lightmap shader
+    (ds2/uvwide.py)"""
+    mats = []
+    for a in assets:
+        if a.type == 'Material':
+            x = a.payload()
+            try:
+                mats.append((x, convert.CONVERTERS['Material'](x)))
+            except Exception:                 # noqa: BLE001 - reported with the asset
+                pass
+    return uvwide.lm_ids(mats)
+
+
+def convert_mesh(x, lm):
+    """360 mesh -> (PC mesh, 360 geo, widened UV streams)"""
+    g = geo.parse(x, True)
+    w = uvwide.widened(x, g, lm)
+    y = meshconv.convert(x, _model('mesh_templates.pkl'))
+    return (uvwide.mesh(y, x, g, w) if y is not None else None), g, w
+
+
+def convert_volatile(g, w, x):
+    y = _volatile(g, x)
+    return uvwide.volatile(y, x, g, w) if y is not None else None
+
+
 def convert_stream(data, report):
     """360 stream bytes -> (PC stream bytes, total uncompressed size)"""
     _, assets = streamfile.read(data)
+    lm = stream_lm_ids(assets)
     w = streamwrite.Writer()
     total = 0
-    mesh = None                       # a MeshVolatile follows its Mesh
+    mesh = None                       # a MeshVolatile follows its Mesh: (geo, widened streams)
     luts = set()                      # LUT textures: header, then data (ds2/lut.py)
     for a in assets:
         if a.type in DROP:
@@ -63,10 +91,10 @@ def convert_stream(data, report):
             elif a.type == 'tg4d' and a.name in luts:
                 y = lut.data(x)               # D3D byte order; the test build re-checks it against the PC
             elif a.type == 'Mesh':
-                y = meshconv.convert(x, _model('mesh_templates.pkl'))
-                mesh = geo.parse(x, True)
+                y, g, w = convert_mesh(x, lm)
+                mesh = (g, w)
             elif a.type == 'MeshVolatile':
-                y = _volatile(mesh, x) if mesh is not None else None
+                y = convert_volatile(*mesh, x) if mesh is not None else None
             elif a.type == 'VFX':
                 y = _vfx(x)
             elif a.type in convert.CONVERTERS:

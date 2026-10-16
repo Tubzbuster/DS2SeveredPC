@@ -300,6 +300,62 @@ def refresh_luts(root, dst):
                 open(p, 'wb').write(y)
 
 
+def refresh_uv_streams(root, dst):
+    """meshes with lightmap materials (ds2/uvwide.py): re-convert Severed's
+    own ones and their volatiles with the PC's 20-byte UV streams; PC copies
+    untouched"""
+    from ds2 import pcassets
+    own = pcassets.load()
+    sizes = {}
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if not f.lower().endswith('.str'):
+                continue
+            p = os.path.join(d, f)
+            src = os.path.join(root, os.path.relpath(p, dst))
+            if not os.path.exists(src):
+                continue
+            assets = streamfile.read(open(src, 'rb').read())[1]
+            if not any(a.type == 'Mesh' for a in assets):
+                continue
+            lm = build.stream_lm_ids(assets)
+            fresh, mesh = {}, None
+            for a in assets:
+                if a.type == 'Mesh':
+                    y, g, w = build.convert_mesh(a.payload(), lm)
+                    mesh = (g, w) if w else None
+                    if w and y is not None:
+                        fresh[(a.type, a.name, a.ids)] = y
+                elif a.type == 'MeshVolatile' and mesh:
+                    y = build.convert_volatile(*mesh, a.payload())
+                    if y is not None:
+                        fresh[(a.type, a.name, a.ids)] = y
+                    mesh = None
+            if not fresh:
+                continue
+            w = streamwrite.Writer()
+            n = total = 0
+            for a in streamfile.read(open(p, 'rb').read())[1]:
+                y = a.payload()
+                k = (a.type, a.name, a.ids)
+                if k in fresh and pcassets.key(a.type, a.name, a.ids) not in own:
+                    y, n = fresh[k], n + 1
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+                total += len(y)
+            if n:
+                open(p, 'wb').write(w.data())
+                sizes[os.path.splitext(os.path.relpath(p, dst))[0].replace('/', '\\')] = total
+                log('  re-converted %d mesh asset(s) in %s' % (n, os.path.relpath(p, dst)))
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower().endswith('.toc'):
+                p = os.path.join(d, f)
+                y = open(p, 'rb').read()
+                for name, size in sizes.items():
+                    y = toc.set_size(y, name, size)
+                open(p, 'wb').write(y)
+
+
 def refresh_snu_channels(root, dst):
     """re-encode the audio streams whose channel count the PC cannot play as
     XAS (6-channel cutscene audio: snu.pad_channels)"""
@@ -519,6 +575,10 @@ def main():
         log('Converting the colour-grading LUTs to the PC\'s 3D form')
         refresh_luts(root, dst)
         open(os.path.join(work, 'lut_fix.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'uv_streams.ok')):
+        log('Re-converting the meshes with lightmap materials (20-byte UV streams)')
+        refresh_uv_streams(root, dst)
+        open(os.path.join(work, 'uv_streams.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

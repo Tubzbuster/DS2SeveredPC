@@ -1212,3 +1212,32 @@ Severed's own LUTs: `lut_pdlc1_quarry`, `lut_pdlc1_elev_fall`,
 probe 31's bad texture slot: when more grading volumes are active than the
 shader has LUT slots, the list overruns.
 
+
+## 46. Lightmap materials and the PC's 20-byte UV stream (the black door)
+
+A quarry door drew as a solid black slab that slid up when it opened: the
+door mesh itself. `door_inner_01_am` is the one mining door the PC game
+lacks, so the only one built by our mesh converter.
+
+A mesh table names its material at DataTable1 entry +0x0C (one of the
+material's id words). In the PC/360 pairs, every mesh with a table whose
+material has the PC lightmap shader (a pass with shader 0x0E155D33, e.g. the
+`*_diffuse` materials) has 20-byte UV streams on PC: u, v, 0.0, 1.0 and a
+colour (`00 00 00 ff` for 8-byte sources; the 360 colour for 12-byte u, v,
+colour sources). The 360 keeps 8 or 12 bytes. No mesh without such a
+material was widened by the rule (no false positives); 12 PC meshes were
+widened for other reasons, harmless with non-lightmap shaders. Left as on
+the 360, the PC's lightmap shader reads the stream with the wrong stride.
+
+`ds2/uvwide.py` widens all 8/12-byte UV streams of such a mesh: table
+bytes +0x07 (UV format code) -> 0 and +0x27 (UV size) -> 20; descriptor
+flags (+0x0A -> 0, UV stride byte -> 0x14), sizes and the volatile offsets
+of later streams; header +0x0C (mesh plus volatile size); the volatile is
+rebuilt and padded to 0x80. Scored on the pairs: volatiles exact on all 55
+unambiguous pairs; mesh header fields exact except the restrip fields that
+differed before. Severed's own meshes affected (9): `door_inner_01_am`, the
+docking bay doors and locks, `door_pubvu01_cln`, `exterior_black_win`
+(gunship) and Gabe's helmet (`playersecurityhelmetweller`,
+`mesh_helmet_dism`). The PC exporter also merges vertex buffers with equal
+flags; we keep the 360's buffers (the PC game has meshes with duplicate
+buffer flags too).
