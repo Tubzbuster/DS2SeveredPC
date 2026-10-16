@@ -1853,15 +1853,24 @@ static void d3d_guard(void)
     if (GetCurrentThreadId() != g_game_thread) return;
     if (g_guard_state == 2) { memset(g_okpage, 0, sizeof g_okpage); return; }
     if (g_guard_state == 0) {
+        /* the code may still be encrypted early on (probe 28's run looked
+           at 0.19 s): look again every 2 s for 10 minutes */
+        static DWORD next, tries;
         int n = 0;
-        BYTE *f = find_sig(SIG_FLUSH, &n);
-        g_guard_state = 1;
+        BYTE *f;
+        if (GetTickCount() < next) return;
+        next = GetTickCount() + 2000;
+        f = find_sig(SIG_FLUSH, &n);
         if (!f || n != 1 || f[0x78] != 0xA1) {
-            log_line("D3D guard: batch flush not found (%d matches) - guard off", n);
-            g_guard_state = 2;
+            if (++tries >= 300) {
+                log_line("D3D guard: batch flush not found (%d matches) after 10 minutes - guard off", n);
+                g_guard_state = 2;
+            }
             return;
         }
+        log_line("D3D guard: batch flush found after %lu tries", tries);
         g_devglobal = *(void ****)(f + 0x79);
+        g_guard_state = 1;
     }
     if (!mem_ok(g_devglobal, 4) || !*g_devglobal || !mem_ok(*g_devglobal, 4)) return;
     dev = (void **)*g_devglobal;
@@ -1988,6 +1997,13 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
     (void)p;
     for (;;) {
         Sleep(200);
+        /* with Alt, Ctrl or Shift held the keys belong to other programs
+           (Alt+F9 records in the Nvidia overlay) */
+        if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
+            while ((GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
+                    GetAsyncKeyState(VK_F10) | GetAsyncKeyState(VK_F11)) & 0x8000) Sleep(100);
+            continue;
+        }
         if (GetAsyncKeyState(VK_F9) & 0x8000) {
             add_severed();
             while (GetAsyncKeyState(VK_F9) & 0x8000) Sleep(100);
@@ -2030,7 +2046,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 28 - process %s", path);
+    log_line("severed probe 29 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

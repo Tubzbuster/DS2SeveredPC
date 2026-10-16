@@ -27,7 +27,7 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | thumping during the opening scene: from the end of the RIG call until the scene ends, fixed relative to the camera. The cutscene audio (`pdlc1_igc_01_01`, 5.1) has loud, clean front-only low hits at 47.2-51.5 s, after the dialogue: authored content, so possibly as on console; to compare with the console video. The downmix channel order is confirmed (LFE silent, dialogue in centre) |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | thumping during the opening scene (end of the RIG call to the end of the scene) is intermittent: absent in the run where F9 was pressed about 10 s into the intro. F9 makes the probe request all the start sections at once (normally the level streams them in). Not in the cutscene audio. Theory: a physics body waiting on a section's collision. To test: an intro without F9, then one with F9 |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
@@ -79,7 +79,9 @@ and is corrected as we play.
 ## Test tools
 
 - F8 (probe 20+): sends the intro hand-over. F7: sends the messages listed
-  in `severed_send.txt`.
+  in `severed_send.txt`. F9: requests the start sections (and logs the
+  episode list). Probe 29+: the F-keys are ignored with Alt, Ctrl or Shift
+  held (Alt+F9 records in the Nvidia overlay).
 - Crash reports name the meshes near the crash (probe 21+).
 - Probe 26+: heap checks every 2 s (`HEAP ... CORRUPT` lines).
 - Probe 27+: Direct3D guard (`D3D GUARD` lines); crash reports list the
