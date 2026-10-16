@@ -1307,12 +1307,14 @@ static void run_pending_messages(void)
 }
 
 static void heap_watch(void);
+static void d3d_guard(void);
 
 static void run_pending_sections(void)
 {
     int i;
     run_pending_messages();
     heap_watch();
+    d3d_guard();
     if (!g_sections_pending || GetCurrentThreadId() != g_game_thread || !g_streamreq || !g_streammgr || !*g_streammgr)
         return;
     if (InterlockedExchange(&g_sections_pending, 0) == 0) return;
@@ -1670,6 +1672,200 @@ static void addr_name(DWORD a, char *out, int n)
     (void)n;
 }
 
+/* ---- Direct3D object guard (probe 27) -------------------------------------
+ * Both quarry crashes read through the same bogus pointer (0x15FFCF8F)
+ * inside Direct3D while drawing a full-screen pass, with the heaps intact:
+ * likely a released resource still bound. The device's Set* methods are
+ * wrapped: an object whose vtable is not in a loaded module is logged with
+ * the game code that passed it (once per method and caller), and for
+ * textures, buffers, shaders and declarations NULL is passed instead.
+ * Textures bound earlier are rechecked before every draw. The
+ * device comes from the game's own global, read from the batch flush
+ * (exe 0x13D2DC0: `mov eax, [device]` at +0x78). */
+static const char SIG_FLUSH[] =
+    "51 A1 ?? ?? ?? ?? 8B 0D ?? ?? ?? ?? C6 00 00 8B 01 8B 10 56 50 8B 42 30 FF D0";
+static void ***g_devglobal;
+static int g_guard_state;              /* 0 not tried, 1 waiting for the device, 2 done */
+static volatile LONG g_guard_logs;
+static DWORD g_guard_seen[64][2];
+static volatile LONG g_guard_nseen;
+
+static int d3d_obj_ok_slow(const void *p)
+{
+    MEMORY_BASIC_INFORMATION mi;
+    const void *vt = *(const void * const *)p;
+    return vt && mem_ok(vt, 4) && VirtualQuery(vt, &mi, sizeof mi) && mi.Type == MEM_IMAGE;
+}
+
+/* the Set* methods run thousands of times a frame: pages found readable
+   this frame and vtables found inside a loaded module are remembered, so
+   VirtualQuery runs only for a new page or a new object type (the page
+   cache is cleared every frame, so a page freed since is checked again) */
+static DWORD g_okpage[256];
+static const void *g_okvt[32];
+static int g_nokvt;
+
+static int d3d_obj_ok(const void *p)
+{
+    MEMORY_BASIC_INFORMATION mi;
+    const void *vt;
+    DWORD pg = (DWORD)p >> 12;
+    int i;
+    if (!p) return 1;
+    if (((DWORD)p & 0xFFF) > 0xFFC) return mem_ok(p, 4) && d3d_obj_ok_slow(p);
+    if (g_okpage[pg & 255] != pg) {
+        if (!mem_ok(p, 4)) return 0;
+        g_okpage[pg & 255] = pg;
+    }
+    vt = *(const void * const *)p;
+    for (i = 0; i < g_nokvt; i++) if (g_okvt[i] == vt) return 1;
+    if (!vt || !mem_ok(vt, 4) || !VirtualQuery(vt, &mi, sizeof mi) || mi.Type != MEM_IMAGE) return 0;
+    if (g_nokvt < 32) g_okvt[g_nokvt++] = vt;
+    return 1;
+}
+
+/* returns 1 if p may be passed on */
+static int d3d_check(const char *method, DWORD slot, const void *p, void *ret, int replace)
+{
+    char who[MAX_PATH + 32];
+    LONG i, n;
+    if (d3d_obj_ok(p)) return 1;
+    n = g_guard_nseen < 64 ? g_guard_nseen : 64;
+    for (i = 0; i < n; i++)
+        if (g_guard_seen[i][0] == (DWORD)method && g_guard_seen[i][1] == (DWORD)ret) return !replace;
+    i = InterlockedIncrement(&g_guard_nseen) - 1;
+    if (i < 64) { g_guard_seen[i][0] = (DWORD)method; g_guard_seen[i][1] = (DWORD)ret; }
+    if (InterlockedIncrement(&g_guard_logs) <= 64) {
+        addr_name((DWORD)ret, who, sizeof who);
+        log_line("D3D GUARD: %s slot %lu given invalid object %p from %s%s", method, slot, p, who,
+                 replace ? " - NULL passed instead" : "");
+    }
+    return !replace;
+}
+
+typedef HRESULT (WINAPI *SetTexture_t)(void *, DWORD, void *);
+typedef HRESULT (WINAPI *SetStreamSource_t)(void *, UINT, void *, UINT, UINT);
+typedef HRESULT (WINAPI *SetOne_t)(void *, void *);
+typedef HRESULT (WINAPI *SetRT_t)(void *, DWORD, void *);
+static SetTexture_t o_SetTexture;
+static SetStreamSource_t o_SetStreamSource;
+static SetOne_t o_SetIndices, o_SetVertexDeclaration, o_SetVertexShader, o_SetPixelShader, o_SetDepthStencil;
+static SetRT_t o_SetRenderTarget;
+
+/* what is bound per texture stage (0-15, vertex samplers 257-260 as
+   16-19) and by whom, rechecked before each draw: a texture freed while
+   still bound is unbound there */
+static void *g_bound[20], *g_boundby[20];
+
+static int stage_slot(DWORD st)
+{
+    return st < 16 ? (int)st : st >= 257 && st <= 260 ? (int)(st - 257 + 16) : -1;
+}
+
+static HRESULT WINAPI g_SetTexture(void *d, DWORD st, void *t)
+{
+    void *ret = __builtin_return_address(0);
+    int k = stage_slot(st);
+    if (!d3d_check("SetTexture", st, t, ret, 1)) t = NULL;
+    if (k >= 0) { g_bound[k] = t; g_boundby[k] = ret; }
+    return o_SetTexture(d, st, t);
+}
+
+static void check_bound(void *d, void *drawret)
+{
+    char who[MAX_PATH + 32], draw[MAX_PATH + 32];
+    int k;
+    for (k = 0; k < 20; k++) {
+        if (!g_bound[k] || d3d_obj_ok(g_bound[k])) continue;
+        if (InterlockedIncrement(&g_guard_logs) <= 64) {
+            addr_name((DWORD)g_boundby[k], who, sizeof who);
+            addr_name((DWORD)drawret, draw, sizeof draw);
+            log_line("D3D GUARD: texture %p on stage %d (set from %s) is no longer valid at a draw from %s - unbound",
+                     g_bound[k], k < 16 ? k : 257 + k - 16, who, draw);
+        }
+        o_SetTexture(d, k < 16 ? (DWORD)k : (DWORD)(257 + k - 16), NULL);
+        g_bound[k] = NULL;
+    }
+}
+
+typedef HRESULT (WINAPI *DrawPrim_t)(void *, DWORD, UINT, UINT);
+typedef HRESULT (WINAPI *DrawIdx_t)(void *, DWORD, INT, UINT, UINT, UINT, UINT);
+typedef HRESULT (WINAPI *DrawPrimUP_t)(void *, DWORD, UINT, const void *, UINT);
+typedef HRESULT (WINAPI *DrawIdxUP_t)(void *, DWORD, UINT, UINT, UINT, const void *, DWORD, const void *, UINT);
+static DrawPrim_t o_DrawPrimitive;
+static DrawIdx_t o_DrawIndexedPrimitive;
+static DrawPrimUP_t o_DrawPrimitiveUP;
+static DrawIdxUP_t o_DrawIndexedPrimitiveUP;
+
+static HRESULT WINAPI g_DrawPrimitive(void *d, DWORD t, UINT s0, UINT n)
+{ check_bound(d, __builtin_return_address(0)); return o_DrawPrimitive(d, t, s0, n); }
+static HRESULT WINAPI g_DrawIndexedPrimitive(void *d, DWORD t, INT b, UINT mn, UINT nv, UINT si, UINT pc)
+{ check_bound(d, __builtin_return_address(0)); return o_DrawIndexedPrimitive(d, t, b, mn, nv, si, pc); }
+static HRESULT WINAPI g_DrawPrimitiveUP(void *d, DWORD t, UINT n, const void *v, UINT st)
+{ check_bound(d, __builtin_return_address(0)); return o_DrawPrimitiveUP(d, t, n, v, st); }
+static HRESULT WINAPI g_DrawIndexedPrimitiveUP(void *d, DWORD t, UINT mn, UINT nv, UINT pc, const void *i, DWORD f, const void *v, UINT st)
+{ check_bound(d, __builtin_return_address(0)); return o_DrawIndexedPrimitiveUP(d, t, mn, nv, pc, i, f, v, st); }
+static HRESULT WINAPI g_SetStreamSource(void *d, UINT n, void *vb, UINT off, UINT stride)
+{ if (!d3d_check("SetStreamSource", n, vb, __builtin_return_address(0), 1)) vb = NULL; return o_SetStreamSource(d, n, vb, off, stride); }
+static HRESULT WINAPI g_SetIndices(void *d, void *ib)
+{ if (!d3d_check("SetIndices", 0, ib, __builtin_return_address(0), 1)) ib = NULL; return o_SetIndices(d, ib); }
+static HRESULT WINAPI g_SetVertexDeclaration(void *d, void *v)
+{ if (!d3d_check("SetVertexDeclaration", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetVertexDeclaration(d, v); }
+static HRESULT WINAPI g_SetVertexShader(void *d, void *v)
+{ if (!d3d_check("SetVertexShader", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetVertexShader(d, v); }
+static HRESULT WINAPI g_SetPixelShader(void *d, void *v)
+{ if (!d3d_check("SetPixelShader", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetPixelShader(d, v); }
+static HRESULT WINAPI g_SetRenderTarget(void *d, DWORD i, void *v)
+{ d3d_check("SetRenderTarget", i, v, __builtin_return_address(0), 0); return o_SetRenderTarget(d, i, v); }
+static HRESULT WINAPI g_SetDepthStencil(void *d, void *v)
+{ d3d_check("SetDepthStencilSurface", 0, v, __builtin_return_address(0), 0); return o_SetDepthStencil(d, v); }
+
+static void vt_patch(void **vt, int i, void *hook, void **orig)
+{
+    DWORD old;
+    if (vt[i] == hook) return;
+    if (!VirtualProtect(&vt[i], 4, PAGE_EXECUTE_READWRITE, &old)) return;
+    *orig = vt[i];
+    vt[i] = hook;
+    VirtualProtect(&vt[i], 4, old, &old);
+}
+
+static void d3d_guard(void)
+{
+    void **dev, **vt;
+    if (GetCurrentThreadId() != g_game_thread) return;
+    if (g_guard_state == 2) { memset(g_okpage, 0, sizeof g_okpage); return; }
+    if (g_guard_state == 0) {
+        int n = 0;
+        BYTE *f = find_sig(SIG_FLUSH, &n);
+        g_guard_state = 1;
+        if (!f || n != 1 || f[0x78] != 0xA1) {
+            log_line("D3D guard: batch flush not found (%d matches) - guard off", n);
+            g_guard_state = 2;
+            return;
+        }
+        g_devglobal = *(void ****)(f + 0x79);
+    }
+    if (!mem_ok(g_devglobal, 4) || !*g_devglobal || !mem_ok(*g_devglobal, 4)) return;
+    dev = (void **)*g_devglobal;
+    vt = (void **)*dev;
+    if (!mem_ok(vt, 108 * 4)) return;
+    vt_patch(vt, 37, (void *)g_SetRenderTarget, (void **)&o_SetRenderTarget);
+    vt_patch(vt, 39, (void *)g_SetDepthStencil, (void **)&o_SetDepthStencil);
+    vt_patch(vt, 65, (void *)g_SetTexture, (void **)&o_SetTexture);
+    vt_patch(vt, 81, (void *)g_DrawPrimitive, (void **)&o_DrawPrimitive);
+    vt_patch(vt, 82, (void *)g_DrawIndexedPrimitive, (void **)&o_DrawIndexedPrimitive);
+    vt_patch(vt, 83, (void *)g_DrawPrimitiveUP, (void **)&o_DrawPrimitiveUP);
+    vt_patch(vt, 84, (void *)g_DrawIndexedPrimitiveUP, (void **)&o_DrawIndexedPrimitiveUP);
+    vt_patch(vt, 87, (void *)g_SetVertexDeclaration, (void **)&o_SetVertexDeclaration);
+    vt_patch(vt, 92, (void *)g_SetVertexShader, (void **)&o_SetVertexShader);
+    vt_patch(vt, 100, (void *)g_SetStreamSource, (void **)&o_SetStreamSource);
+    vt_patch(vt, 104, (void *)g_SetIndices, (void **)&o_SetIndices);
+    vt_patch(vt, 107, (void *)g_SetPixelShader, (void **)&o_SetPixelShader);
+    g_guard_state = 2;
+    log_line("D3D guard: device %p, Set* methods checked from now on", dev);
+}
+
 /* a loaded mesh: header 'MGAE'; header 0x20 = model name (offset, or pointer after relocation) */
 static int mesh_name(DWORD q, char *out, int n)
 {
@@ -1742,6 +1938,16 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
         }
     }
     if (GetCurrentThreadId() == g_game_thread) check_heaps("at the crash");
+    {
+        int k;
+        char who[MAX_PATH + 32];
+        for (k = 0; k < 20; k++) {
+            if (!g_bound[k]) continue;
+            addr_name((DWORD)g_boundby[k], who, sizeof who);
+            log_line("  texture stage %d: %p%s, set from %s", k < 16 ? k : 257 + k - 16, g_bound[k],
+                     mem_ok(g_bound[k], 4) ? "" : " (NOT readable)", who);
+        }
+    }
     log_meshes_near("eax", c->Eax); log_meshes_near("ebx", c->Ebx); log_meshes_near("ecx", c->Ecx);
     log_meshes_near("edx", c->Edx); log_meshes_near("esi", c->Esi); log_meshes_near("edi", c->Edi);
     log_meshes_near("ebp", c->Ebp);
@@ -1806,7 +2012,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 26 - process %s", path);
+    log_line("severed probe 27 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

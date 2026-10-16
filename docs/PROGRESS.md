@@ -31,7 +31,7 @@ and is corrected as we play.
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
-| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, 4-5 s after quarry_z01 finished loading, in the frame's last full-screen pass. Probe 26: no heap corruption (heap checks clean, also at the crash). Both crashes read through the same bogus pointer, 0x15FFCF8F, so it is likely a value from the data used as a pointer (a texture of a post-processing effect?) |
+| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, 4-5 s after quarry_z01 finished loading, in the frame's last full-screen pass. Probe 26: no heap corruption (heap checks clean, also at the crash). Both crashes read through the same bogus pointer, 0x15FFCF8F, not a value from Severed's data (searched): likely a Direct3D resource freed while still in use. Probe 27 checks every object given to Direct3D and every bound texture before each draw, logs who set a bad one, and unbinds it (may also avoid the crash) |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | untested | scene `igc_01_05`; end of chapter 1 |
@@ -81,6 +81,9 @@ and is corrected as we play.
 - F8 (probe 20+): sends the intro hand-over. F7: sends the messages listed
   in `severed_send.txt`.
 - Crash reports name the meshes near the crash (probe 21+).
+- Probe 26+: heap checks every 2 s (`HEAP ... CORRUPT` lines).
+- Probe 27+: Direct3D guard (`D3D GUARD` lines); crash reports list the
+  bound textures and who set them.
 
 ## To do for a release
 
