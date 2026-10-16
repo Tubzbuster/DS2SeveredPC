@@ -20,7 +20,7 @@ and is corrected as we play.
 | Severed in Single Player > Episode Select | works | via the probe DLL |
 | Level loads (no black void, no crash) | works | |
 | Intro terminal ("Primary mission assets", RIG call video, dialogue) | works | |
-| Gabe on the ground, RIG call scene, getting up | fix pending | the scene waits for its 5.1 audio; now converted to stereo. F8 skips it |
+| Gabe on the ground, RIG call scene, getting up | broken | the scene's audio is primed but the sequence never starts (not the audio format: stereo did not help either); probe 22 traces its state machine. F8 skips it |
 | Control handed back after the scene | partial | only with F8 so far |
 
 ## Chapter 1: the mines
@@ -28,8 +28,8 @@ and is corrected as we play.
 | Area / sections | Status | Notes |
 |---|---|---|
 | drill_tunnel: drill_tunnel_01, drill_tunnel_02 | partial | walkable, dialogue plays, objective added |
-| drill_tunnel: drill_cavern_01 | partial | Flamethrower pickup at its end crashed (store kiosk mesh); fix pending (PC game's own assets) |
-| drill_tunnel: drill_saferoom | broken | crash at the door (`kiosk_public01_am`); fix pending (PC game's own assets) |
+| drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
+| drill_tunnel: drill_saferoom | partial | door and next area work (PC game's own assets); save station saves once, a second use locks the player (camera zooms in, no menu) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | untested | grinder_room loads when picking up the Flamethrower |
 | bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | untested | |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
@@ -65,9 +65,12 @@ and is corrected as we play.
 | RIG health spine | broken | not shown at all; fix pending (PC game's own RIG bar meshes) |
 | Starting equipment (`equip_command_player_initial`) | broken | inventory empty |
 | Gabe's Pulse Rifle and RIG upgrades | missing | Severed-only object type, to be redone |
-| Weapons: Flamethrower pickup | broken | crash (see drill_cavern_01) |
-| Stores, save stations, benches | untested | the kiosk crash suggests they need the PC game's own assets |
+| Weapons: Flamethrower pickup | works | |
+| Save stations | partial | first save works; second use locks up; saves are listed as "Chapter 1" (loading one probably starts the base game: do not rely on them) |
+| Stores, benches | untested | |
 | Performance near some lights | partial | frame drops in the drill tunnel |
+| Gabe's pain sounds | untested | possibly Isaac's; whether Severed has its own is not known yet |
+| First view after the terminal | broken | stretched slabs in front of the camera (screenshot); a mesh still converted wrongly |
 | Menu text (localised episode name) | partial | English placeholder via the probe |
 
 ## Test tools
