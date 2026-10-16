@@ -1805,6 +1805,93 @@ static void check_bound(void *d, void *drawret)
     }
 }
 
+/* ---- state calls (probe 30) ---------------------------------------------
+ * Probe 29 found every bound object valid at the crash, with 0x15FFCF8F
+ * still in a register: possibly a state value used by Direct3D as an
+ * index. Render, texture stage and sampler state calls go into a ring
+ * (shown at a crash, with any call whose value matches a register), and
+ * sampler states outside their valid ranges are logged when set. */
+typedef HRESULT (WINAPI *SetState_t)(void *, DWORD, DWORD);
+typedef HRESULT (WINAPI *SetStage_t)(void *, DWORD, DWORD, DWORD);
+static SetState_t o_SetRenderState;
+static SetStage_t o_SetTextureStageState, o_SetSamplerState;
+static volatile DWORD g_st_ring[256][5];   /* kind, stage, state, value, caller */
+static volatile LONG g_st_pos;
+
+static void note_state(DWORD kind, DWORD stage, DWORD state, DWORD value, void *ret)
+{
+    LONG i = InterlockedIncrement(&g_st_pos) & 255;
+    g_st_ring[i][0] = kind; g_st_ring[i][1] = stage; g_st_ring[i][2] = state;
+    g_st_ring[i][3] = value; g_st_ring[i][4] = (DWORD)ret;
+}
+
+static int sampler_value_ok(DWORD state, DWORD v)
+{
+    switch (state) {
+    case 1: case 2: case 3: return v >= 1 && v <= 5;          /* ADDRESSU/V/W */
+    case 5: case 6: case 7: return v <= 8;                    /* MAG/MIN/MIPFILTER */
+    case 9: return v < 16;                                    /* MAXMIPLEVEL */
+    case 10: return v <= 16;                                  /* MAXANISOTROPY */
+    case 11: return v <= 1;                                   /* SRGBTEXTURE */
+    case 12: return v < 256;                                  /* ELEMENTINDEX */
+    case 4: case 8: case 13: return 1;                        /* border colour, LOD bias, DMAP offset */
+    default: return 0;                                        /* no such state */
+    }
+}
+
+static HRESULT WINAPI g_SetRenderState(void *d, DWORD st, DWORD v)
+{ note_state(1, 0, st, v, __builtin_return_address(0)); return o_SetRenderState(d, st, v); }
+static HRESULT WINAPI g_SetTextureStageState(void *d, DWORD stage, DWORD st, DWORD v)
+{ note_state(2, stage, st, v, __builtin_return_address(0)); return o_SetTextureStageState(d, stage, st, v); }
+static HRESULT WINAPI g_SetSamplerState(void *d, DWORD stage, DWORD st, DWORD v)
+{
+    void *ret = __builtin_return_address(0);
+    note_state(3, stage, st, v, ret);
+    if (!sampler_value_ok(st, v)) {
+        char who[MAX_PATH + 32];
+        LONG i, n = g_guard_nseen < 64 ? g_guard_nseen : 64;
+        for (i = 0; i < n; i++)
+            if (g_guard_seen[i][0] == 3 && g_guard_seen[i][1] == (DWORD)ret) goto pass;
+        i = InterlockedIncrement(&g_guard_nseen) - 1;
+        if (i < 64) { g_guard_seen[i][0] = 3; g_guard_seen[i][1] = (DWORD)ret; }
+        if (InterlockedIncrement(&g_guard_logs) <= 64) {
+            addr_name((DWORD)ret, who, sizeof who);
+            log_line("D3D GUARD: SetSamplerState stage %lu state %lu value 0x%08lx out of range, from %s",
+                     stage, st, v, who);
+        }
+    }
+pass:
+    return o_SetSamplerState(d, stage, st, v);
+}
+
+static void log_states(const CONTEXT *c)
+{
+    static const char *kinds[] = { "?", "RenderState", "TextureStageState", "SamplerState" };
+    DWORD regs[7] = { c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp };
+    char who[MAX_PATH + 32];
+    LONG last = g_st_pos, k;
+    int r, shown = 0;
+    for (k = 0; k < 256; k++) {           /* calls whose value is in a register */
+        volatile DWORD *e = g_st_ring[(DWORD)(last - k) & 255];
+        if (!e[0] || e[3] < 0x10000) continue;
+        for (r = 0; r < 7; r++)
+            if (e[3] == regs[r] || (e[3] & ~0xF) == (regs[r] & ~0xF)) {
+                addr_name(e[4], who, sizeof who);
+                log_line("  %s stage %lu state %lu = 0x%08lx (in a register at the crash), %ld calls ago, from %s",
+                         kinds[e[0] & 3], e[1], e[2], e[3], (long)k, who);
+                shown++;
+                break;
+            }
+    }
+    for (k = 0; k < 24; k++) {            /* the last calls */
+        volatile DWORD *e = g_st_ring[(DWORD)(last - k) & 255];
+        if (!e[0]) continue;
+        addr_name(e[4], who, sizeof who);
+        log_line("  state call -%ld: %s stage %lu state %lu = 0x%08lx from %s", (long)k, kinds[e[0] & 3], e[1], e[2], e[3], who);
+    }
+    (void)shown;
+}
+
 typedef HRESULT (WINAPI *DrawPrim_t)(void *, DWORD, UINT, UINT);
 typedef HRESULT (WINAPI *DrawIdx_t)(void *, DWORD, INT, UINT, UINT, UINT, UINT);
 typedef HRESULT (WINAPI *DrawPrimUP_t)(void *, DWORD, UINT, const void *, UINT);
@@ -1878,7 +1965,10 @@ static void d3d_guard(void)
     if (!mem_ok(vt, 108 * 4)) return;
     vt_patch(vt, 37, (void *)g_SetRenderTarget, (void **)&o_SetRenderTarget);
     vt_patch(vt, 39, (void *)g_SetDepthStencil, (void **)&o_SetDepthStencil);
+    vt_patch(vt, 57, (void *)g_SetRenderState, (void **)&o_SetRenderState);
     vt_patch(vt, 65, (void *)g_SetTexture, (void **)&o_SetTexture);
+    vt_patch(vt, 67, (void *)g_SetTextureStageState, (void **)&o_SetTextureStageState);
+    vt_patch(vt, 69, (void *)g_SetSamplerState, (void **)&o_SetSamplerState);
     vt_patch(vt, 81, (void *)g_DrawPrimitive, (void **)&o_DrawPrimitive);
     vt_patch(vt, 82, (void *)g_DrawIndexedPrimitive, (void **)&o_DrawIndexedPrimitive);
     vt_patch(vt, 83, (void *)g_DrawPrimitiveUP, (void **)&o_DrawPrimitiveUP);
@@ -1973,6 +2063,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
             log_line("  texture stage %d: %p%s, set from %s", k < 16 ? k : 257 + k - 16, g_bound[k],
                      mem_ok(g_bound[k], 4) ? "" : " (NOT readable)", who);
         }
+        log_states(c);
     }
     log_meshes_near("eax", c->Eax); log_meshes_near("ebx", c->Ebx); log_meshes_near("ecx", c->Ecx);
     log_meshes_near("edx", c->Edx); log_meshes_near("esi", c->Esi); log_meshes_near("edi", c->Edi);
@@ -2046,7 +2137,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 29 - process %s", path);
+    log_line("severed probe 30 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

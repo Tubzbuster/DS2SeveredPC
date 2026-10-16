@@ -106,34 +106,28 @@ and grinder area. Works:
 
 Open, most important first:
 
-1. **Quarry crash** (`bomb_run/quarry_z01`): about 4 s after the 38 MB
-   `quarry_z01` stream finishes loading, inside `d3d9.dll`, during the
-   frame's last full-screen post-processing pass. The game draws it from
-   exe `0x6DF737` → quad `0x6F1300` → flush `0x13D2DC0` →
-   `DrawIndexedPrimitive`.
-   - Every crash reads through the same bogus pointer, `0x15FFCF8B`/`8F`.
-   - Ruled out: heap corruption (probe 26 heap checks clean), texture sizes,
-     the quarry's RCB/BNK (PC copies), the particle-effect templates. The
-     value is not in Severed's data.
-   - Theory: a Direct3D resource (texture?) freed while still bound.
-   - Probe 27 added a Direct3D guard: it checks the `Set*` arguments and
-     the bound textures before each draw, logs `D3D GUARD` lines, unbinds
-     bad ones, and lists bound textures in crash reports. In the user's
-     probe 27 run it never switched on: the level-start and batch
-     signatures were not found at start-up.
-   - Probe 28 retries those signatures and takes the main thread as the
-     game thread. Probe 28's guard still gave up too early (0.19 s), so
-     probe 29 retries it every 2 s. **Waiting for the user's probe 29
-     log.**
-2. **Thumping in the opening scene**, from the end of the RIG call until the
-   scene ends; it stays fixed relative to the camera. It is intermittent: it
-   was absent in the run where the user pressed F9 about 10 s into the
-   intro. F9 makes the probe request all the start sections at once;
-   normally the level streams them in.
-   - Ruled out: corpse physics, the video screen, Gabe's animation bank,
-     the floor collision, the cutscene audio itself.
-   - Theory: a physics body waiting on a section's collision.
-   - **To test:** an intro without F9, then one with F9.
+1. **Quarry crash** (`bomb_run/quarry_z01`): a few seconds after the 38 MB
+   `quarry_z01` stream loads, inside `d3d9.dll`, during the frame's last
+   full-screen pass. The game draws it from exe `0x6DF737` → quad
+   `0x6F1300` → flush `0x13D2DC0` → `DrawIndexedPrimitive`.
+   - Ruled out:
+     - heap corruption (probe 26);
+     - invalid or freed objects: probe 29's guard checked every texture,
+       buffer, shader, declaration and target, and all 8 bound textures
+       were valid at the crash;
+     - texture sizes, the quarry's RCB/BNK, the particle templates;
+     - Severed data containing the value.
+   - `0x15FFCF8F` is in a register in every crash.
+   - Probe 30 records render, texture stage and sampler state calls (a
+     ring printed at the crash, plus calls whose value matches a register)
+     and flags out-of-range sampler values. The sampler values come from
+     per-texture records (exe `0x13D8540`: byte fields +0x24-0x28 → states
+     7, 6, 5, 10, 1-3; dword +0x2C).
+   - **Waiting for the user's probe 30 log.**
+2. **Thumping in the opening scene:** absent in the user's last two runs
+   (one without F9). Possibly fixed by the video audio conversion
+   (FINDINGS 43); not confirmed. Ruled out: the cutscene audio, corpse
+   physics, the video screen, Gabe's animation, the floor collision.
 3. Smaller items in `docs/PROGRESS.md`:
    - stretched slabs in the first view after the terminal;
    - the save station's second use locked up once;

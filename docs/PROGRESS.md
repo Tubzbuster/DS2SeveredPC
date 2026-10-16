@@ -27,11 +27,11 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | thumping during the opening scene (end of the RIG call to the end of the scene) is intermittent: absent in the run where F9 was pressed about 10 s into the intro. F9 makes the probe request all the start sections at once (normally the level streams them in). Not in the cutscene audio. Theory: a physics body waiting on a section's collision. To test: an intro without F9, then one with F9 |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | the thumping in the opening scene was absent in the last two runs (one without F9). Possibly fixed by the video audio conversion (FINDINGS 43); keep listening |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
-| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, 4-5 s after quarry_z01 finished loading, in the frame's last full-screen pass. Probe 26: no heap corruption (heap checks clean, also at the crash). Both crashes read through the same bogus pointer, 0x15FFCF8F, not a value from Severed's data (searched): likely a Direct3D resource freed while still in use. Probe 27 checks every object given to Direct3D and every bound texture before each draw, logs who set a bad one, and unbinds it (may also avoid the crash) |
+| bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | broken | crash at the quarry door, a few seconds after quarry_z01 loads, inside Direct3D during the frame's last full-screen pass. Ruled out: heap corruption (probe 26), invalid or freed textures, buffers, shaders and targets (probe 29's guard checked every one; all 8 bound textures valid at the crash). 0x15FFCF8F is still in a register. Probe 30 records render, texture stage and sampler state calls and flags out-of-range sampler values (they come from per-texture records, exe 0x13D8540) |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | untested | |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | untested | scene `igc_01_05`; end of chapter 1 |
