@@ -931,3 +931,17 @@ equals its field. The re-laid-out meshes kept the old values, so the loader
 pointed the tables back at the old (shorter, zeroed) index data, and the
 index buffer copy read past the end of the mesh (crash at exe+0x1044191).
 The values are now refreshed from the converted fields.
+
+## 36. Audio stream paths on PC
+
+In the first playable test (drill tunnel as Gabe, intro terminal working)
+subtitles showed but no dialogue played. Stream names come from SMB assets
+(`pdlc1_vo_01_01.exa`). The exe (0x713190) opens `audiostreams\%s` +
+`.exa.snu`, and the PC inserts a folder made of characters 4-11 of the
+name (`audiostreams\1_vo_01_\pdlc1_vo_01_01.exa.snu`; the log showed the
+loose-file attempt failing). The 360 keeps the streams flat. Checked against
+the PC archives: 1,990 of the 2,045 base-game stream names (from the SMB
+pairs) hash as `audiostreams\<name[4:12]>\<name>.exa.snu`. The other 55, all
+names of 8 characters, sit flat in `audiostreams\`. Localised streams add the
+language first (`audiostreams\fr\<name[4:12]>\<name>.exa.snu`, 979 hits).
+`snu.pc_path` renames Severed's streams this way in the archive.

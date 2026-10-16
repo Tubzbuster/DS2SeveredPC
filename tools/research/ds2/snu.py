@@ -35,3 +35,21 @@ def convert(x, ffmpeg=None):
     out += hdr
     out += bytes(start - len(out))
     return bytes(out) + body
+
+
+LANGS = {'de', 'es', 'fr', 'it'}
+
+
+def pc_path(rel):
+    """archive path of an audio stream on PC. The 360 keeps them flat
+    (audiostreams\\[lang\\]<name>.exa.snu); the PC engine looks for
+    audiostreams\\[lang\\]<name[4:12]>\\<name>.exa.snu, except for names of 8
+    characters or fewer (checked against all 2,045 base-game stream names in
+    the PC archives)."""
+    parts = rel.replace('/', '\\').split('\\')
+    if parts[0].lower() != 'audiostreams' or not parts[-1].lower().endswith('.exa.snu'):
+        return rel
+    name = parts[-1][:-len('.exa.snu')]
+    if len(name) <= 8:
+        return '\\'.join(parts)
+    return '\\'.join(parts[:-1] + [name[4:12], parts[-1]])

@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'research'))
 
 try:
-    from ds2 import bigarchive, build, eaaudio, simgroup, stfs, streamfile, streamwrite, toc   # noqa: E402
+    from ds2 import bigarchive, build, eaaudio, simgroup, snu, stfs, streamfile, streamwrite, toc   # noqa: E402
 except ImportError:
     raise SystemExit('Run this from the repository\'s tools\\test folder: it needs tools\\research next to it '
                      '(copy the whole repository, not just this file).')
@@ -290,7 +290,7 @@ def main():
             rel = os.path.relpath(p, dst).replace('/', '\\')
             if rel.lower() == 'global_assets\\global_assets_global.str':
                 continue
-            files.append((rel, p))
+            files.append((snu.pc_path(rel), p))
     pc_ga = read_entry(idx, bigarchive.name_hash('global_assets\\global_assets_global.str'))
     ga, swapped, total = patched_global_assets(pc_ga, open(os.path.join(dst, 'global_assets', 'global_assets_global.str'), 'rb').read())
     log('  global_assets_global.str: %d of %d Severed Lua scripts swapped in' % (swapped, total))
