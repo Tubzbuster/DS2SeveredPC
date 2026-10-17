@@ -583,10 +583,10 @@ def main():
         log('Removing the suit-pack suits from Severed\'s stores')
         refresh_simgroups(root, dst, 0xE6CACE4C)       # ItemStoreList (simgroup.STORE_HIDDEN)
         open(os.path.join(work, 'store_suits.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'corpse_nudge.ok')):
-        log('Raising the opening scene\'s corpses off the floor')
-        refresh_simgroups(root, dst, 0x1AADC065)       # DismemberableProp (simgroup.NUDGE_UP)
-        open(os.path.join(work, 'corpse_nudge.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'corpse_test.ok')):
+        log('Moving the opening scene\'s corpses (test: the one by Gabe\'s gun goes below the level)')
+        refresh_simgroups(root, dst, 0x1AADC065)       # DismemberableProp (simgroup.NUDGE)
+        open(os.path.join(work, 'corpse_test.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

@@ -27,7 +27,7 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works, fix pending | the two ragdoll corpses in drill_tunnel_01 (origins at floor height) bounced through the opening scene; raised 12 cm (`simgroup.NUDGE_UP`, step `corpse_nudge.ok`) but the thumping remained, so floor penetration is not the (only) cause; next suspect: the corpse 2.7 m from Gabe's start, next to his gun (GunProxy 0.6 m from it), overlapping Gabe's animated body or the gun. Earlier note: the thumping in the opening scene was absent in the last two runs (one without F9). Possibly fixed by the video audio conversion (FINDINGS 43); keep listening |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works, fix pending | the two ragdoll corpses in drill_tunnel_01 (origins at floor height) bounced through the opening scene; raised 12 cm (`simgroup.NUDGE_UP`, step `corpse_nudge.ok`) but the thumping remained, so floor penetration is not the (only) cause; next suspect: the corpse 2.7 m from Gabe's start, next to his gun (GunProxy 0.6 m from it), overlapping Gabe's animated body or the gun. Test build (step `corpse_test.ok`): that corpse moved 200 m below the level (`simgroup.NUDGE`). Earlier note: the thumping in the opening scene was absent in the last two runs (one without F9). Possibly fixed by the video audio conversion (FINDINGS 43); keep listening |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |

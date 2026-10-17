@@ -67,13 +67,16 @@ STORE_HIDDEN = {
     (0x31CBB1C6, 0xD0F37D3D),   # PDLC Bloody Suit
 }
 
-# Objects whose placement is raised (metres, +Y up) so their ragdolls start
-# above the floor: the two corpses in drill_tunnel_01, posed with their
-# origins at floor height, kept bouncing (audibly) through the opening scene
-# on PC and only settled once the player had control.
-NUDGE_UP = {
-    (0x4FCB8B8A, 0x8DAB82D2, 0x4952414D, 0x4C4C454E): 0.12,   # corpse by the PowerUp
-    (0x4FCB9105, 0x91CED0FE, 0x4952414D, 0x4C4C454E): 0.12,   # corpse by Gabe's gun
+# Objects moved (metres, +Y up) by the converter. The two corpses in
+# drill_tunnel_01 are posed with their origins at floor height; something
+# kept one bouncing (audibly) through the opening scene on PC until the
+# player had control. Raising both 12 cm did not stop it. Test build: the
+# corpse by Gabe's gun (0.6 m from it, 2.7 m from his spot in the scene) is
+# moved 200 m below the level, out of the way, to find out whether it is
+# the one.
+NUDGE = {
+    (0x4FCB8B8A, 0x8DAB82D2, 0x4952414D, 0x4C4C454E): (0.0, 0.12, 0.0),     # corpse by the PowerUp
+    (0x4FCB9105, 0x91CED0FE, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),   # corpse by Gabe's gun (test)
 }
 
 
@@ -130,14 +133,14 @@ def _record(out, x, base, length, cls, stats):
 
 def _nudge(out, x, oC, count, stats):
     """object records (0x44 bytes: GUID at +12, matrix offset at +48;
-    matrices are 16 floats, translation at +48): raise NUDGE_UP objects"""
+    matrices are 16 floats, translation at +48): move NUDGE objects"""
     for i in range(count):
         e = oC + 0x44 * i
-        dy = NUDGE_UP.get(struct.unpack_from('>4I', x, e + 12))
+        d = NUDGE.get(struct.unpack_from('>4I', x, e + 12))
         m = struct.unpack_from('>I', x, e + 48)[0]
-        if dy and m and m + 64 <= len(x):
-            y = struct.unpack_from('>f', x, m + 52)[0] + dy
-            struct.pack_into('<f', out, m + 52, y)
+        if d and m and m + 64 <= len(x):
+            t = struct.unpack_from('>3f', x, m + 48)
+            struct.pack_into('<3f', out, m + 48, *(a + b for a, b in zip(t, d)))
             stats['nudged'] = stats.get('nudged', 0) + 1
 
 
