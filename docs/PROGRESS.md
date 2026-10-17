@@ -46,21 +46,24 @@ entering the decompression room.
 **Open bugs** (strike out any that are no longer bugs):
 - crash entering the decompression room (audio thread, sample decoder)
 - black shape in the zero-oxygen hallway (ruled out: the depth-of-field
-  effect, which is the PC game's own; the floating debris meshes, the PC
-  game's own; the hallway's glass, which converts exactly like the base
-  game's)
+  effect's file, which is the PC game's own; the floating debris meshes,
+  the PC game's own; the hallway's glass, which converts exactly like the
+  base game's). Next: F7 tests turning the hallway's effects off one at a
+  time (`msg_vfx_airless_dof_stop`, `lt_airless_hall_post_fx_off`,
+  `msg_vfx_airless_stop`)
 - Gabe does not drop to the floor after the hanging fight (plays the
-  get-up inside the rock overhang)
+  get-up inside the rock overhang). Stomping during the hang no longer
+  misbehaves on its own; this position issue is what remains
 - thump in the opening scene
 - the held weapon floats a little off Gabe's hands
 - saves show as "Chapter 1" with chapter 1's picture
+- save station lock-up: happens when the terminal is used again during
+  its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)
 - frame drops near some lights in the drill tunnel
-- stretched slabs in front of the camera after the intro terminal (old
-  report: still there?)
-- second use of a save station locked up once (old report: still there?)
-- alt-tab hang (probe 35 turned the heap checks off: still there?)
-- stomp during the hang puts Gabe in the ceiling (same cause as the drop?)
+
+**No longer bugs** (confirmed by the user): the stretched slabs after the
+intro terminal, the alt-tab hang.
 
 ## Start-up
 
@@ -125,12 +128,12 @@ entering the decompression room.
 | Weapon in Gabe's hands | wrong | the held weapon floats a little off his hands (screenshot at the docking station). To investigate: Gabe's weapon attachment offsets |
 | Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
 | Crash in the quarry | works | fixed by the LUT conversion; probe 31 stays as a safety net |
-| Save stations | partial | saving and loading a save work; the second use of a save station locked up once (recheck); saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). On console the load menu shows "Severed, chapter N" with its own picture (Gabe in a corridor, from footage); Severed's files hold only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`), so that picture is probably in a front-end file still to find |
+| Save stations | partial | saving and loading a save work; using the terminal again during its closing animation locks it up; saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). On console the load menu shows "Severed, chapter N" with its own picture (Gabe in a corridor, from footage); Severed's files hold only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`), so that picture is probably in a front-end file still to find |
 | Stores, benches | works | confirmed: no suits in the store on a new save (saves made before the rebuild keep them). Severed's store lists held Gabe versions of the suit packs (Advanced, Quick Draw, EarthGov, Brushed Aluminium, Bloody, ...); choosing one crashed the game (a suit model part not loaded). The converter now leaves those 10 suits out of the stores (`simgroup.STORE_HIDDEN`, step `store_suits.ok`); Gabe's starting suit stays |
 | Performance near some lights | partial | frame drops in the drill tunnel |
 | Overall brightness | works | confirmed by the user after the LUT fix: the darkness was only the quarry's colour grading (FINDINGS 45). Lighting data audit in FINDINGS 44 |
 | Gabe's pain sounds | works | Isaac's grunts and damage lines, as on console (the DLC reuses them) |
-| First view after the terminal | broken | stretched slabs in front of the camera (screenshot); a mesh still converted wrongly |
+| First view after the terminal | works | the stretched slabs are gone (confirmed) |
 | Menu text (localised episode name) | partial | English placeholder via the probe |
 
 ## Test tools
