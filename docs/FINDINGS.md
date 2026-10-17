@@ -1462,7 +1462,10 @@ stays where `ses_player_02_02_initial` left him, above the ship.
 checkpoint sets no chapter, so the chapter from the save is still in force.
 Saves made with the chapter 16 build have to be set back to chapter 1
 (F7: `player_set_chapter_1`) or replaced. A separate chapter for Severed's
-save pictures is out (the hook in PROGRESS, To do for a release, instead).
+save pictures is out (the hook in PROGRESS, To do for a release, instead). Confirmed: after F7 sent
+`player_set_chapter_1` on that save, Gabe landed normally. The converter no
+longer touches PlayerSetChapter at all, and the save picture streams
+(`saveicons.py`) are left out of the build.
 
 ## 53. The airless hallway: what is converted there
 

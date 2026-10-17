@@ -1,5 +1,9 @@
 """Save pictures and titles for Severed's saves (PC load menu).
 
+Not used at present: it relied on Severed's chapters being numbered 16,
+which broke the gunship landing (FINDINGS 52). Kept for the release hook,
+which will ask for Severed's picture by its own key instead.
+
 The PC load menu picks a save's picture and title by its chapter number
 only (exe 0xBAE170): the key "ch%02d" (sdbm hash) is looked up in the
 UIMenuCheckpointIcons table (global_assets SimGroup) for a picture VFX,

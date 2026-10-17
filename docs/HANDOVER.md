@@ -37,6 +37,9 @@ and videos.
 - **Never commit probe logs:** they contain the user's Windows username.
 - **Never modify `deadspace2.exe` on disk**, and never bypass the DRM (Steam +
   Solidshield). The probe patches code in memory only.
+- **Keep the base game's chapter numbers:** Severed's saves stay chapters 1
+  and 2. Renumbering them to 16 broke the gunship landing (FINDINGS 52).
+  Anything Severed-specific in the save menu is done by the release hook.
 - **Probe memory reads are read-only diagnostics:** addresses and values are
   logged, no code bytes are dumped.
 - **The user's unwrapped retail exe** is for read-only static analysis only:

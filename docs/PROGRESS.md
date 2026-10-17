@@ -49,12 +49,10 @@ hall, the psych arrival hall and the landing bay finale.
    bar may have been probe 43's hidden shader).
 
 **Reported in the replay (new game):**
-- Gabe floats above the gunship after the docking transition, unable to
-  move: caused by the chapter 16 numbering (FINDINGS 52, update). The
-  build is back to chapters 1/2, but saves made with the chapter 16 build
-  still carry chapter 16. Test: load the Dock save, send
-  `player_set_chapter_1` with F7 (`severed_send.txt`), then ride the
-  gunship; or use a save made before the chapter 16 build.
+- ~~Gabe floats above the gunship after the docking transition~~ fixed:
+  caused by the chapter 16 numbering (FINDINGS 52). Chapters stay 1 and 2
+  for good. Saves made with the chapter 16 build need `player_set_chapter_1`
+  sent once with F7 (`severed_send.txt`), confirmed working.
 - hanging fight drop: the hanging state now ends 1 s before the drop
   sequence starts (`hang_drop2.ok`): Gabe should fall to the grate as the
   fight ends, then get up.

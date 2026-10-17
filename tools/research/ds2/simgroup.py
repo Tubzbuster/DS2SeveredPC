@@ -109,15 +109,11 @@ def _delay(out, x, base, oh, stats):
         struct.pack_into('<f', out, base + off, new)
         stats['delays'] = stats.get('delays', 0) + 1
 
-# Chapter numbers (PlayerSetChapter): the PC load menu picks a save's
-# picture and title by chapter number alone, so both of Severed's chapters
-# become 16, which saveicons.py gives Severed's own picture and title. Base
-# chapter 16 is defined but unused; 17 would be new, and PlayerSettings has
-# only 16 per-chapter log lists, so it is not used.
-# Off again: chapter 2 is set as the gunship lands, where Gabe then floated
-# above the ship unable to move (chapter 16 may mean more to the game than
-# the save label). Saves show the base chapter 1/2 pictures meanwhile.
-CHAPTERS = {}
+# Chapter numbers (PlayerSetChapter) are never changed: Severed keeps
+# chapters 1 and 2, as on the console. Renumbering them (to 16, for the
+# save pictures) stopped Gabe's landing sequence after the gunship scene,
+# even from a save made under it (FINDINGS 52). Severed's own save pictures
+# and titles are for the release hook instead (PROGRESS, To do for a release).
 
 # Comfort: Severed's strobing lights. AnimateLight (exe 0xBA5467-0xBA55B6)
 # sets a light to IntensityJitterMin + (IntensityJitter - Min) * v, picking a
@@ -332,11 +328,6 @@ def convert(x, stats=None):
             _delay(out, x, B + ro, oh, stats)
         if cls is not None and cls['name'] == 'AnimateLight':
             _calm_light(out, x, B + ro, cls, stats)
-        if cls is not None and cls['name'] == 'PlayerSetChapter':
-            c = struct.unpack_from('>I', x, B + ro + 12)[0]
-            if c in CHAPTERS:
-                struct.pack_into('<I', out, B + ro + 12, CHAPTERS[c])
-                stats['chapters'] = stats.get('chapters', 0) + 1
     # group hashes: sdbm over the members' class-name hashes, PC byte order
     if o10:
         for i in range(n18):

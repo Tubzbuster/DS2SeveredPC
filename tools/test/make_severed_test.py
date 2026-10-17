@@ -767,7 +767,7 @@ def main():
         open(os.path.join(work, 'hall_glass_back.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'chapters_restored.ok')):
         log('Gunship landing test: chapters 1 and 2 as on the console')
-        refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS now empty)
+        refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (chapters 1 and 2 again)
         refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET now empty)
         open(os.path.join(work, 'chapters_restored.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'hang_drop2.ok')):
@@ -793,7 +793,8 @@ def main():
     ga, swapped, total = patched_global_assets(pc_ga, open(os.path.join(dst, 'global_assets', 'global_assets_global.str'), 'rb').read())
     log('  global_assets_global.str: %d of %d Severed Lua scripts swapped in' % (swapped, total))
     files.append(('global_assets\\global_assets_global.str', ga))
-    save_icon_files(idx, root, files)
+    # save_icon_files(idx, root, files): off with the chapter 16 numbering; the
+    # base streams it patched are now left as they are (FINDINGS 52)
     # Experiment (probe 12): the level's SimGroup, which holds Severed's
     # StreamSet and checkpoint objects, also as a stream sets file, requested
     # in stream-sets mode by the probe like the base chapters' ones.
