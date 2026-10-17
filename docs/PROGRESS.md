@@ -193,6 +193,13 @@ intro terminal, the alt-tab hang, the gunship hull textures.
 
   Each box has a Browse button. The app then runs the conversion that
   `Make-SeveredTest.bat` does now.
+
+  No Python install is needed: the converter uses only Python's standard
+  library (plus our `xasenc.dll` and ffmpeg), so the app is the converter
+  packed with its own Python by PyInstaller, with a tkinter window. Build
+  it as a folder (`--onedir`) zipped for download rather than a single
+  self-unpacking exe, which antivirus tools flag more often. Built on a
+  GitHub Actions Windows runner from the repo code alone (no game files).
 - **Check the user's add-on before converting.** People's copies can have
   any file name, so the app identifies the add-on by its contents, not its
   name:
