@@ -65,7 +65,7 @@ and is corrected as we play.
 | RIG health spine | works | since the PC game's own RIG bar meshes are used |
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle upgrades | fix pending | probe 34 sets the 10 nodes in the PC UpgradeManager (`pulse rifle upgrades:` log lines); RIG upgrades not looked at yet |
-| Twitchers | broken | one Twitcher alone keeps Gabe in his flinch: each slash lands before the flinch ends (Normal and Casual; no grab). Their `Zombie` settings differ from the slashers' in an authored way (pain interrupt delays 4/2 s, dodge 0.9, turn speeds doubled, 8 damage per hit), nothing that looks like a conversion error. Next: A/B against the base game's own Twitchers (Government Sector) on the same PC, and a 60 fps cap test |
+| Twitchers | broken | one Twitcher alone keeps Gabe in his flinch: each slash lands before the flinch ends (Normal and Casual; no grab). Their `Zombie` settings differ from the slashers' in an authored way (pain interrupt delays 4/2 s, dodge 0.9, turn speeds doubled, 8 damage per hit), nothing that looks like a conversion error. Next: A/B against the base game's own Twitchers (Government Sector) on the same PC, and a 60 fps cap test (the user plays at 75 fps with external V-Sync) |
 | Scripted hang after the cargo lift | partial | Gabe hangs upside down from a set piece; stomp is accepted there and moves him into the ceiling |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
