@@ -166,7 +166,22 @@ def bnk(x):
         for f, v in info['ptrs'].items():
             if f >= 4 and x[f - 4] == 0x08 and x[f - 3] == 0x01 and v + 4 <= info['R']:
                 y[v:v + 4] = x[v:v + 4][::-1]
-        y = bytes(y)
+        y = bytes(_bnk_param_types(x, y))
+    return y
+
+
+def _bnk_param_types(x, y):
+    """{u32 type, u32 value} parameter records (type 1 a float such as
+    +-1.0, type 2 an id): the templates sometimes leave the type word raw
+    while swapping its value. A type 1 or 2 left raw right before a value
+    that was swapped is swapped too (54 such words in the 147 PC/360 pairs,
+    all fixed, none broken)."""
+    y = bytearray(y)
+    for i in range(0, len(x) - 7, 4):
+        a, nxt = x[i:i + 4], x[i + 4:i + 8]
+        if a in (b'\0\0\0\x01', b'\0\0\0\x02') and y[i:i + 4] == a and nxt != nxt[::-1] \
+                and y[i + 4:i + 8] == nxt[::-1]:
+            y[i:i + 4] = a[::-1]
     return y
 
 

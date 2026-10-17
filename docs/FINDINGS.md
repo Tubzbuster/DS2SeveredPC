@@ -1443,3 +1443,22 @@ Found while testing: `build.convert_stream` reused `w` (the stream writer)
 for the mesh's widened UV streams, so a first conversion of any stream with
 a mesh failed; existing builds were converted before that change.
 
+## 54. Gabe's Pulse Rifle grip: what was checked
+
+- The rifle's own assets (mesh, volatile, HKX, MetaModels, material,
+  textures, RCB, `pulsebasicmotion.bnk`) are byte-identical to the base
+  game's and the build uses the PC copies; the rifle MetaModel has no grip
+  offset. Gabe's body, skeleton and arm meshes are PC copies too.
+- The one converted, Gabe-only bank on his suit, `pc_nolegs_patrol.bnk`,
+  is Severed's `pc_nolegs.bnk` (all Severed suits) plus helmet script
+  states. Neither exists in the base game on either platform, so there is
+  no PC copy and no pair to check against.
+- BNK converter check against the 147 PC/360 pairs: 22 files differed
+  (89 words). Most were `{u32 type, u32 value}` parameter records whose
+  type word (1 or 2) stayed raw while the value was swapped; now fixed
+  (`convert._bnk_param_types`: 54 fixed, none broken; 15 files / 30 words
+  left). No Severed bank contains that pattern, and the remaining kind
+  (round floats left raw) occurs 5 times in Gabe's bank, as in base banks
+  where such words are right 7,800 times in 7,811. So no converted data
+  explains the grip yet.
+
