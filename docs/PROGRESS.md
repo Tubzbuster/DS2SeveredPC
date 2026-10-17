@@ -37,18 +37,19 @@ entering the decompression room.
    the drop's end; the probe now names it.
 2. Save pictures and titles: make new saves in chapter 1 and chapter 2
    (`chapter_numbers.ok`); older saves keep their old labels.
-3. Decompression room: enter it again with probe 39 and send the log if it
-   crashes.
+3. Decompression room: fix pushed (`loop_split.ok`): the oil drip loop
+   sound crashed the audio decoder.
 4. Zero-oxygen hallway: F7 tests turning the hallway's effects off one at
    a time (below).
 
 **Open bugs** (strike out any that are no longer bugs):
-- crash entering the decompression room (audio thread, sample decoder)
+- crash entering the decompression room (audio thread, sample decoder):
+  fix pushed, to test
 - black shape in the zero-oxygen hallway (ruled out: the depth-of-field
   effect's file, which is the PC game's own; the floating debris meshes,
   the PC game's own; the hallway's glass, which converts exactly like the
-  base game's). Next: F7 tests turning the hallway's effects off one at a
-  time (`msg_vfx_airless_dof_stop`, `lt_airless_hall_post_fx_off`,
+  base game's). `msg_vfx_airless_dof_stop` changed nothing; the broken
+  windows there also show flat beige. Next F7 tests: ( `lt_airless_hall_post_fx_off`,
   `msg_vfx_airless_stop`)
 - Gabe does not drop to the floor after the hanging fight (plays the
   get-up inside the rock overhang): fix pushed, to test. The F7 test

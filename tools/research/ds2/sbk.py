@@ -16,7 +16,8 @@ Layout (u32 words; 360 big-endian, PC little-endian):
            (identical bytes on both platforms)
   data     'sdat', count, count x {index, 0x0313BABE, offset, 0xFEEDFEED},
            then the samples back to back: EAAudioCore header + one block
-           (flag 0). 360 codec 3 (EA-XMA); written as codec 4 (EA-XAS),
+           (flag 0; two, split at the loop start, when a loop starts
+           mid-sample). 360 codec 3 (EA-XMA); written as codec 4 (EA-XAS),
            which the PC engine decodes for its streams.
 
 Checked against 80 PC/360 bank pairs: metadata identical apart from the
@@ -98,7 +99,15 @@ def convert_sample(s, ffmpeg=None):
     if h['codec'] != A.CODEC_EAXMA:
         raise ValueError('codec %d' % h['codec'])
     pcm = A.decode_eaxma(A.blocks(s, h['header_size'], len(s)), h['channels'], h['rate'], h['samples'], ffmpeg)
-    body = A.xas_blocks(pcm, h['channels'], single=True)
+    ls = h.get('loop_start') if h['loop'] else None
+    if ls and 0 < ls < h['samples']:
+        # a loop from mid-sample: the PC decoder restarts at the block that
+        # begins at the loop start (none in a single block: null read,
+        # exe 0x515F0F, the decompression room crash), so split it there
+        n = ls * h['channels']
+        body = A.xas_blocks(pcm[:n], h['channels'], single=True) + A.xas_blocks(pcm[n:], h['channels'], single=True)
+    else:
+        body = A.xas_blocks(pcm, h['channels'], single=True)
     hdr = A.make_header(A.CODEC_XAS1, h['channels'], h['rate'], h['samples'], type_=0,
                         loop_start=h.get('loop_start') if h['loop'] else None, version=h['version'])
     return hdr + body

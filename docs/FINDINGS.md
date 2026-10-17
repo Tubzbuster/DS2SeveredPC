@@ -1363,6 +1363,16 @@ are EA-XMA, type 0 (RAM); we convert them to single-block XAS. The PC's own
 banks are all EALayer3, so XAS bank playback is untested territory. Probe
 39 logs the voice and the sample header when this crash happens.
 
+Update (probe 39 dump): the crashing voice plays
+`prop_ds_oil_drips_lp.sbk` (decompression_z01), a looping sample (381,561
+samples at 20 kHz) whose loop starts at sample 15,288, the voice's
+position at the crash. The decoder restarts a loop at the block that begins
+at the loop start; our single-block sample has none, so it read a null
+block pointer. Only 6 of Severed's 5,734 samples (3 banks: this one,
+`hatch_standby.sbk`, `audio_elevator_travel_merge.sbk`) loop from a
+mid-point (171 loop from 0); these are now written as two blocks split at
+the loop start (`sbk.convert_sample`, step `loop_split.ok`).
+
 ## 51. The gunship hull: built from the PC game's own mesh
 
 Severed's gunship hull `exterior_black_win` (gunship_hi_02) converted with

@@ -726,6 +726,14 @@ def main():
         refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET)
         refresh_simgroups(root, dst, 0x31714328)       # ScriptableProp (simgroup.NUDGE emptied)
         open(os.path.join(work, 'hang_release.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'loop_split.ok')):
+        log('Re-converting the 3 sound banks whose loops start mid-sample (decompression room crash)')
+        from ds2 import convert, pcassets
+        own = pcassets.load()
+        loops = {'prop_ds_oil_drips_lp.sbk', 'hatch_standby.sbk', 'audio_elevator_travel_merge.sbk'}
+        refresh_assets(root, dst, 'SBK', convert.CONVERTERS['SBK'],
+                       keep=lambda a: a.name.lower() not in loops or pcassets.key(a.type, a.name, a.ids) in own)
+        open(os.path.join(work, 'loop_split.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'chapter_numbers.ok')):
         log('Save pictures: Severed\'s chapters become 16 and 17 (their own pictures and titles)')
         refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS)
