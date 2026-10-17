@@ -65,7 +65,7 @@ and is corrected as we play.
 | RIG health spine | works | since the PC game's own RIG bar meshes are used |
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle upgrades | fix pending | probe 34 sets the 10 nodes in the PC UpgradeManager (`pulse rifle upgrades:` log lines); RIG upgrades not looked at yet |
-| Twitchers | partial | sometimes repeat one attack and stunlock Gabe. Their animations, rig, collision and AI are the PC game's own; our template data (corpse/dismemberment) looks sane. To check: the difficulty in effect (Severed has none of its own), and a clip |
+| Twitchers | partial | sometimes repeat one attack and stunlock Gabe. Their animations, rig, collision and AI are the PC game's own; our template data (corpse/dismemberment) looks sane. The difficulty is chosen when starting Severed, as on console (the one after Zealot, Hardcore, is greyed out). To check: which difficulty the run used, and a clip |
 | Scripted hang after the cargo lift | partial | Gabe hangs upside down from a set piece; stomp is accepted there and moves him into the ceiling |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |

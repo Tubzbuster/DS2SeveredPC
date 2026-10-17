@@ -162,8 +162,8 @@ Not yet played: the mining camp onwards, and all of chapter 2.
    - probe 34 sets Gabe's 10 Pulse Rifle nodes in the PC UpgradeManager;
    - the black door: lightmap materials need 20-byte UV streams (FINDINGS
      46, `ds2/uvwide.py`, step `uv_streams.ok`; 9 meshes incl. Gabe's helmet).
-   Open: Twitcher stunlock (AI and animations are PC-own; asked the user for
-   the difficulty and a clip); stomp during the hang after the cargo lift
+   Open: Twitcher stunlock (AI and animations are PC-own; the difficulty menu works as on
+   console; asked which difficulty the run used, and for a clip); stomp during the hang after the cargo lift
    puts Gabe in the ceiling; the bouncing body in the opening (corpses in
    drill_tunnel_01 use PC-own models and ragdolls; only placement is ours);
    the save picture (console shows "Severed, chapter N" with its own image).
