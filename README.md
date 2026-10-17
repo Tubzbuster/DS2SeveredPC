@@ -22,7 +22,7 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed (Xbox 360 add-on, your own copy)
   Platform ..... Windows (PC)
-  Version ...... 0.3.0 (pre-alpha, test builds only)
+  Version ...... 0.4.0 (pre-alpha, test builds only)
   Author ....... tubzbuster & DS2SeveredPC contributors
   Updated ...... 2026-10-17
 ================================================================================
@@ -53,6 +53,26 @@ Use Ctrl+F with the codes below to jump to a section.
 [SV00]                         VERSION HISTORY
 ================================================================================
 ```
+
+**v0.4.0 (2026-10-17)**: About 75% of chapter 2 plays (11 of its 15
+checkpoints). From the crash landing through the decompression room, the
+gift shop, the morgue, the hospital lobby, the upper corridors, the surgery
+ward, the recreation rooms and the observation deck, the psych ward scene
+with Lexine, the Oracle and the captain, up to the saferoom by the chase
+hall. Still to play: the security room, the chase hall and the landing bay
+finale. Fixes in this round:
+- the crash entering the decompression room (looping sounds that start
+  mid-sample are split for the PC's decoder)
+- the gift shop's strobing lights calmed (comfort change)
+- the converter writes its window text to `tools\test\make_severed_test.log`
+
+Known problems: black surfaces and stretched black shapes in the hospital
+(lightmap-shader materials drawn black; found in the zero-oxygen hallway,
+fix in progress), flat beige windows in that hallway, sideways reflections
+in the clinic overlook room, Gabe floating above the gunship after the
+docking transition (fix pending a test), Gabe does not drop to the floor
+after the hanging fight (fix pending a test), the Pulse Rifle sits oddly in
+Gabe's hands (future release). See `docs/PROGRESS.md`.
 
 **v0.3.0 (2026-10-17)**: All of chapter 1 plays, and chapter 2 starts.
 From the mining camp through the elevator fall and the hanging fight, the

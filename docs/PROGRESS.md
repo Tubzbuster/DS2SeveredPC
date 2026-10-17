@@ -14,9 +14,14 @@ and is corrected as we play.
 
 ## Summary (2026-10-17)
 
-**Where we are:** all of chapter 1 plays, and chapter 2 has started. Last
-reached: the zero-oxygen hallway after the Tormentor fight, then a crash on
-entering the decompression room.
+**Where we are:** all of chapter 1 plays, and about three quarters of
+chapter 2 (11 of its 15 checkpoints). Furthest reached (new game, probe 46
+log): through the hospital (morgue, lobby, upper corridors, surgery ward,
+recreation and observation) and the `igc_02_01` scene in the psych ward's
+development room with Lexine, the Oracle and the captain, then the psych
+ward halls to the chase hall saferoom (`chase_hall_saferoom_z01`), where the
+session ended at the menu. Not reached yet: the security room, the chase
+hall, the psych arrival hall and the landing bay finale.
 
 **Fixed so far** (confirmed in game unless marked):
 - Severed in Episode Select; intro terminal, RIG call scene, hand-over
@@ -31,20 +36,16 @@ entering the decompression room.
 - crash at the docking station (gunship vertex buffer index)
 - black screen after the gunship scene (chapter 2 opening)
 - gunship hull textures (built from the PC game's own mesh)
+- crash entering the decompression room (looping sounds split)
+- the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Hanging fight drop with probe 40: the release still had a listener at
-   the drop's end; the probe now names it.
-2. Save pictures: start Severed fresh from Episode Select and save: the
-   picture should now be Severed's (the title stays "Chapter 16": the
-   string tables can't be replaced from the test archive yet).
-3. Decompression room: fixed (`loop_split.ok`).
-4. Zero-oxygen hallway with probe 46: as before (F6 until the level
+1. Hanging fight drop (`hang_drop2.ok`), see below.
+2. Gunship landing after the docking transition (`chapters_restored.ok`).
+3. Zero-oxygen hallway with probe 46: as before (F6 until the level
    vanishes, F3 through the pieces, F5 when the box goes), then wait 5
    seconds before F4: F5 now also logs every draw of that piece.
-5. Gift shop: lights back to the second version (0.85-1.15x every 0.5 s,
-   `calm_lights5.ok`); the livelier third version flashed too much.
-6. Bed room after the elevator: check again with F4 pressed (the black
+4. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
 
 **Reported in the replay (new game):**
@@ -114,22 +115,24 @@ intro terminal, the alt-tab hang, the gunship hull textures.
 | docking_station: docking_airlock_01, docking_station_z01/z02 | works, fix pending | the gunship fight, destroying it and boarding work (FINDINGS 47). The smeared hull textures: Severed's `exterior_black_win` is the base game's gunship hull with another window material; it is now built from the PC game's own `exterior.dae` with that material (`pcassets.DERIVED`, step `gunship_hull.ok`, FINDINGS 51) |
 | chapter 1 -> 2 transition (emergency_arrival) | works | confirmed: the crash-landing scene, its dialogue and the Chapter 2 title play (FINDINGS 49). A side-by-side screenshot with console footage at the psych ward line matches |
 | emergency / psych ward: Tormentor fight, airless hallway | works, issues | the Tormentor boss fight works; a flat black shape floats in the zero-oxygen hallway (Gabe walks through it). The hallway turns on a depth-of-field effect (`msg_vfx_airless_dof_start`), but that effect, the floating debris meshes and all the hallway's materials are the PC game's own, and its glass converts exactly like the base game's: cause still open |
-| decompression room | crash | crashed on entering (doors open, light supports destroyed): audio thread, exe 0x515F0F, the sample decoder (0x515EE0) read a block through a null pointer (voice +0x34). Severed's sound banks are the only XAS bank samples the PC plays (its own banks are all EALayer3). Probe 39 dumps the voice and the sample header at this crash |
+| decompression room | works | confirmed passed in two runs. Was: crashed on entering (doors open, light supports destroyed): audio thread, exe 0x515F0F, the sample decoder (0x515EE0) read a block through a null pointer (voice +0x34). Severed's sound banks are the only XAS bank samples the PC plays (its own banks are all EALayer3). Probe 39 dumps the voice and the sample header at this crash |
 
 ## Chapter 2: the hospital
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| emergency: emergency_arrival_z01, emergency_arrival_hall_z01, storage_z01, hacking_room_z01 | untested | scene `ses_player_02_01` |
-| emergency: decompression_z01, decom_hall_z01, airless_hall_z01, vista_sprawl_z01/z03 | untested | |
-| trauma: triage_z01, triage_hall_z01, morgue_z01, morgue_hall_z01-z03, elevator_morgue_z01 | untested | |
-| recreation: recreation_z01/z02, recreation_hall_z01-z03, bathroom_z01/z02, elevator_rec_z01/z02, elevator_recreation_hall_z01 | untested | |
-| upper_corridors: patient_z01/z02, patient_hall_z02-z05, store_room_z01, surgery_lobby_z01 | untested | |
-| surgery_ward: surgery_z01, surgery_hall_z01, surgery_observation_z01, surgery_pit_z01, elev_surg_pit_z01, decontamination_z01 | untested | |
-| observation: observation_z01, observation_hall_z01, psycho_development_z01, psycho_dev_hall_z01 | untested | scene `igc_02_01` |
-| chase_hall: chase_hall_z01/z02, chase_hall_saferoom_z01 | untested | |
-| psych_ward: psych_arrival_hall_z01, psych_hall_z01/z03-z05, isaacs_cell_z01, vista_sprawl_psych_z01/z02, landing_bay_psycho_z01 | untested | finale (`igc_02_03` onwards) |
-| Also in the DLC: entry_hall, hospital_entrance, security, pre_moonquake | untested | where these fit is not known yet |
+| emergency: emergency_arrival_z01, emergency_arrival_hall_z01, storage_z01, hacking_room_z01 | works | crash landing, Tormentor fight |
+| emergency: decompression_z01, decom_hall_z01, airless_hall_z01, vista_sprawl_z01/z03 | partial | decompression crash fixed; gift shop lights calmed (confirmed); the zero-oxygen hallway's black box is its scratched-metal wall panels drawn black, and its windows are flat beige (FINDINGS 53) |
+| trauma: elevator_morgue_z01, morgue_z01, morgue_hall_z01-z03, triage_z01, triage_hall_z01 | works, issues | passed; black stretched shapes in several rooms (likely the same black lightmap-shader surfaces) |
+| hospital_entrance: lower_lobby_z01/z02, upper_lobby_z01/z02, reception_z01 | works, issues | passed; black shapes as above |
+| upper_corridors: patient_hall_z02-z05, patient_z01/z02, store_room_z01, surgery_lobby_z01 | works, issues | passed; black shapes as above |
+| surgery_ward: decontamination_z01, surgery_z01, surgery_hall_z01, surgery_observation_z01, surgery_pit_z01, elev_surg_pit_z01 | works, issues | passed; the reflections in the clinic overlook room are sideways |
+| recreation: elevator_recreation_hall, recreation_hall_z01-z03, recreation_z01/z02, elevator_rec_z01/z02 | works | passed |
+| observation: observation_z01, observation_hall_z01, psycho_development_z01 | works | passed; scene `igc_02_01` (Lexine, the Oracle, the captain) plays |
+| psych_ward: psych_hall_z01/z03/z04, chase_hall_saferoom_z01 | works | reached the saferoom (furthest point so far) |
+| security: security_z01, security_hall_z01; psych_ward: isaacs_cell_z01 | untested | streamed in, not yet played |
+| chase_hall: chase_hall_z01/z02; psych_ward: psych_arrival_hall_z01, landing_bay_psycho_z01/z02 | untested | the finale (final battle, final hack, `igc_02_03` onwards) |
+| Also in the DLC: entry_hall, pre_moonquake | works | played in chapter 1 (mining camp to the docking station) |
 | End of the DLC (credits) | untested | |
 
 ## Systems
