@@ -1667,9 +1667,22 @@ static void upgrade_rifle(void)
              set, had, missing, tree, n);
 }
 
+/* probe 41: with severed_noupgrade.on in the game folder the nodes are
+   left alone (test: is the Pulse Rifle's odd grip from this?) */
+static int upgrade_disabled(void)
+{
+    char path[MAX_PATH], *slash;
+    GetModuleFileNameA(NULL, path, sizeof path);
+    slash = strrchr(path, '\\');
+    if (!slash) return 0;
+    lstrcpyA(slash + 1, "severed_noupgrade.on");
+    return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+}
+
 static void upgrade_schedule(const char *why)
 {
     if (!g_upgmgr) return;
+    if (upgrade_disabled()) { log_line("pulse rifle upgrades: skipped (%s; severed_noupgrade.on)", why); return; }
     g_upg_due = GetTickCount() + 3000;
     g_upg_deadline = g_upg_due + 60000;
     log_line("pulse rifle upgrades: scheduled (%s)", why);
@@ -2556,7 +2569,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 40 - process %s", path);
+    log_line("severed probe 41 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
