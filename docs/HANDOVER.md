@@ -28,8 +28,8 @@ and videos.
   `claude/fervent-lovelace-80fw4s`. Commit and push there. No pull requests
   unless asked. The repo is public.
 - **Commit messages** end with:
-  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` and
-  (no conversation link).
+  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Never put a
+  link to the Claude conversation in commits or files (the repo is public).
   No model names in code or commits.
 - **Never commit EA game files** (archives, streams, audio, video, textures,
   exe). Learned models and tables hold byte-order rules, names and hashes
