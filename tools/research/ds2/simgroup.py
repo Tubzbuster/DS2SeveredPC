@@ -75,7 +75,11 @@ STORE_HIDDEN = {
 # moved 200 m below the level, out of the way, to find out whether it is
 # the one.
 NUDGE = {
-    (0x4FCB92A0, 0x039675EE, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),   # Gabe's dropped Flamethrower (GunProxy, test)
+    # test 4: the opening tunnel's physics props (ScriptableProp) below the level
+    (0x30CB98AE, 0x0BC0B00F, 0x5A544946, 0x30343354): (0.0, -200.0, 0.0),   # 2.7 m from Gabe's gun
+    (0x58CB2AA0, 0x419AC8FA, 0x30393730, 0x58585858): (0.0, -200.0, 0.0),
+    (0x4FCB8B8A, 0xC4309FBC, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),   # by the PowerUp corpse
+    (0x4FCB9CAB, 0x38C4FC3A, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),
 }
 
 

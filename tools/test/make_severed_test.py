@@ -596,10 +596,17 @@ def main():
         log('Removing the suit-pack suits from Severed\'s stores')
         refresh_simgroups(root, dst, 0xE6CACE4C)       # ItemStoreList (simgroup.STORE_HIDDEN)
         open(os.path.join(work, 'store_suits.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'gun_test.ok')):
-        log('Opening scene test: Gabe\'s dropped Flamethrower goes below the level, the corpses back in place')
+    if not os.path.exists(os.path.join(work, 'bnk_blend.ok')):
+        log('Re-converting the animation banks (blend weights: chapter 2 opening)')
+        from ds2 import convert, pcassets
+        own = pcassets.load()
+        refresh_assets(root, dst, 'BNK', convert.CONVERTERS['BNK'],
+                       keep=lambda a: pcassets.key(a.type, a.name, a.ids) in own)
+        open(os.path.join(work, 'bnk_blend.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'prop_test.ok')):
+        log('Opening scene test: the tunnel\'s 4 physics props go below the level, Gabe\'s gun back in place')
         refresh_simgroups(root, dst, 0x1AADC065)       # DismemberableProp: corpses back (simgroup.NUDGE)
-        open(os.path.join(work, 'gun_test.ok'), 'w').write('ok')
+        open(os.path.join(work, 'prop_test.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

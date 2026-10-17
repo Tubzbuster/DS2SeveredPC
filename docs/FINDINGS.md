@@ -1306,3 +1306,31 @@ offset 116); with the flag and a non-null [state machine +0x88], the anchor
 moves by minus the vector at [+0x88] + 0x80. Probe 36 logs that vector and
 the anchor for `ses_player_01_03` (name hash 0x95F3F281): a null pointer or
 a zero offset would explain the missing drop.
+
+Update (probe 37): `ses_player_01_03` runs and finishes normally (its
+state machine reaches state 0x3B after about 6 s). Its anchor is the
+origin (0, 0, 0): the sequence object has no transform, on the 360 too.
+The hanging proxy offset is only (0.1, 0, -0.15) m, so it is not what
+drops Gabe a storey. Untested idea: the hanging state stays on until
+`ses_player_01_03_end`; sending `PlayerChangeState_hanging_combat_deactivate`
+by hand (F7, severed_send.txt) when the fight ends shows whether the
+state holds him up.
+
+## 49. BNK blend weights (the chapter 2 opening never started)
+
+After the gunship scene (`igc_01_05`) the screen stayed black. exe
+0x77A8B0 shows the loading spinner when a fade-out is not followed by a
+fade-in within 1 s, so the spinner was a symptom. Probe 37's sequence
+trace showed `ses_player_02_02_initial` (teleport, hold pose
+`pdlc1_gps_02_01_player_000`) never leaving state 0x1B. Only its end sends
+`mm_sync_02_01`, which starts chapter 2's opening and fades the screen in.
+
+The hold pose's blend node (bytes 08 01, first child = a float, 2.0 in the
+base game) had its float 0x4332924A (178.6) left raw: the child block is
+typed by its first byte, a float exponent, so it picked a near-random
+template. Read as little-endian the value is about 4.8 million, and the
+pose never ended. In the pairs that child is swapped in all 198 nodes.
+`convert.bnk` now swaps it: 125 of 147 pair banks exact (123 before), no
+new wrong words. In Severed it changes `pdlc1_gps_02_01_player.bnk`,
+`pdlc1_gps_02_01_gunship_hi.bnk` and a base-game bank that is taken from
+the PC archives anyway. Step `bnk_blend.ok` re-converts the banks.

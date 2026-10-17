@@ -153,7 +153,21 @@ def _reloc(typ, x):
 
 
 def bnk(x):
-    return _reloc('BNK', x)
+    """BNK: learned templates, then the blend weight of 08 01 nodes: the
+    node's first child starts with a float (2.0 in the base game; swapped
+    in all 198 pairs). Its block is typed by that float's first byte, so
+    its template is a near-random one (0x4332924A in
+    pdlc1_gps_02_01_player.bnk stayed raw and the hold pose never ended)."""
+    from . import reloc
+    y = _reloc('BNK', x)
+    info = reloc.parse(x) if y is not None else None
+    if info:
+        y = bytearray(y)
+        for f, v in info['ptrs'].items():
+            if f >= 4 and x[f - 4] == 0x08 and x[f - 3] == 0x01 and v + 4 <= info['R']:
+                y[v:v + 4] = x[v:v + 4][::-1]
+        y = bytes(y)
+    return y
 
 
 def rcb(x):

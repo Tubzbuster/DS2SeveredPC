@@ -1736,7 +1736,7 @@ static int mm(const BYTE *p, int i) { return (int)(((const float *)p)[i] * 1000.
 static void ssm_anchor(BYTE *o, DWORD idx)
 {
     static LONG lines;
-    static struct { BYTE *self; DWORD tick; } seen[64];
+    static struct { BYTE *self; DWORD tick; int v[6]; } seen[64];
     BYTE *ses, *rec, *px;
     DWORD flags, name, now = GetTickCount();
     int i;
@@ -1757,9 +1757,19 @@ static void ssm_anchor(BYTE *o, DWORD idx)
         return;
     }
     if (seen[i].self && now - seen[i].tick < 250) return;
-    seen[i].self = o; seen[i].tick = now;
-    if (InterlockedIncrement(&lines) > 600) return;
     px = *(BYTE **)(o + 0x88);
+    {   /* only when the anchor or the offset changes (probe 38) */
+        int v[6], k;
+        v[0] = mm(ses + 0x1C0, 0); v[1] = mm(ses + 0x1C0, 1); v[2] = mm(ses + 0x1C0, 2);
+        v[3] = px && mem_ok(px + 0x80, 12) ? mm(px + 0x80, 0) : 0x7FFFFFFF;
+        v[4] = px && mem_ok(px + 0x80, 12) ? mm(px + 0x80, 1) : 0;
+        v[5] = px && mem_ok(px + 0x80, 12) ? mm(px + 0x80, 2) : 0;
+        for (k = 0; k < 6 && seen[i].self && seen[i].v[k] == v[k]; k++) ;
+        seen[i].self = o; seen[i].tick = now;
+        if (k == 6) return;
+        memcpy(seen[i].v, v, sizeof v);
+    }
+    if (InterlockedIncrement(&lines) > 600) return;
     if (px && mem_ok(px + 0x80, 12))
         log_line("SES %08lx (ssm %08lx, handler 0x%02lx) flags %04lx origin %d %d %d mm, proxy %08lx offset %d %d %d mm",
                  name, (DWORD)o, idx, flags, mm(ses + 0x1C0, 0), mm(ses + 0x1C0, 1), mm(ses + 0x1C0, 2),
@@ -2502,7 +2512,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 37 - process %s", path);
+    log_line("severed probe 38 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

@@ -27,7 +27,7 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works, fix pending | thumping in the opening scene (ragdoll-like bouncing, fine once it ends). Ruled out: raising both corpses 12 cm, removing either corpse (tests 1 and 2). Test 3 (step `gun_test.ok`, `simgroup.NUDGE`): Gabe's dropped Flamethrower (GunProxy {4FCB92A0-0396-75EE-...}) 200 m below the level, both corpses back in place. That build has no Flamethrower pickup: for the opening scene only. Next suspect: ScriptableProp {30CB98AE-0BC0-B00F-...} 2.7 m from the gun |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works, fix pending | thumping in the opening scene (fine once it ends). Ruled out: raising both corpses 12 cm; removing either corpse; removing Gabe\'s dropped Flamethrower (tests 1-3). Test 4 (step `prop_test.ok`, `simgroup.NUDGE`): the tunnel\'s 4 ScriptableProps 200 m below the level, everything else in place |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
@@ -35,7 +35,7 @@ and is corrected as we play.
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | partial | played through to the docking station. The upside-down tentacle grab after the lift plays; pressing stomp during it put Gabe inside the ceiling (he got out once the animation ended). The quarantine lockdown with 3 override terminals starts. Died there: Twitchers sometimes repeat the same attack and stunlock Gabe in a damage loop |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | works, textures off | the gunship fight, destroying it and boarding work since the vertex buffer index fix (FINDINGS 47). The gunships' textures look rainbow-coloured and stretched: to investigate (their MetaModels and materials are the PC game's own; meshes and lightmap materials are Severed's) |
-| chapter 1 -> 2 transition (emergency_arrival) | stalls | after `igc_01_05` the screen fades to black and the game shows the spinner that appears when a fade-out is not followed by a fade-in within 1 s (exe 0x77A8B0 sends iMsgLoadingScreenStart). All transition sections and both opening audio streams were read. `ses_player_02_02_initial` (teleport, `pdlc1_gps_02_01_player_000`) never sent `mm_sync_02_01`. The console goes straight on after about 4 s of black. Probe 37 traces the scripted sequences again (the hook had missed this run) |
+| chapter 1 -> 2 transition (emergency_arrival) | fix pending | black screen after the gunship scene (sound and pause work). `ses_player_02_02_initial` never ended, so `mm_sync_02_01` (chapter 2 opening, fade-in) never came: a blend weight left unswapped in its hold pose (FINDINGS 49). Fixed in `convert.bnk`, step `bnk_blend.ok` |
 
 ## Chapter 2: the hospital
 
@@ -67,7 +67,7 @@ and is corrected as we play.
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle upgrades | works | probe 34: `10 node(s) set, 0 missing`; the user confirmed the upgraded rifle in game. RIG upgrades not looked at yet |
 | Twitchers | not reproduced since | parked by the user; previously: one Twitcher alone keeps Gabe in his flinch: each slash lands before the flinch ends (Normal and Casual; no grab). Their `Zombie` settings differ from the slashers' in an authored way (pain interrupt delays 4/2 s, dodge 0.9, turn speeds doubled, 8 damage per hit), nothing that looks like a conversion error. Next: A/B against the base game's own Twitchers (Government Sector) on the same PC, and a 60 fps cap test (the user plays at 75 fps with external V-Sync) |
-| Scripted hang after the cargo lift | partial | Gabe hangs upside down and fights (works). Compared with console footage (FINDINGS 48): on console the closing sequence `ses_player_01_03` drops him about a storey onto the red grate floor, where he gets up; on PC he never drops, so the get-up plays at hanging height inside the rock overhang. He ends in the right place once the sequence is over. Not the animation (the bank converts right) and not a missing class; the sequence data matches the console. The entry into the hang now looks like the console. Probe 36 logged nothing (its sequence hook missed that run); probe 37 retries the hook. It logs the sequence anchor and the proxy offset (`SES 95f3f281` lines) |
+| Scripted hang after the cargo lift | partial | the entry into the hang looks like the console. Gabe still does not drop to the floor at the end. Probe 37: `ses_player_01_03` runs and finishes; its anchor is the origin (no transform, as on the 360) and the hanging proxy offset is tiny, so neither explains it (FINDINGS 48). Next: F7 test sending `PlayerChangeState_hanging_combat_deactivate` as the fight ends |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
 | Weapon in Gabe's hands | wrong | the held weapon floats a little off his hands (screenshot at the docking station). To investigate: Gabe's weapon attachment offsets |
@@ -91,6 +91,7 @@ and is corrected as we play.
 - Probe 26+: heap checks every 2 s (`HEAP ... CORRUPT` lines). Probe 35: off unless `severed_heapcheck.on` is in the game folder (suspected of the alt-tab hang).
 - Probe 36: `SES` lines: each scripted sequence's name hash, settings flags and origin once; sequences with SSEQFL_NEGATE_CHAR_PROXY_OFFSET every 250 ms with the hanging proxy offset they subtract (FINDINGS 48).
 - Probe 37: the scripted sequence hook retries for 10 s (it missed about half of the runs before).
+- Probe 38: `SES` lines only when a sequence's anchor or offset changes (probe 37 hit the 600-line cap in the opening scene).
 - Probe 30+: `severed_novtf.on` (empty file in the game folder) unbinds
   vertex textures before dynamic-geometry draws; an experiment for the
   quarry crash.
