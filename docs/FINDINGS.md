@@ -1354,3 +1354,24 @@ decoder 0x515EE0, called from 0x51F800 with the voice's read pointer at
 are EA-XMA, type 0 (RAM); we convert them to single-block XAS. The PC's own
 banks are all EALayer3, so XAS bank playback is untested territory. Probe
 39 logs the voice and the sample header when this crash happens.
+
+## 51. The gunship hull: built from the PC game's own mesh
+
+Severed's gunship hull `exterior_black_win` (gunship_hi_02) converted with
+smeared textures. Both gunships are otherwise the PC game's own assets
+(doors, interiors, gunship_hi_03 entirely). The base game's
+gunship_hi_02 `exterior.dae` (01961BED.36BD9CD9...) has the same 360 size
+(1,818,496 bytes) and the same 31 tables in the same order; the only
+differences are the windows: table `window_sort_1_Shape` (material
+F54115CE) is `window_01Shape` (material 8899C1FE) in Severed, with
+slightly different window geometry (the volatile differs by 640 bytes).
+
+The PC exporter laid this mesh out differently from the 360: vertex
+buffers with the same flag merged (0601 + 0201), the small 0200 buffer
+kept with 12-byte texture coordinates, and the table vertex ranges rebased.
+Our conversion keeps the 360's four buffers.
+
+`pcassets.DERIVED` now builds the hull from the user's own PC mesh (archive
+entry 2E72F4DC in DS2DAT8) with Severed's material ids written into each
+table (`derive_mesh`: one word changes), and takes the PC volatile with it.
+Step `gunship_hull.ok`.

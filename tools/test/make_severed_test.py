@@ -365,6 +365,57 @@ def refresh_uv_streams(root, dst, pick=None):
                 open(p, 'wb').write(y)
 
 
+def derive_pc_meshes(root, dst, idx):
+    """Severed meshes built from the PC game's own mesh with Severed's
+    materials (pcassets.DERIVED: the gunship hull)"""
+    sizes = {}
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if not f.lower().endswith('.str'):
+                continue
+            p = os.path.join(d, f)
+            data = open(p, 'rb').read()
+            if not any(k.split('|')[1].encode() in data for k in pcassets.DERIVED):
+                continue
+            assets = streamfile.read(data)[1]
+            keys = [pcassets.key(a.type, a.name, a.ids) for a in assets]
+            hits = [i for i, k in enumerate(keys) if k in pcassets.DERIVED]
+            if not hits:
+                continue
+            src = os.path.join(root, os.path.relpath(p, dst))
+            sx = {pcassets.key(a.type, a.name, a.ids): a for a in streamfile.read(open(src, 'rb').read())[1]}
+            fresh = {}
+            for i in hits:
+                entry, mk, vk = pcassets.DERIVED[keys[i]]
+                if int(entry, 16) not in idx or i + 1 >= len(assets) or assets[i + 1].type != 'MeshVolatile':
+                    continue
+                pc = {pcassets.key(a.type, a.name, a.ids): a for a in streamfile.read(read_entry(idx, int(entry, 16)))[1]}
+                if mk not in pc or vk not in pc or keys[i] not in sx:
+                    continue
+                y = pcassets.derive_mesh(pc[mk].payload(), sx[keys[i]].payload())
+                if y is not None:
+                    fresh[i], fresh[i + 1] = y, pc[vk].payload()
+            if not fresh:
+                continue
+            w = streamwrite.Writer()
+            total = 0
+            for i, a in enumerate(assets):
+                y = fresh.get(i, a.payload())
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+                total += len(y)
+            open(p, 'wb').write(w.data())
+            sizes[os.path.splitext(os.path.relpath(p, dst))[0].replace('/', '\\')] = total
+            log('  %d mesh(es) built from the PC game\'s own in %s' % (len(fresh) // 2, os.path.relpath(p, dst)))
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower().endswith('.toc'):
+                p = os.path.join(d, f)
+                y = open(p, 'rb').read()
+                for name, size in sizes.items():
+                    y = toc.set_size(y, name, size)
+                open(p, 'wb').write(y)
+
+
 def refresh_snu_channels(root, dst):
     """re-encode the audio streams whose channel count the PC cannot play as
     XAS (6-channel cutscene audio: snu.pad_channels)"""
@@ -603,6 +654,10 @@ def main():
         refresh_assets(root, dst, 'BNK', convert.CONVERTERS['BNK'],
                        keep=lambda a: pcassets.key(a.type, a.name, a.ids) in own)
         open(os.path.join(work, 'bnk_blend.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'gunship_hull.ok')):
+        log('Building the gunship hull from the PC game\'s own (Severed\'s window material)')
+        derive_pc_meshes(root, dst, idx)
+        open(os.path.join(work, 'gunship_hull.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'prop_test.ok')):
         log('Opening scene test: the tunnel\'s 4 physics props go below the level, Gabe\'s gun back in place')
         refresh_simgroups(root, dst, 0x1AADC065)       # DismemberableProp: corpses back (simgroup.NUDGE)

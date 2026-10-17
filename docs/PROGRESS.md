@@ -12,6 +12,56 @@ Section names are the level's stream folders
 scene and audio numbering (`igc_01_xx` = chapter 1, `igc_02_xx` = chapter 2)
 and is corrected as we play.
 
+## Summary (2026-10-17)
+
+**Where we are:** all of chapter 1 plays, and chapter 2 has started. Last
+reached: the zero-oxygen hallway after the Tormentor fight, then a crash on
+entering the decompression room.
+
+**Fixed so far** (confirmed in game unless marked):
+- Severed in Episode Select; intro terminal, RIG call scene, hand-over
+- level geometry, collision, lighting; quarry colour grading (black screen)
+- Necromorph AI (navmesh checksums)
+- dialogue, audio logs, videos, 5.1 cutscene audio; music and ambience
+  streams play
+- saving and loading
+- Gabe's Pulse Rifle upgrades
+- the quarry door drawn solid black
+- suit packs removed from the stores (choosing one crashed)
+- crash at the docking station (gunship vertex buffer index)
+- black screen after the gunship scene (chapter 2 opening)
+- gunship hull built from the PC game's own mesh (smeared textures):
+  *pushed, to test*
+
+**Tests waiting on you:**
+1. Gunship hull textures (docking station): fix pushed (`gunship_hull.ok`).
+2. Opening scene thump: test 4, the tunnel's 4 physics props moved away
+   (`prop_test.ok`).
+3. Hanging fight drop: F7 with `severed_send.txt` containing
+   `PlayerChangeState_hanging_combat_deactivate`, pressed as the last
+   enemy dies.
+4. Decompression room: enter it again with probe 39 and send the log if it
+   crashes.
+
+**Open bugs** (strike out any that are no longer bugs):
+- crash entering the decompression room (audio thread, sample decoder)
+- black shape in the zero-oxygen hallway (ruled out: the depth-of-field
+  effect, which is the PC game's own; the floating debris meshes, the PC
+  game's own; the hallway's glass, which converts exactly like the base
+  game's)
+- Gabe does not drop to the floor after the hanging fight (plays the
+  get-up inside the rock overhang)
+- thump in the opening scene
+- the held weapon floats a little off Gabe's hands
+- saves show as "Chapter 1" with chapter 1's picture
+- Twitchers stunlocking Gabe (not reproduced since)
+- frame drops near some lights in the drill tunnel
+- stretched slabs in front of the camera after the intro terminal (old
+  report: still there?)
+- second use of a save station locked up once (old report: still there?)
+- alt-tab hang (probe 35 turned the heap checks off: still there?)
+- stomp during the hang puts Gabe in the ceiling (same cause as the drop?)
+
 ## Start-up
 
 | Step | Status | Notes |
@@ -27,16 +77,16 @@ and is corrected as we play.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works, fix pending | thumping in the opening scene (fine once it ends). Ruled out: raising both corpses 12 cm; removing either corpse; removing Gabe\'s dropped Flamethrower (tests 1-3). Test 4 (step `prop_test.ok`, `simgroup.NUDGE`): the tunnel\'s 4 ScriptableProps 200 m below the level, everything else in place |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works, fix pending | thumping in the opening scene (fine once it ends). Ruled out: raising both corpses 12 cm; removing either corpse; removing Gabe's dropped Flamethrower (tests 1-3). Test 4 (step `prop_test.ok`, `simgroup.NUDGE`): the tunnel's 4 ScriptableProps 200 m below the level, everything else in place |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
 | bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | works | loads and plays (probe 31, and no `D3D GUARD` lines since the LUT fix). Price's scene and attack, the override switch, the door encounter and the cargo lift all work. The black screen when the quarry door opened is fixed (colour-grading LUTs, FINDINGS 45). The door that drew as a solid black slab (`door_inner_01_am`) is fixed and confirmed (20-byte UV streams, FINDINGS 46) |
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | partial | played through to the docking station. The upside-down tentacle grab after the lift plays; pressing stomp during it put Gabe inside the ceiling (he got out once the animation ended). The quarantine lockdown with 3 override terminals starts. Died there: Twitchers sometimes repeat the same attack and stunlock Gabe in a damage loop |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
-| docking_station: docking_airlock_01, docking_station_z01/z02 | works, textures off | the gunship fight, destroying it and boarding work since the vertex buffer index fix (FINDINGS 47). The gunships' textures look rainbow-coloured and stretched: to investigate (their MetaModels and materials are the PC game's own; meshes and lightmap materials are Severed's) |
+| docking_station: docking_airlock_01, docking_station_z01/z02 | works, fix pending | the gunship fight, destroying it and boarding work (FINDINGS 47). The smeared hull textures: Severed's `exterior_black_win` is the base game's gunship hull with another window material; it is now built from the PC game's own `exterior.dae` with that material (`pcassets.DERIVED`, step `gunship_hull.ok`, FINDINGS 51) |
 | chapter 1 -> 2 transition (emergency_arrival) | works | confirmed: the crash-landing scene, its dialogue and the Chapter 2 title play (FINDINGS 49). A side-by-side screenshot with console footage at the psych ward line matches |
-| emergency / psych ward: Tormentor fight, airless hallway | works, issues | the Tormentor boss fight works; a flat black shape floats in the zero-oxygen hallway (Gabe walks through it): to investigate |
+| emergency / psych ward: Tormentor fight, airless hallway | works, issues | the Tormentor boss fight works; a flat black shape floats in the zero-oxygen hallway (Gabe walks through it). The hallway turns on a depth-of-field effect (`msg_vfx_airless_dof_start`), but that effect, the floating debris meshes and all the hallway's materials are the PC game's own, and its glass converts exactly like the base game's: cause still open |
 | decompression room | crash | crashed on entering (doors open, light supports destroyed): audio thread, exe 0x515F0F, the sample decoder (0x515EE0) read a block through a null pointer (voice +0x34). Severed's sound banks are the only XAS bank samples the PC plays (its own banks are all EALayer3). Probe 39 dumps the voice and the sample header at this crash |
 
 ## Chapter 2: the hospital

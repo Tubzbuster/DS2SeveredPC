@@ -22,9 +22,9 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed (Xbox 360 add-on, your own copy)
   Platform ..... Windows (PC)
-  Version ...... 0.2.0 (pre-alpha, test builds only)
+  Version ...... 0.3.0 (pre-alpha, test builds only)
   Author ....... tubzbuster & DS2SeveredPC contributors
-  Updated ...... 2026-10-16
+  Updated ...... 2026-10-17
 ================================================================================
 Use Ctrl+F with the codes below to jump to a section.
 ```
@@ -53,6 +53,28 @@ Use Ctrl+F with the codes below to jump to a section.
 [SV00]                         VERSION HISTORY
 ================================================================================
 ```
+
+**v0.3.0 (2026-10-17)**: All of chapter 1 plays, and chapter 2 starts.
+From the mining camp through the elevator fall and the hanging fight, the
+docking station and the gunship fight, then the crash landing at the
+hospital with its scene, dialogue and the "Chapter 2" title, the Tormentor
+fight and the zero-oxygen hallway. Fixes in this round:
+- Gabe has his upgraded Pulse Rifle (the probe buys the DLC's upgrade
+  nodes at level start)
+- the quarry door that drew solid black (lightmap meshes get the PC's
+  20-byte texture coordinates)
+- the suit packs are out of Severed's stores (choosing one crashed)
+- the crash on reaching the docking station (gunship meshes: an unswapped
+  vertex buffer index)
+- the black screen after the gunship scene (an animation blend value left
+  unswapped kept chapter 2's opening from starting)
+- the gunship hull is now built from the PC game's own mesh (its textures
+  were smeared; to confirm)
+
+Known problems: crash entering the decompression room (audio), a black
+shape in the zero-oxygen hallway, Gabe does not drop to the floor after the
+hanging fight, a thump in the opening scene, the held weapon floats off
+Gabe's hands. See `docs/PROGRESS.md`.
 
 **v0.2.0 (2026-10-16)**: Chapter 1 plays from the opening through the
 drill tunnel, saferoom, grinder, the quarry and its door encounter, the
@@ -127,17 +149,19 @@ How it works:
 | Area | Status |
 |---|---|
 | Severed in the episode select | Works (via the probe DLL) |
-| Intro terminal cutscene, RIG call scene, hand-over | Works, with subtitles |
-| Level geometry, textures, lighting, collision | Works in the areas reached (one quarry door draws black) |
-| Playing as Gabe (security suit), HUD, inventory | Works |
-| Dialogue, audio logs, videos | Works |
-| Necromorph AI | Works (Twitchers can stunlock Gabe) |
-| Drill tunnel, saferoom, grinder, quarry, cargo lift | Works |
-| Mining camp | Reached; the quarantine lockdown starts |
-| Stores, benches, save stations | Work (saves show as "Chapter 1") |
-| Gabe's starting weapons | Given; the Pulse Rifle pre-upgrades are not done yet |
+| Intro terminal cutscene, RIG call scene, hand-over | Works, with subtitles (a thump in the opening scene) |
+| Level geometry, textures, lighting, collision | Works in the areas reached (a black shape in the zero-oxygen hallway) |
+| Playing as Gabe (security suit), HUD, inventory | Works (the held weapon floats a little off his hands) |
+| Dialogue, audio logs, videos, music, ambience | Works |
+| Necromorph AI, Tormentor boss | Works |
+| Chapter 1: drill tunnel to the docking station | Works (Gabe does not drop to the floor after the hanging fight) |
+| Gunship fight, boarding | Works (hull textures: fix pending) |
+| Chapter 2: crash landing, Tormentor, zero-oxygen hallway | Works |
+| Chapter 2: decompression room | Crashes (audio): being investigated |
+| Stores, benches, save stations | Work (saves show as "Chapter 1"; suit packs removed from the stores) |
+| Gabe's starting weapons | Given, with the Pulse Rifle upgrades |
 | Performance near some lights | Drops; not investigated yet |
-| Elevator, docking station, chapter 2, ending | Not reached yet |
+| Rest of chapter 2, ending | Not reached yet |
 | One-click installer | Not yet (the test script does the job for now) |
 
 ```text
