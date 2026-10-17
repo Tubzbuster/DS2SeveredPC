@@ -40,8 +40,9 @@ entering the decompression room.
    title "Severed"; older saves keep their old labels.
 3. Decompression room: fix pushed (`loop_split.ok`): the oil drip loop
    sound crashed the audio decoder.
-4. Zero-oxygen hallway: F7 tests turning the hallway's effects off one at
-   a time (below).
+4. Zero-oxygen hallway: test build (`hall_glass_test.ok`) with the
+   hallway geometry's window glass and three broken-glass overlays hidden:
+   do the beige panes and the black shape go?
 
 **Open bugs** (strike out any that are no longer bugs):
 - crash entering the decompression room (audio thread, sample decoder):

@@ -91,8 +91,8 @@ def convert_stream(data, report):
             elif a.type == 'tg4d' and a.name in luts:
                 y = lut.data(x)               # D3D byte order; the test build re-checks it against the PC
             elif a.type == 'Mesh':
-                y, g, w = convert_mesh(x, lm)
-                mesh = (g, w)
+                y, g, wide = convert_mesh(x, lm)    # not w: that is the stream writer
+                mesh = (g, wide)
             elif a.type == 'MeshVolatile':
                 y = convert_volatile(*mesh, x) if mesh is not None else None
             elif a.type == 'VFX':

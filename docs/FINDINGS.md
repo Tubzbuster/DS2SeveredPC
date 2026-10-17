@@ -1423,3 +1423,23 @@ title "Severed" to the PC streams at packaging time. Chapter 17 was
 avoided: PlayerSettings has only 16 per-chapter log entry lists
 (`CMD_SetChapter01..16EntryList`), which the game may read by chapter.
 
+## 53. The airless hallway: what is converted there
+
+The hallway's geometry is Severed's own `airless_hall_z01` section
+(`pdlc_airless_hall_z01\opt_model1`, 276 parts, 64 materials); its
+materials (66), textures (153) and effects (27) are all the PC game's own
+copies, and the `airless_hall` script stream holds only PC assets. All 64
+materials and their textures are present in the stream. The mesh's buffers
+use formats with learned rules (no UV widening needed), and our output for
+the glass parts is well formed (sensible texture coordinates, pointers in
+place); the neighbouring `emergency_arrival_hall_z01` geometry likewise.
+Candidates for the flat beige windows and the black shape: the window
+glass (`cln_glassclean01`, the only part in the small 20-byte-UV buffer)
+and the broken-glass overlays (`ovl_glassshatter01-03`). Test step
+`hall_glass_test.ok` makes those 4 parts invisible (indices collapsed to
+one vertex).
+
+Found while testing: `build.convert_stream` reused `w` (the stream writer)
+for the mesh's widened UV streams, so a first conversion of any stream with
+a mesh failed; existing builds were converted before that change.
+

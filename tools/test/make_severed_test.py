@@ -84,7 +84,9 @@ def patched_global_assets(pc, sev):
 
 
 SAVE_ICON_STREAMS = ('global_assets\\global_assets.str', 'global_assets\\global_assets_global.str',
-                     'frontend\\frontend.str', 'frontend\\frontend_global.str')
+                     'frontend\\frontend.str', 'frontend\\frontend_global.str',
+                     'text_assets\\text_assets.str', 'text_assets\\text_assets_global.str',
+                     'text_assets\\text\\F40CC683.str')          # the text stream the game asked for (probe log)
 
 
 def save_icon_files(idx, root, files):
@@ -365,6 +367,40 @@ def vb68_meshes(x, g, w):
     locks a garbage buffer)"""
     return any(x[t.entry + 0x68:t.entry + 0x6C] != x[t.entry + 0x68:t.entry + 0x6C][::-1]
                for t in g.tables)
+
+
+# Test (airless hallway, flat beige windows and a black shape): the parts of
+# the hallway's own geometry drawn with the window glass and the three
+# broken-glass overlays, made invisible (their indices all point at one
+# vertex). If both artefacts go, one of these is the culprit.
+HALL_MESH = 'pdlc_airless_hall_z01\\opt_model1'
+HALL_HIDE = {0xD8B6AC1D: 'cln_glassclean01', 0x3A9DBC8A: 'ovl_glassshatter01',
+             0xA394ED30: 'ovl_glassshatter02', 0xD493DDA6: 'ovl_glassshatter03'}
+
+
+def hide_hall_parts(dst):
+    from ds2 import geo
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if f.lower() != 'airless_hall_z01.str':
+                continue
+            p = os.path.join(d, f)
+            w = streamwrite.Writer()
+            n = 0
+            for a in streamfile.read(open(p, 'rb').read())[1]:
+                y = a.payload()
+                if a.type == 'Mesh' and HALL_MESH in a.path.lower().replace('/', '\\'):
+                    y = bytearray(y)
+                    for t in geo.parse(bytes(y), False).tables:
+                        if struct.unpack_from('<I', y, t.entry + 0x0C)[0] in HALL_HIDE:
+                            cnt, ptr = struct.unpack_from('<I', y, t.entry + 0x30)[0], struct.unpack_from('<I', y, t.entry + 0x88)[0]
+                            if ptr + 2 * cnt <= len(y):
+                                y[ptr:ptr + 2 * cnt] = y[ptr:ptr + 2] * cnt
+                                n += 1
+                    y = bytes(y)
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+            open(p, 'wb').write(w.data())
+            log('  %d glass part(s) hidden in %s' % (n, os.path.relpath(p, dst)))
 
 
 def refresh_uv_streams(root, dst, pick=None):
@@ -734,6 +770,10 @@ def main():
         refresh_assets(root, dst, 'SBK', convert.CONVERTERS['SBK'],
                        keep=lambda a: a.name.lower() not in loops or pcassets.key(a.type, a.name, a.ids) in own)
         open(os.path.join(work, 'loop_split.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'hall_glass_test.ok')):
+        log('Airless hallway test: its window glass and broken-glass overlays hidden')
+        hide_hall_parts(dst)
+        open(os.path.join(work, 'hall_glass_test.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'chapter_numbers2.ok')):
         log('Save pictures: both of Severed\'s chapters become chapter 16 (its own picture and title)')
         refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS)
