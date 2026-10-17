@@ -86,10 +86,11 @@ RETARGET = {
 }
 
 # Chapter numbers (PlayerSetChapter): the PC load menu picks a save's
-# picture and title by chapter number alone, so Severed's chapters 1 and 2
-# become 16 and 17, which saveicons.py gives Severed's own pictures and
-# titles (base chapter 16 is defined but unused, 17 is new).
-CHAPTERS = {1: 16, 2: 17}
+# picture and title by chapter number alone, so both of Severed's chapters
+# become 16, which saveicons.py gives Severed's own picture and title. Base
+# chapter 16 is defined but unused; 17 would be new, and PlayerSettings has
+# only 16 per-chapter log lists, so it is not used.
+CHAPTERS = {1: 16, 2: 16}
 
 
 def msg_hash(name):

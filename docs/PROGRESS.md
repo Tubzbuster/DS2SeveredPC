@@ -36,7 +36,8 @@ entering the decompression room.
 1. Hanging fight drop with probe 40: the release still had a listener at
    the drop's end; the probe now names it.
 2. Save pictures and titles: make new saves in chapter 1 and chapter 2
-   (`chapter_numbers.ok`); older saves keep their old labels.
+   (`chapter_numbers2.ok`): both should show Severed's picture and the
+   title "Severed"; older saves keep their old labels.
 3. Decompression room: fix pushed (`loop_split.ok`): the oil drip loop
    sound crashed the audio decoder.
 4. Zero-oxygen hallway: F7 tests turning the hallway's effects off one at
@@ -60,7 +61,7 @@ entering the decompression room.
   tunnel's 4 physics props, tests 1-4)
 - the held weapon floats a little off Gabe's hands
 - saves show as "Chapter 1" with chapter 1's picture: fix pushed, to test
-  (chapters 16/17 with Severed's own pictures and titles)
+  (both chapters numbered 16, with Severed's own picture and title)
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)

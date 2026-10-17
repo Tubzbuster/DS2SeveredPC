@@ -1414,12 +1414,12 @@ name)); VFX (type hash, g, g, g, g2) with g the sdbm hash of the source
 path `s:\assets\...\name.vfx`, the GUID being g, g, g, g2.
 
 Severed's PlayerSetChapter objects set chapters 1 and 2, hence the base
-chapter 1/2 pictures and "Chapter 1" titles. The converter now sets 16 and
-17 (`simgroup.CHAPTERS`) and `saveicons.py` adds the pictures (Severed's
-64x64 Xbox icons stretched), the two VFX, the table entries (ch00/default
-renamed, new GUIDs appended to the SimGroup) and the titles ("Severed,
-Chapter 1/2", per language) to the PC streams at packaging time. Open
-risk: PlayerSettings has 16 per-chapter log entry lists
-(`CMD_SetChapter01..16EntryList`), so chapter 17 may index past them if
-the game reads them by chapter.
+chapter 1/2 pictures and "Chapter 1" titles. The converter now sets both
+to 16 (`simgroup.CHAPTERS`), the base game's defined but unused chapter
+("Chapter 16" text; no picture key), and `saveicons.py` adds the picture
+(Severed's 64x64 Xbox icon `weller1_ch1.png`, stretched), its VFX, the
+table entry (ch00 renamed ch16, new GUID appended to the SimGroup) and the
+title "Severed" to the PC streams at packaging time. Chapter 17 was
+avoided: PlayerSettings has only 16 per-chapter log entry lists
+(`CMD_SetChapter01..16EntryList`), which the game may read by chapter.
 

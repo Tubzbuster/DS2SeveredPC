@@ -5,19 +5,19 @@ only (exe 0xBAE170): the key "ch%02d" (sdbm hash) is looked up in the
 UIMenuCheckpointIcons table (global_assets SimGroup) for a picture VFX,
 and "CH%02d_TitleString" in the string tables for the title. Severed sets
 chapters 1 and 2 (PlayerSetChapter), so its saves showed the base game's
-chapter 1/2 picture and title. The converter numbers Severed's chapters 16
-and 17 (simgroup.CHAPTERS) and this module adds, to the PC's own streams:
+chapter 1/2 picture and title. The converter numbers both of Severed's
+chapters 16 (simgroup.CHAPTERS) and this module adds, to the PC's own
+streams:
 
-- two textures ui_saveload_icn_ch16/ch17 (DXT5 128x64, 3 mips, as the
-  base pictures) made from Severed's two 64x64 Xbox save icons
-  (weller1_ch1/ch2.png), stretched;
-- two picture VFX, copies of ui_saveload_icn01.vfx naming those textures;
-- the table's two placeholder entries "ch00" and "default" (both chapter
-  1's picture; the save list only ever asks for ch01-ch15) renamed ch16 /
-  ch17 and pointed at the new VFX (GUIDs appended, see _table);
-- CH16_TitleString / CH17_TitleString ("Severed, Chapter 1/2", from
-  Severed's own "Severed, chapter" text) in each language's global string
-  table (CH16 exists in the base game as "Chapter 16", unused).
+- a texture ui_saveload_icn_ch16 (DXT5 128x64, 3 mips, as the base
+  pictures) made from Severed's 64x64 Xbox save icon weller1_ch1.png,
+  stretched;
+- a picture VFX, a copy of ui_saveload_icn01.vfx naming that texture;
+- the table's placeholder entry "ch00" (chapter 1's picture; the save list
+  only ever asks for ch01-ch15) renamed ch16 and pointed at the new VFX
+  (GUID appended, see _table);
+- CH16_TitleString ("Severed", replacing the unused base "Chapter 16") in
+  each language's global string table.
 
 Asset ids: textures (type hash, 0, type hash, crc32(folder),
 crc32(folder + name)); VFX (type hash, g, g, g, g2) where g is the sdbm hash
@@ -26,15 +26,14 @@ of the source path and the table's GUID is g, g, g, g2.
 import struct
 import zlib
 
-NEW = {16: 1, 17: 2}           # PC chapter -> Severed chapter (icon weller1_ch<n>)
-SLOTS = {16: 'ch00', 17: 'default'}
+NEW = {16: 1}                  # PC chapter -> Severed icon (weller1_ch<n>)
+SLOTS = {16: 'ch00'}
 TEMPLATE_VFX = 'ui_saveload_icn01.vfx'
 TEMPLATE_TEX = 'ui_saveload_icn_ch01'
 TEX_FOLDER = b'shared_vfx_textures_ui_textures_frontend_icons'
 VFX_SRC = 's:\\assets\\shared\\vfx\\player_ui\\frontend\\icons\\ui_saveload_icn%02d.vfx'
 TABLE_PATH = 'levels\\global_assets\\global_assets\\streams\\global_assets.simgroup.bin'
-TITLES = {'en': 'Severed, Chapter %d', 'de': 'Severed, Kapitel %d', 'es': 'Severed, cap\u00edtulo %d',
-          'fr': 'Severed, \u00e9pisode %d', 'it': 'Severed, capitolo %d', 'ru': 'Severed, \u0433\u043b\u0430\u0432\u0430 %d'}
+TITLE = 'Severed'              # the DLC's name, the same in every language
 TAG_HASH, TAG_GUID = 0xFF0AFFFF, 0xFF0CFFFF
 
 
@@ -202,16 +201,15 @@ def _vfx(p, ch):
     return y
 
 
-def _lh2(p, lang, stats):
+def _lh2(p, stats):
     n, L = struct.unpack_from('<II', p, 0x10)
     if p[:4] != b'LCH2' or L != 1:
         return p
     ids = list(struct.unpack_from('<%dI' % n, p, 0x20))
     offs = struct.unpack_from('<%dI' % n, p, 0x20 + 4 * n)
     text = {i: p[o:p.index(b'\0', o)] for i, o in zip(ids, offs)}
-    fmt = TITLES.get(lang, TITLES['en'])
-    for ch, sev in NEW.items():
-        text[sdbm('CH%02d_TitleString' % ch)] = (fmt % sev).encode('utf-8')
+    for ch in NEW:
+        text[sdbm('CH%02d_TitleString' % ch)] = TITLE.encode('utf-8')
     ids = sorted(text)
     head = 0x20 + 8 * len(ids)
     body, offs = bytearray(), []
@@ -235,14 +233,14 @@ def patch(assets, icons, stats):
         if a.type == 'SimGroup' and a.path.lower() == TABLE_PATH:
             y, hit = _table(y, stats), True
         elif a.type == 'LH2' and a.name.lower().startswith('deadspace2_global.'):
-            y, hit = _lh2(y, a.name.split('.')[-2].lower(), stats), True
+            y, hit = _lh2(y, stats), True
         out.append([a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y])
         if a.type == 'VFX' and a.name == TEMPLATE_VFX:
             for ch in NEW:
                 out.append([a.type_hash, a.flags, (a.ids[0],) + _guid(ch), a.name.replace('01', '%02d' % ch),
                             a.path.replace('icn01', 'icn%02d' % ch), a.type, _vfx(y, ch)])
             hit = True
-            stats['vfx'] = stats.get('vfx', 0) + 2
+            stats['vfx'] = stats.get('vfx', 0) + len(NEW)
         elif a.type in ('tg4h', 'tg4d') and a.name == TEMPLATE_TEX and NEW[16] in icons:
             for ch, sev in NEW.items():
                 name = TEMPLATE_TEX.replace('ch01', 'ch%02d' % ch)

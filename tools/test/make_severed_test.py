@@ -99,8 +99,8 @@ def save_icon_files(idx, root, files):
             for n in (1, 2):
                 if x.type == 'PNG' and x.name.lower() == 'weller1_ch%d.png' % n:
                     icons[n] = x.payload()
-    if set(icons) != {1, 2}:
-        log('  save pictures: Severed\'s weller1_ch1/ch2.png not found, left out')
+    if 1 not in icons:
+        log('  save pictures: Severed\'s weller1_ch1.png not found, left out')
         return
     have = {n.lower(): i for i, (n, _) in enumerate(files)}
     stats = {}
@@ -734,10 +734,10 @@ def main():
         refresh_assets(root, dst, 'SBK', convert.CONVERTERS['SBK'],
                        keep=lambda a: a.name.lower() not in loops or pcassets.key(a.type, a.name, a.ids) in own)
         open(os.path.join(work, 'loop_split.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'chapter_numbers.ok')):
-        log('Save pictures: Severed\'s chapters become 16 and 17 (their own pictures and titles)')
+    if not os.path.exists(os.path.join(work, 'chapter_numbers2.ok')):
+        log('Save pictures: both of Severed\'s chapters become chapter 16 (its own picture and title)')
         refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS)
-        open(os.path.join(work, 'chapter_numbers.ok'), 'w').write('ok')
+        open(os.path.join(work, 'chapter_numbers2.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
