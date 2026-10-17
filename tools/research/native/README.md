@@ -2,7 +2,8 @@
 
 Two small C libraries, built into one `xasenc.dll` (64-bit Windows) or
 `libxasenc.so` (Linux). They have no dependencies and nothing specific to
-Dead Space 2, so other EA-format projects can use them as they are.
+Dead Space 2, so other EA-format projects can use them as they are, under the
+repository's zlib licence (`LICENSE` at the top of the repo).
 
 ## `xas_enc.c`: EA-XAS v1 encoder
 

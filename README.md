@@ -372,6 +372,10 @@ own legitimate copy** of Dead Space 2 for PC.
 DS2SeveredPC is and will stay **free and non-commercial**. Nothing here is
 sold, and the header image is used with permission on that basis.
 
+The code is under the **zlib licence** (`LICENSE`): use it in your own
+projects, with credit, and mark changed versions as changed. That covers
+the code and docs only, not the header image or anything of EA's.
+
 It is provided **"AS IS", WITHOUT WARRANTY OF ANY KIND**. You use it at your
 own risk. Back up your saves.
 
