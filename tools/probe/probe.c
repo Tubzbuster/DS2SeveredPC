@@ -1489,10 +1489,27 @@ static void check_heaps(const char *when)
     }
 }
 
+/* Probe 35: off unless severed_heapcheck.on is in the game folder. Locking
+   every heap (the driver's too) from the game thread every 2 s can block it
+   while the driver resets the device: the game hung on alt-tab. */
+static int heap_watch_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        char flag[MAX_PATH], *slash;
+        GetModuleFileNameA(NULL, flag, sizeof flag);
+        slash = strrchr(flag, '\\');
+        if (slash) lstrcpyA(slash + 1, "severed_heapcheck.on");
+        on = GetFileAttributesA(flag) != INVALID_FILE_ATTRIBUTES;
+        log_line("heap watch: %s", on ? "on (severed_heapcheck.on)" : "off (severed_heapcheck.on absent)");
+    }
+    return on;
+}
+
 static void heap_watch(void)
 {
     DWORD now = GetTickCount();
-    if (!g_added || GetCurrentThreadId() != g_game_thread || now - g_heap_tick < 2000) return;
+    if (!g_added || GetCurrentThreadId() != g_game_thread || now - g_heap_tick < 2000 || !heap_watch_on()) return;
     if (!g_heap_tick) log_line("heap watch: validating all heaps every 2 s");
     g_heap_tick = now;
     check_heaps("by the 2 s check");
@@ -2437,7 +2454,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 34 - process %s", path);
+    log_line("severed probe 35 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
