@@ -75,7 +75,7 @@ STORE_HIDDEN = {
 # moved 200 m below the level, out of the way, to find out whether it is
 # the one.
 NUDGE = {
-    (0x4FCB8B8A, 0x8DAB82D2, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),   # corpse by the PowerUp (test)
+    (0x4FCB92A0, 0x039675EE, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),   # Gabe's dropped Flamethrower (GunProxy, test)
 }
 
 

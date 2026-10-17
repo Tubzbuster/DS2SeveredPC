@@ -1877,8 +1877,10 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                          sg && hook_wrap(sg, 6, (void *)hook_sgblock, (void **)&g_sgblock_tramp) ? ", hooked" : "");
             }
             {
-                int nq;
-                BYTE *q = find_sig(SIG_SSMHANDLER, &nq);
+                int nq, k;
+                BYTE *q = NULL;
+                /* decrypted late: missed on about half the runs before probe 37 */
+                for (k = 0; k < 200 && !(q = find_sig(SIG_SSMHANDLER, &nq)); k++) Sleep(50);
                 log_line("scripted sequence trace: %d match(es) at exe+0x%lx%s", nq, q ? (DWORD)q - base : 0,
                          q && hook_wrap(q, 9, (void *)hook_ssm, (void **)&g_ssm_tramp) ? ", hooked" : "");
             }
@@ -2500,7 +2502,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 36 - process %s", path);
+    log_line("severed probe 37 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
