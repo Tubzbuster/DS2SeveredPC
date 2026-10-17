@@ -25,7 +25,7 @@ and videos.
 ## Rules (keep)
 
 - **Repo and branch:** `Tubzbuster/DS2SeveredPC`, branch
-  `claude/fervent-lovelace-80fw4s`. Commit and push there. No pull requests
+  `DS2PCDLC-Main`. Commit and push there. No pull requests
   unless asked. The repo is public.
 - **Commit messages** end with:
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Never put a
