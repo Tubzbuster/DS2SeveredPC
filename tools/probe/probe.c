@@ -1724,11 +1724,57 @@ static ssm_fn g_ssm_tramp;
 static struct { void *self; DWORD idx, result; } g_ssm[SSM_SLOTS];
 static int g_nssm;
 
+/* Sequence anchor (probe 36). exe 0xEA4C00 builds a sequence's anchor from
+ * the ScriptedEventSequence object ([+54] - 0x10, matrix at +0x190, origin
+ * +0x1C0, record at +0xC: name hash +0x18, settings flags +0x74) and, with
+ * SSEQFL_NEGATE_CHAR_PROXY_OFFSET (0x4000), moves it by minus the vector at
+ * [+88] + 0x80 (the hanging state's proxy offset). Logged for sequences with
+ * that flag (ses_player_01_03 drops Gabe from the hanging fight), every
+ * 250 ms while their state machine runs. Positions in millimetres. */
+static int mm(const BYTE *p, int i) { return (int)(((const float *)p)[i] * 1000.0f); }
+
+static void ssm_anchor(BYTE *o, DWORD idx)
+{
+    static LONG lines;
+    static struct { BYTE *self; DWORD tick; } seen[64];
+    BYTE *ses, *rec, *px;
+    DWORD flags, name, now = GetTickCount();
+    int i;
+    if (!mem_ok(o + 0x54, 4) || !mem_ok(o + 0x88, 4) || !*(BYTE **)(o + 0x54)) return;
+    ses = *(BYTE **)(o + 0x54) - 0x10;
+    if (!mem_ok(ses + 0xC, 4) || !mem_ok(ses + 0x190, 0x40)) return;
+    rec = *(BYTE **)(ses + 0xC);
+    if (!mem_ok(rec + 0x18, 4) || !mem_ok(rec + 0x74, 4)) return;
+    flags = *(DWORD *)(rec + 0x74);
+    name = *(DWORD *)(rec + 0x18);
+    for (i = 0; i < 64 && seen[i].self && seen[i].self != o; i++);
+    if (i == 64) return;
+    if (!(flags & 0x4000)) {          /* other sequences: once, to check the layout */
+        if (!seen[i].self && InterlockedIncrement(&lines) <= 600)
+            log_line("SES %08lx (ssm %08lx) flags %04lx origin %d %d %d mm", name, (DWORD)o, flags,
+                     mm(ses + 0x1C0, 0), mm(ses + 0x1C0, 1), mm(ses + 0x1C0, 2));
+        seen[i].self = o; seen[i].tick = now;
+        return;
+    }
+    if (seen[i].self && now - seen[i].tick < 250) return;
+    seen[i].self = o; seen[i].tick = now;
+    if (InterlockedIncrement(&lines) > 600) return;
+    px = *(BYTE **)(o + 0x88);
+    if (px && mem_ok(px + 0x80, 12))
+        log_line("SES %08lx (ssm %08lx, handler 0x%02lx) flags %04lx origin %d %d %d mm, proxy %08lx offset %d %d %d mm",
+                 name, (DWORD)o, idx, flags, mm(ses + 0x1C0, 0), mm(ses + 0x1C0, 1), mm(ses + 0x1C0, 2),
+                 (DWORD)px, mm(px + 0x80, 0), mm(px + 0x80, 1), mm(px + 0x80, 2));
+    else
+        log_line("SES %08lx (ssm %08lx, handler 0x%02lx) flags %04lx origin %d %d %d mm, proxy %08lx (no offset: the anchor is not moved)",
+                 name, (DWORD)o, idx, flags, mm(ses + 0x1C0, 0), mm(ses + 0x1C0, 1), mm(ses + 0x1C0, 2), (DWORD)px);
+}
+
 static DWORD __attribute__((thiscall)) hook_ssm(void *self, DWORD a, DWORD b, DWORD idx, DWORD c)
 {
     static LONG lines;
     DWORD r = g_ssm_tramp(self, a, b, idx, c);
     int i;
+    ssm_anchor((BYTE *)self, idx);
     for (i = 0; i < g_nssm; i++)
         if (g_ssm[i].self == self && g_ssm[i].idx == idx) break;
     if (i < g_nssm && g_ssm[i].result == r) return r;
@@ -2454,7 +2500,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 35 - process %s", path);
+    log_line("severed probe 36 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

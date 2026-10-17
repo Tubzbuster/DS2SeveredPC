@@ -1297,5 +1297,12 @@ The drop is probably the hanging state's character proxy offset being
 cancelled during the sequence (NEGATE_CHAR_PROXY_OFFSET). The base game's
 own hanging fight (chapter 2, the train) uses the same states, but its
 SimGroups have another block version (0x91C8773C), which our dumper does
-not read yet. Next step: probe the player position and hanging state while
-`ses_player_01_03` runs.
+not read yet.
+
+The flag is used by exe 0xEA4C00, which builds a sequence's anchor: the
+ScriptedEventSequence object is [state machine +0x54] - 0x10 (matrix at
++0x190, record at +0xC with the settings flags at +0x74, the record's field
+offset 116); with the flag and a non-null [state machine +0x88], the anchor
+moves by minus the vector at [+0x88] + 0x80. Probe 36 logs that vector and
+the anchor for `ses_player_01_03` (name hash 0x95F3F281): a null pointer or
+a zero offset would explain the missing drop.

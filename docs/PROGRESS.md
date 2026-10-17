@@ -66,7 +66,7 @@ and is corrected as we play.
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle upgrades | works | probe 34: `10 node(s) set, 0 missing`; the user confirmed the upgraded rifle in game. RIG upgrades not looked at yet |
 | Twitchers | not reproduced since | parked by the user; previously: one Twitcher alone keeps Gabe in his flinch: each slash lands before the flinch ends (Normal and Casual; no grab). Their `Zombie` settings differ from the slashers' in an authored way (pain interrupt delays 4/2 s, dodge 0.9, turn speeds doubled, 8 damage per hit), nothing that looks like a conversion error. Next: A/B against the base game's own Twitchers (Government Sector) on the same PC, and a 60 fps cap test (the user plays at 75 fps with external V-Sync) |
-| Scripted hang after the cargo lift | partial | Gabe hangs upside down and fights (works). Compared with console footage (FINDINGS 48): on console the closing sequence `ses_player_01_03` drops him about a storey onto the red grate floor, where he gets up; on PC he never drops, so the get-up plays at hanging height inside the rock overhang. He ends in the right place once the sequence is over. Not the animation (the bank converts right) and not a missing class; the sequence data matches the console. Next: probe the player position and hanging state during the sequence |
+| Scripted hang after the cargo lift | partial | Gabe hangs upside down and fights (works). Compared with console footage (FINDINGS 48): on console the closing sequence `ses_player_01_03` drops him about a storey onto the red grate floor, where he gets up; on PC he never drops, so the get-up plays at hanging height inside the rock overhang. He ends in the right place once the sequence is over. Not the animation (the bank converts right) and not a missing class; the sequence data matches the console. Probe 36 logs the sequence anchor and the proxy offset (`SES 95f3f281` lines) |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
 | Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
@@ -87,6 +87,7 @@ and is corrected as we play.
   held (Alt+F9 records in the Nvidia overlay).
 - Crash reports name the meshes near the crash (probe 21+).
 - Probe 26+: heap checks every 2 s (`HEAP ... CORRUPT` lines). Probe 35: off unless `severed_heapcheck.on` is in the game folder (suspected of the alt-tab hang).
+- Probe 36: `SES` lines: each scripted sequence's name hash, settings flags and origin once; sequences with SSEQFL_NEGATE_CHAR_PROXY_OFFSET every 250 ms with the hanging proxy offset they subtract (FINDINGS 48).
 - Probe 30+: `severed_novtf.on` (empty file in the game folder) unbinds
   vertex textures before dynamic-geometry draws; an experiment for the
   quarry crash.
