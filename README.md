@@ -389,11 +389,7 @@ own risk. Back up your saves.
                                            (reimplemented, no code used)
   * 4Kodda - DS1-3 Modding Toolkit ..... mesh format reference (no code used)
   * Havok .............................. for shipping class descriptions
-  * GameFAQs FAQ writers of the 2000s .. for the vibes
-================================================================================
-        This document Copyright (c) 2026 tubzbuster & DS2SeveredPC contributors
-                  Make us whole again. Twinkle twinkle, little star.
-================================================================================
+  
 ```
 
 <br>
