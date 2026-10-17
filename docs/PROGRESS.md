@@ -44,8 +44,8 @@ entering the decompression room.
    the level vanishes, then F3: the level comes back and each further F3
    hides one piece of it; F5 the moment the black box goes, then F4 and
    send the log.
-5. Gift shop: lights now 0.675-1.125x every 0.4 s (`calm_lights4.ok`):
-   a little more flicker than the "flat" second try, 10% dimmer.
+5. Gift shop: lights back to the second version (0.85-1.15x every 0.5 s,
+   `calm_lights5.ok`); the livelier third version flashed too much.
 6. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
 
