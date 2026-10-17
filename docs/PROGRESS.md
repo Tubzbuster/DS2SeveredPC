@@ -49,11 +49,13 @@ entering the decompression room.
   effect's file, which is the PC game's own; the floating debris meshes,
   the PC game's own; the hallway's glass, which converts exactly like the
   base game's). `msg_vfx_airless_dof_stop` changed nothing; the broken
-  windows there also show flat beige. Next F7 tests: ( `lt_airless_hall_post_fx_off`,
-  `msg_vfx_airless_stop`)
+  windows there also show flat beige. Next F7 tests:
+  `lt_airless_hall_post_fx_off`, `msg_vfx_airless_stop`
 - Gabe does not drop to the floor after the hanging fight (plays the
-  get-up inside the rock overhang): fix pushed, to test. The F7 test
-  showed the hanging state holds him up until the drop animation ends
+  get-up inside the rock overhang). The F7 test showed the hanging state
+  holds him up until the drop animation ends; releasing it at the drop's
+  start did not help, and the release message still had a listener at the
+  end (probe 40 names it)
 - thump in the opening scene (not the two corpses, Gabe's gun or the
   tunnel's 4 physics props, tests 1-4)
 - the held weapon floats a little off Gabe's hands
