@@ -71,10 +71,10 @@ fight and the zero-oxygen hallway. Fixes in this round:
 - the gunship hull is now built from the PC game's own mesh (its textures
   were smeared)
 
-Known problems: crash entering the decompression room (audio), a black
-shape in the zero-oxygen hallway, Gabe does not drop to the floor after the
-hanging fight, a thump in the opening scene, the held weapon floats off
-Gabe's hands. See `docs/PROGRESS.md`.
+Known problems: a black shape and flat windows in the zero-oxygen hallway,
+Gabe does not drop to the floor after the hanging fight, a thump in the
+opening scene, the Pulse Rifle sits oddly in Gabe's hands (future release).
+See `docs/PROGRESS.md`.
 
 **v0.2.0 (2026-10-16)**: Chapter 1 plays from the opening through the
 drill tunnel, saferoom, grinder, the quarry and its door encounter, the
