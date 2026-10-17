@@ -1268,3 +1268,34 @@ and PC values agree. Severed has 30 such meshes (14 names: the gunship and
 `exterior`, the docking bay and hospital doors, `locker_vertical05_am`,
 `powercell_dispenser_mm`, the kiosk, ...). `meshconv.convert` now swaps
 it, and the test script re-converts those meshes (step `mesh_vb68.ok`).
+
+## 48. The drop after the hanging fight (compared with console footage)
+
+Console footage (from 11:49 in the user's video): when the hanging fight
+ends, Gabe falls about a storey onto the red grate floor, lands on his back,
+gets up and walks into the cave corridor. On PC he stays at hanging height:
+the get-up animation plays there, inside the rock overhang, and he ends in
+the right place only when the sequence is over.
+
+The flow (elevator_mini_globals SimGroup):
+- `ses_player_01_02_end` fires `PlayerChangeState_hanging_combat_activate`
+  and `teleport_player_to_hanging_combat`;
+- after the last NPC, `mm_ses_01_03_trigger` starts `ses_player_01_03`:
+  move type NONE, flags 0x4025 (REPEATABLE, NO_GRAVITY_COLLISION,
+  NO_DAMAGE, NEGATE_CHAR_PROXY_OFFSET), action animation 0x6B377EC2 from
+  `pdlc1_igc_01_03_player.bnk`;
+- `ses_player_01_03_end` fires `PlayerChangeState_hanging_combat_deactivate`.
+
+Ruled out:
+- the animation bank: the animation's hash and header convert correctly,
+  and codec-12 animation data is right on the pairs;
+- class remapping: no remapped or blanked class is involved;
+- the flag values: the PC exe registers SSEQFL_* with the same bits
+  (NEGATE_CHAR_PROXY_OFFSET = 0x4000, exe 0xE8E690).
+
+The drop is probably the hanging state's character proxy offset being
+cancelled during the sequence (NEGATE_CHAR_PROXY_OFFSET). The base game's
+own hanging fight (chapter 2, the train) uses the same states, but its
+SimGroups have another block version (0x91C8773C), which our dumper does
+not read yet. Next step: probe the player position and hanging state while
+`ses_player_01_03` runs.
