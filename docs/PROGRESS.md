@@ -210,6 +210,8 @@ intro terminal, the alt-tab hang, the gunship hull textures.
     header can differ between copies (licence and signature data), so a
     correct copy could fail;
   - the shipped list holds only file names and hashes, no game data;
+  - the European and World copies have the same 421 file hashes (FINDINGS
+    1), so one list covers both;
   - on a mismatch, the app names the files that differ and stops, rather
     than building a broken archive.
 - **Severed save pictures and titles (release hook):** the load menu

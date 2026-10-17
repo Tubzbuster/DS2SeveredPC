@@ -34,6 +34,14 @@ The `weller1.*` files are the DLC's manifest, written by EA's
   The menu option ships *with the DLC*, not in the game exe.
 - `weller1.dlm`: list of the DLC's audio streams and their folders
 
+Regional copies (compared with `tools/scan/addon_info.py`): a European
+and a "World" copy are identical apart from the licence entries. Same
+content ID, same header, and all 421 files have the same MD5. One copy's
+licences are tied to an account and a console; the other's are open to
+everyone (all FF). So the package has no regional build. The converter
+never reads the licence entries, and it identifies the add-on by the hash
+of each file inside.
+
 The new chapter reuses Titan Station areas (hospital, psych ward, mining
 camp, …) and pulls shared assets from the base game by path.
 
