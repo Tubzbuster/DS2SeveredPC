@@ -1334,3 +1334,23 @@ pose never ended. In the pairs that child is swapped in all 198 nodes.
 new wrong words. In Severed it changes `pdlc1_gps_02_01_player.bnk`,
 `pdlc1_gps_02_01_gunship_hi.bnk` and a base-game bank that is taken from
 the PC archives anyway. Step `bnk_blend.ok` re-converts the banks.
+
+Update to 49: confirmed in game. The chapter 2 opening (crash landing,
+dialogue, Chapter 2 title) plays.
+
+## 50. Music and ambience streams; the decompression room crash
+
+Music and ambience play from the base game's streams, picked by Severed's
+audio Lua (identical bytes on both platforms in all 46 LUA pairs; Lua 5.0
+bytecode with the little-endian flag). The probe logs show them being read,
+for example `mx_tension_05`, `mx_action_05`, `mx_chase_02`,
+`mx_creepy_cold_01` and `mx_rn_stinger_02`, and ambiences such as
+`amb_med_industrial_hallway_01` and `amb_ch09_elevator_quad`.
+Whether every cue the console plays fires is still to be compared.
+
+The decompression room crash: on the audio thread, exe 0x515F0F (sample
+decoder 0x515EE0, called from 0x51F800 with the voice's read pointer at
++0x34) read through a null pointer. All 5,703 of Severed's bank samples
+are EA-XMA, type 0 (RAM); we convert them to single-block XAS. The PC's own
+banks are all EALayer3, so XAS bank playback is untested territory. Probe
+39 logs the voice and the sample header when this crash happens.

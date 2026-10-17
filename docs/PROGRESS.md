@@ -35,7 +35,9 @@ and is corrected as we play.
 | mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | partial | played through to the docking station. The upside-down tentacle grab after the lift plays; pressing stomp during it put Gabe inside the ceiling (he got out once the animation ended). The quarantine lockdown with 3 override terminals starts. Died there: Twitchers sometimes repeat the same attack and stunlock Gabe in a damage loop |
 | elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
 | docking_station: docking_airlock_01, docking_station_z01/z02 | works, textures off | the gunship fight, destroying it and boarding work since the vertex buffer index fix (FINDINGS 47). The gunships' textures look rainbow-coloured and stretched: to investigate (their MetaModels and materials are the PC game's own; meshes and lightmap materials are Severed's) |
-| chapter 1 -> 2 transition (emergency_arrival) | fix pending | black screen after the gunship scene (sound and pause work). `ses_player_02_02_initial` never ended, so `mm_sync_02_01` (chapter 2 opening, fade-in) never came: a blend weight left unswapped in its hold pose (FINDINGS 49). Fixed in `convert.bnk`, step `bnk_blend.ok` |
+| chapter 1 -> 2 transition (emergency_arrival) | works | confirmed: the crash-landing scene, its dialogue and the Chapter 2 title play (FINDINGS 49). A side-by-side screenshot with console footage at the psych ward line matches |
+| emergency / psych ward: Tormentor fight, airless hallway | works, issues | the Tormentor boss fight works; a flat black shape floats in the zero-oxygen hallway (Gabe walks through it): to investigate |
+| decompression room | crash | crashed on entering (doors open, light supports destroyed): audio thread, exe 0x515F0F, the sample decoder (0x515EE0) read a block through a null pointer (voice +0x34). Severed's sound banks are the only XAS bank samples the PC plays (its own banks are all EALayer3). Probe 39 dumps the voice and the sample header at this crash |
 
 ## Chapter 2: the hospital
 
@@ -91,6 +93,7 @@ and is corrected as we play.
 - Probe 26+: heap checks every 2 s (`HEAP ... CORRUPT` lines). Probe 35: off unless `severed_heapcheck.on` is in the game folder (suspected of the alt-tab hang).
 - Probe 36: `SES` lines: each scripted sequence's name hash, settings flags and origin once; sequences with SSEQFL_NEGATE_CHAR_PROXY_OFFSET every 250 ms with the hanging proxy offset they subtract (FINDINGS 48).
 - Probe 37: the scripted sequence hook retries for 10 s (it missed about half of the runs before).
+- Probe 39: at a crash in the sample decoder (exe+0x115F0F), dumps the voice and the sample's EA header.
 - Probe 38: `SES` lines only when a sequence's anchor or offset changes (probe 37 hit the 600-line cap in the opening scene).
 - Probe 30+: `severed_novtf.on` (empty file in the game folder) unbinds
   vertex textures before dynamic-geometry draws; an experiment for the

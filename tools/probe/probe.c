@@ -2440,6 +2440,24 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
         }
         log_states(c);
     }
+    if ((DWORD)r->ExceptionAddress - (DWORD)GetModuleHandleA(NULL) == 0x115F0F) {
+        /* sample decoder (exe 0x515EE0) with a null block pointer: the
+           voice (ebx, 0x50 bytes; +8 sample data, +0x34 read pointer) and
+           the sample's EA header, to identify the sample (probe 39) */
+        BYTE *v = (BYTE *)c->Ebx, *smp;
+        int k;
+        for (k = 0; k < 0x50 && mem_ok(v + k, 16); k += 16)
+            log_line("  voice +%02x: %08lx %08lx %08lx %08lx", k, *(DWORD *)(v + k), *(DWORD *)(v + k + 4),
+                     *(DWORD *)(v + k + 8), *(DWORD *)(v + k + 12));
+        smp = mem_ok(v + 8, 4) ? *(BYTE **)(v + 8) : NULL;
+        if (smp && mem_ok(smp, 24))
+            log_line("  sample data %p: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x", smp,
+                     smp[0], smp[1], smp[2], smp[3], smp[4], smp[5], smp[6], smp[7],
+                     smp[8], smp[9], smp[10], smp[11], smp[12], smp[13], smp[14], smp[15]);
+        for (k = 0; k < 0x40 && mem_ok((BYTE *)c->Edi + 0x60 + k, 16); k += 16)
+            log_line("  player +%02x: %08lx %08lx %08lx %08lx", 0x60 + k, *(DWORD *)((BYTE *)c->Edi + 0x60 + k),
+                     *(DWORD *)((BYTE *)c->Edi + 0x64 + k), *(DWORD *)((BYTE *)c->Edi + 0x68 + k), *(DWORD *)((BYTE *)c->Edi + 0x6C + k));
+    }
     log_meshes_near("eax", c->Eax); log_meshes_near("ebx", c->Ebx); log_meshes_near("ecx", c->Ecx);
     log_meshes_near("edx", c->Edx); log_meshes_near("esi", c->Esi); log_meshes_near("edi", c->Edi);
     log_meshes_near("ebp", c->Ebp);
@@ -2512,7 +2530,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 38 - process %s", path);
+    log_line("severed probe 39 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
