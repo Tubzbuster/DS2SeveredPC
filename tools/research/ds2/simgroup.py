@@ -81,16 +81,20 @@ NUDGE = {}
 # through it. Releasing it as the drop sequence starts (mm_ses_01_03_trigger
 # starts ses_player_01_03) lets him come down (F7 test: released early, he
 # fell straight to the floor). The end's own release finds no listener.
-RETARGET = {
-    0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate', b'mm_ses_01_03_trigger'),
-}
+# Tried {0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate',
+# b'mm_ses_01_03_trigger')}: Gabe still did not drop, so it is off again
+# (and a suspect for Gabe floating after the gunship landing).
+RETARGET = {}
 
 # Chapter numbers (PlayerSetChapter): the PC load menu picks a save's
 # picture and title by chapter number alone, so both of Severed's chapters
 # become 16, which saveicons.py gives Severed's own picture and title. Base
 # chapter 16 is defined but unused; 17 would be new, and PlayerSettings has
 # only 16 per-chapter log lists, so it is not used.
-CHAPTERS = {1: 16, 2: 16}
+# Off again: chapter 2 is set as the gunship lands, where Gabe then floated
+# above the ship unable to move (chapter 16 may mean more to the game than
+# the save label). Saves show the base chapter 1/2 pictures meanwhile.
+CHAPTERS = {}
 
 # Comfort: Severed's strobing lights. AnimateLight (exe 0xBA5467-0xBA55B6)
 # sets a light to IntensityJitterMin + (IntensityJitter - Min) * v, picking a

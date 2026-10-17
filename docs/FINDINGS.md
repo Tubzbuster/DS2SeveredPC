@@ -1474,6 +1474,19 @@ Severed mesh table has those index counts (nor runs of tables starting
 there), so probe 46 logs, after F5, every draw of the marked piece (and
 the one before) in any pass, with its textures.
 
+Identified from the converted mesh: the two pieces are tables 2 and 11 of
+the hallway's `opt_model1` (start 14786 / 4269 indices, 44302 / 2401), both
+material BCB92A59 = `industrial_mat_ind_metalscratched02_diffuse` (12
+tables of the mesh), the same material as the PC game's own copy. Their
+geometry is sound (all vertices inside the table bounds, longest edge
+4.7 m), so the box is those wall panels shaded black, not stray geometry.
+The material uses the PC lightmap shader (0x0E155D33; samplers color ->
+AoMapSampler, lightmap_ycocg -> LightMapSampler, no texture of its own for
+either). Other materials of the mesh with that shader (floor panel 13,
+metal clamp, scorch and oil overlays, ceiling hall, metal panel 02, ...)
+are candidates for the other black shapes; probe 46's colour-pass trace
+will show what is bound to the lightmap and AO samplers.
+
 Found while testing: `build.convert_stream` reused `w` (the stream writer)
 for the mesh's widened UV streams, so a first conversion of any stream with
 a mesh failed; existing builds were converted before that change.

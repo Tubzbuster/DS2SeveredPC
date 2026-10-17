@@ -47,6 +47,19 @@ entering the decompression room.
 6. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
 
+**Reported in the replay (new game):**
+- Gabe floats above the gunship after the docking transition, unable to
+  move (worked before). Test build reverts the two script changes made
+  since: chapter numbers back to 1/2 and the hanging release as on the
+  console (`chapters_restored.ok`); the save picture goes back to the base
+  chapter pictures meanwhile.
+- black stretched shapes in several hospital rooms: the hallway's box is
+  the scratched-metal wall panels shaded black (lightmap-shader material);
+  probe 46 trace pending.
+- bodies in the drill tunnel lie in different places on each new game
+  (likely settling during the intro).
+- the clinic overlook room's reflections are sideways.
+
 **Open bugs** (strike out any that are no longer bugs):
 - ~~crash entering the decompression room~~ fixed (looping sound split)
 - black shape in the zero-oxygen hallway (ruled out: the depth-of-field

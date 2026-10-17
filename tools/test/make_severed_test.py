@@ -765,10 +765,11 @@ def main():
         log('Airless hallway: glass test over (no change), the glass parts back')
         restore_hall_parts(root, dst)
         open(os.path.join(work, 'hall_glass_back.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'chapter_numbers2.ok')):
-        log('Save pictures: both of Severed\'s chapters become chapter 16 (its own picture and title)')
-        refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS)
-        open(os.path.join(work, 'chapter_numbers2.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'chapters_restored.ok')):
+        log('Gunship landing test: chapters 1 and 2 as on the console, the hanging release as on the console')
+        refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS now empty)
+        refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET now empty)
+        open(os.path.join(work, 'chapters_restored.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
