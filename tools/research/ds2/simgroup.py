@@ -67,6 +67,15 @@ STORE_HIDDEN = {
     (0x31CBB1C6, 0xD0F37D3D),   # PDLC Bloody Suit
 }
 
+# Objects whose placement is raised (metres, +Y up) so their ragdolls start
+# above the floor: the two corpses in drill_tunnel_01, posed with their
+# origins at floor height, kept bouncing (audibly) through the opening scene
+# on PC and only settled once the player had control.
+NUDGE_UP = {
+    (0x4FCB8B8A, 0x8DAB82D2, 0x4952414D, 0x4C4C454E): 0.12,   # corpse by the PowerUp
+    (0x4FCB9105, 0x91CED0FE, 0x4952414D, 0x4C4C454E): 0.12,   # corpse by Gabe's gun
+}
+
 
 def schema():
     global _SCHEMA
@@ -117,6 +126,19 @@ def _record(out, x, base, length, cls, stats):
     _struct(out, x, base, cls)
     if cls['name'] == 'ItemStoreList':
         _hide_store_items(out, x, base, cls, stats)
+
+
+def _nudge(out, x, oC, count, stats):
+    """object records (0x44 bytes: GUID at +12, matrix offset at +48;
+    matrices are 16 floats, translation at +48): raise NUDGE_UP objects"""
+    for i in range(count):
+        e = oC + 0x44 * i
+        dy = NUDGE_UP.get(struct.unpack_from('>4I', x, e + 12))
+        m = struct.unpack_from('>I', x, e + 48)[0]
+        if dy and m and m + 64 <= len(x):
+            y = struct.unpack_from('>f', x, m + 52)[0] + dy
+            struct.pack_into('<f', out, m + 52, y)
+            stats['nudged'] = stats.get('nudged', 0) + 1
 
 
 def _hide_store_items(out, x, base, cls, stats):
@@ -226,4 +248,5 @@ def convert(x, stats=None):
                 out[e:e + 4] = struct.pack('<I', sdbm(struct.pack('<%dI' % gcount, *[m[1] for m in members])))
             else:
                 stats['group_hash_unverified'] = stats.get('group_hash_unverified', 0) + 1
+    _nudge(out, x, oC, n16, stats)
     return bytes(out)
