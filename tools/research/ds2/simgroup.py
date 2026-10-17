@@ -85,6 +85,12 @@ RETARGET = {
     0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate', b'mm_ses_01_03_trigger'),
 }
 
+# Chapter numbers (PlayerSetChapter): the PC load menu picks a save's
+# picture and title by chapter number alone, so Severed's chapters 1 and 2
+# become 16 and 17, which saveicons.py gives Severed's own pictures and
+# titles (base chapter 16 is defined but unused, 17 is new).
+CHAPTERS = {1: 16, 2: 17}
+
 
 def msg_hash(name):
     """message names: sdbm of the lower-case name, multiplier 0x1003F"""
@@ -268,6 +274,11 @@ def convert(x, stats=None):
         _record(out, x, B + ro, ln, cls, stats)
         if oh in RETARGET:
             _retarget(out, x, B + ro, ln, oh, stats)
+        if cls is not None and cls['name'] == 'PlayerSetChapter':
+            c = struct.unpack_from('>I', x, B + ro + 12)[0]
+            if c in CHAPTERS:
+                struct.pack_into('<I', out, B + ro + 12, CHAPTERS[c])
+                stats['chapters'] = stats.get('chapters', 0) + 1
     # group hashes: sdbm over the members' class-name hashes, PC byte order
     if o10:
         for i in range(n18):

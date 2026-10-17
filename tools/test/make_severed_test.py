@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'research'))
 
 try:
-    from ds2 import bigarchive, build, eaaudio, pcassets, simgroup, snu, stfs, streamfile, streamwrite, toc   # noqa: E402
+    from ds2 import bigarchive, build, eaaudio, pcassets, saveicons, simgroup, snu, stfs, streamfile, streamwrite, toc   # noqa: E402
 except ImportError:
     raise SystemExit('Run this from the repository\'s tools\\test folder: it needs tools\\research next to it '
                      '(copy the whole repository, not just this file).')
@@ -81,6 +81,65 @@ def patched_global_assets(pc, sev):
         src = s or a
         w.add(src.type_hash, src.flags, src.ids, src.name, src.path, src.type, src.payload())
     return w.data(), swapped, len(lua)
+
+
+SAVE_ICON_STREAMS = ('global_assets\\global_assets.str', 'global_assets\\global_assets_global.str',
+                     'frontend\\frontend.str', 'frontend\\frontend_global.str')
+
+
+def save_icon_files(idx, root, files):
+    """Severed's save pictures and titles (saveicons.py) added to the PC
+    streams holding the picture table, the chapter 1 picture and the
+    string tables; replaces those streams in files (or adds them) and their
+    TOCs' stream sizes"""
+    icons = {}
+    main = os.path.join(root, 'pdlc1_ch01_mng', 'pdlc1_ch01_mng.str')    # holds the two PNGs
+    if os.path.exists(main):
+        for x in streamfile.read(open(main, 'rb').read())[1]:
+            for n in (1, 2):
+                if x.type == 'PNG' and x.name.lower() == 'weller1_ch%d.png' % n:
+                    icons[n] = x.payload()
+    if set(icons) != {1, 2}:
+        log('  save pictures: Severed\'s weller1_ch1/ch2.png not found, left out')
+        return
+    have = {n.lower(): i for i, (n, _) in enumerate(files)}
+    stats = {}
+    for name in SAVE_ICON_STREAMS:
+        h = bigarchive.name_hash(name)
+        if name.lower() in have:
+            src = files[have[name.lower()]][1]
+            data = src if isinstance(src, (bytes, bytearray)) else open(src, 'rb').read()
+        elif h in idx:
+            data = read_entry(idx, h)
+        else:
+            continue
+        rows = saveicons.patch(streamfile.read(data)[1], icons, stats)
+        if rows is None:
+            continue
+        w = streamwrite.Writer()
+        for r in rows:
+            w.add(*r)
+        y = w.data()
+        if name.lower() in have:
+            files[have[name.lower()]] = (name, y)
+        else:
+            files.append((name, y))
+        log('  save pictures: %s patched' % name)
+        stem = name[:-4]
+        tname = stem + '.toc'                           # X.str -> X.toc, X_global.str -> X_global.toc
+        th = bigarchive.name_hash(tname)
+        if th in idx and tname.lower() not in have:
+            t = read_entry(idx, th)
+            names = toc.parse(t, '<')['stream_names']
+            size = sum(len(r[6]) for r in rows)
+            hit = [n for n in names if n.lower().replace('/', '\\') in (stem.lower(), stem.lower().split('\\')[-1])]
+            for n in hit:
+                t = toc.set_size(t, n, size)
+            if hit:
+                files.append((tname, t))
+                have[tname.lower()] = len(files) - 1
+            log('    %s: size of %s set (streams listed: %s)' % (tname, ', '.join(hit) or 'none', ', '.join(names[:6])))
+    log('  save pictures: %s' % ', '.join('%s %s' % kv for kv in sorted(stats.items())))
 
 
 def strip_dropped(dst):
@@ -667,6 +726,10 @@ def main():
         refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET)
         refresh_simgroups(root, dst, 0x31714328)       # ScriptableProp (simgroup.NUDGE emptied)
         open(os.path.join(work, 'hang_release.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'chapter_numbers.ok')):
+        log('Save pictures: Severed\'s chapters become 16 and 17 (their own pictures and titles)')
+        refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS)
+        open(os.path.join(work, 'chapter_numbers.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
@@ -685,6 +748,7 @@ def main():
     ga, swapped, total = patched_global_assets(pc_ga, open(os.path.join(dst, 'global_assets', 'global_assets_global.str'), 'rb').read())
     log('  global_assets_global.str: %d of %d Severed Lua scripts swapped in' % (swapped, total))
     files.append(('global_assets\\global_assets_global.str', ga))
+    save_icon_files(idx, root, files)
     # Experiment (probe 12): the level's SimGroup, which holds Severed's
     # StreamSet and checkpoint objects, also as a stream sets file, requested
     # in stream-sets mode by the probe like the base chapters' ones.

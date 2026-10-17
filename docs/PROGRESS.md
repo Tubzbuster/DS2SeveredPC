@@ -33,11 +33,13 @@ entering the decompression room.
 - gunship hull textures (built from the PC game's own mesh)
 
 **Tests waiting on you:**
-1. Hanging fight drop: the hanging state now ends as the drop starts
-   (`hang_release.ok`); no F7 needed. Delete `severed_send.txt` first.
-2. Decompression room: enter it again with probe 39 and send the log if it
+1. Hanging fight drop with probe 40: the release still had a listener at
+   the drop's end; the probe now names it.
+2. Save pictures and titles: make new saves in chapter 1 and chapter 2
+   (`chapter_numbers.ok`); older saves keep their old labels.
+3. Decompression room: enter it again with probe 39 and send the log if it
    crashes.
-3. Zero-oxygen hallway: F7 tests turning the hallway's effects off one at
+4. Zero-oxygen hallway: F7 tests turning the hallway's effects off one at
    a time (below).
 
 **Open bugs** (strike out any that are no longer bugs):
@@ -54,7 +56,8 @@ entering the decompression room.
 - thump in the opening scene (not the two corpses, Gabe's gun or the
   tunnel's 4 physics props, tests 1-4)
 - the held weapon floats a little off Gabe's hands
-- saves show as "Chapter 1" with chapter 1's picture
+- saves show as "Chapter 1" with chapter 1's picture: fix pushed, to test
+  (chapters 16/17 with Severed's own pictures and titles)
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)

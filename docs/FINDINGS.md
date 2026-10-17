@@ -1383,3 +1383,33 @@ Our conversion keeps the 360's four buffers.
 entry 2E72F4DC in DS2DAT8) with Severed's material ids written into each
 table (`derive_mesh`: one word changes), and takes the PC volatile with it.
 Step `gunship_hull.ok`.
+
+## 52. Save pictures and titles
+
+The PC load menu (exe 0xBAE170) builds a save's picture key as
+`ch%02d` and its title as `CH%02d_TitleString` from the save's chapter
+number alone; the .lvl's save icon suffix is never used. The picture key is
+looked up (0xA42750, its only caller) in the `UIMenuCheckpointIcons` object
+of `global_assets.simgroup.bin` (old block format 0x91C8773C: entries
+{field hash, tag, value}, tag 0xFF0AFFFF a name hash, 0xFF0CFFFF a GUID at
+an offset into a GUID pool shared between entries). Used keys: ch01-ch15,
+black, ch00 and default (the last two = chapter 1's picture, never asked
+for). Pictures are VFX `ui_saveload_icnNN.vfx` naming textures
+`ui_saveload_icn_chNN` (DXT5 128x64, 3 mips). The base string tables
+already hold `CH16_TitleString` ("Chapter 16", unused) and CH00 =
+"CLEARED GAME".
+
+Ids: textures (type hash, 0, type hash, crc32(folder), crc32(folder +
+name)); VFX (type hash, g, g, g, g2) with g the sdbm hash of the source
+path `s:\assets\...\name.vfx`, the GUID being g, g, g, g2.
+
+Severed's PlayerSetChapter objects set chapters 1 and 2, hence the base
+chapter 1/2 pictures and "Chapter 1" titles. The converter now sets 16 and
+17 (`simgroup.CHAPTERS`) and `saveicons.py` adds the pictures (Severed's
+64x64 Xbox icons stretched), the two VFX, the table entries (ch00/default
+renamed, new GUIDs appended to the SimGroup) and the titles ("Severed,
+Chapter 1/2", per language) to the PC streams at packaging time. Open
+risk: PlayerSettings has 16 per-chapter log entry lists
+(`CMD_SetChapter01..16EntryList`), so chapter 17 may index past them if
+the game reads them by chapter.
+
