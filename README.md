@@ -170,18 +170,17 @@ How it works:
 |---|---|
 | Severed in the episode select | Works (via the probe DLL) |
 | Intro terminal cutscene, RIG call scene, hand-over | Works, with subtitles (a thump in the opening scene) |
-| Level geometry, textures, lighting, collision | Works in the areas reached (a black shape in the zero-oxygen hallway) |
+| Level geometry, textures, lighting, collision | Works in the areas reached (some surfaces in the hospital draw black: being fixed) |
 | Playing as Gabe (security suit), HUD, inventory | Works (the Pulse Rifle sits oddly in his hands: future release) |
 | Dialogue, audio logs, videos, music, ambience | Works |
 | Necromorph AI, Tormentor boss | Works |
 | Chapter 1: drill tunnel to the docking station | Works (Gabe does not drop to the floor after the hanging fight: fix pending) |
-| Gunship fight, boarding | Works |
-| Chapter 2: crash landing, Tormentor, zero-oxygen hallway | Works |
-| Chapter 2: decompression room | Crashes (audio): being investigated |
+| Gunship fight, boarding | Works (on one replay Gabe floated above the ship after the transition: fix pending) |
+| Chapter 2: crash landing to the psych ward saferoom (about 75%) | Works (black surfaces, beige hallway windows, sideways reflections in one room) |
 | Stores, benches, save stations | Work (saves show as "Chapter 1"; suit packs removed from the stores) |
 | Gabe's starting weapons | Given, with the Pulse Rifle upgrades |
 | Performance near some lights | Drops; not investigated yet |
-| Rest of chapter 2, ending | Not reached yet |
+| Security room, chase hall, landing bay finale, ending | Not reached yet |
 | One-click installer | Not yet (the test script does the job for now) |
 
 ```text
