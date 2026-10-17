@@ -92,14 +92,18 @@ RETARGET = {
 # only 16 per-chapter log lists, so it is not used.
 CHAPTERS = {1: 16, 2: 16}
 
-# Comfort: Severed's strobing lights. AnimateLight objects flicker a light's
-# intensity between IntensityJitterMin and IntensityJitter every Frequency
-# seconds. 32 of Severed's 695 swing from (near) black to 1.5-2.5x
-# brightness 4-30 times a second, e.g. the gift shop's two key lights
-# (0.15 s, 0 to 2x): the whole room strobes (measured ~6.5 flashes/s). Their range is narrowed to
-# 0.7-1.3x (timing kept), so they still flicker but no longer flash.
+# Comfort: Severed's strobing lights. AnimateLight (exe 0xBA5467-0xBA55B6)
+# sets a light to IntensityJitterMin + (IntensityJitter - Min) * v, picking a
+# new v every Frequency seconds: Function 0 a random v, Function 1 v = 1 with
+# probability DutyCycle, decaying to 0 over FunctionParam seconds (a flash).
+# 32 of Severed's 695 swing from (near) black to 1.5-2.5x brightness 4-30
+# times a second, e.g. the gift shop's two key lights (Function 1, 0.15 s,
+# duty 0.7, 0 to 2x): the whole room strobes (~6.5 flashes/s). A 0.7-1.3x
+# range at the same speed was still a strobe to the eye, so their range is
+# narrowed to 0.85-1.15x and their period lengthened to 0.5 s (2 a second).
 CALM_PERIOD = 0.25
-CALM_RANGE = (0.7, 1.3)
+CALM_RANGE = (0.85, 1.15)
+CALM_SLOW = 0.5
 
 
 def _calm_light(out, x, base, cls, stats):
@@ -109,6 +113,7 @@ def _calm_light(out, x, base, cls, stats):
     if 0 < freq < CALM_PERIOD and jit - jmin > 1.0:
         struct.pack_into('<f', out, base + off['CMD_IntensityJitterMin'], CALM_RANGE[0])
         struct.pack_into('<f', out, base + off['CMD_IntensityJitter'], CALM_RANGE[1])
+        struct.pack_into('<f', out, base + off['CMD_Frequency'], CALM_SLOW)
         stats['lights_calmed'] = stats.get('lights_calmed', 0) + 1
 
 

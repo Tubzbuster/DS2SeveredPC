@@ -1440,8 +1440,11 @@ and the broken-glass overlays (`ovl_glassshatter01-03`). Test step
 one vertex).
 
 Result: no change in game (glass not the cause); the glass is restored by
-step `hall_glass_back.ok`. Next: probe 42's F6 draw census (each draw's
-primitive counts, stride, textures) facing the artefacts and away.
+step `hall_glass_back.ok`. Probe 42's F6 draw census was inconclusive:
+the frames facing and away share no draws to compare (different views),
+and the world passes keep their material textures off stages 0-1. Probe 43
+instead hides one pixel shader at a time (F6), with F5 marking the shader
+hidden when the artefact goes.
 
 Found while testing: `build.convert_stream` reused `w` (the stream writer)
 for the mesh's widened UV streams, so a first conversion of any stream with
@@ -1484,4 +1487,17 @@ makes it harsh is a range from 0 to 2x on a room's main lights. As a
 comfort change, `simgroup.CALM_RANGE` narrows every Severed AnimateLight
 with a period under 0.25 s and a range wider than 1.0 (32 of 695) to
 0.7-1.3x, timing kept. Step `calm_lights.ok`.
+
+Second round (the user saw no change): the exe's AnimateLight update
+(0xBA5467-0xBA55B6) sets intensity = Min + (Jitter - Min) * v, with a new v
+every Frequency seconds; Function 0 picks a random v, Function 1 sets v = 1
+with probability DutyCycle and lets it decay to 0 over FunctionParam seconds
+(a flash). The gift shop's key lights are Function 1, so even at 0.7-1.3x
+they still pulsed bright/dim 6.5 times a second. Now 0.85-1.15x with the
+period lengthened to 0.5 s (`CALM_SLOW`), step `calm_lights2.ok`.
+
+Saves: the chapter number is set by PlayerSetChapter when a chapter begins
+and is carried in the save, so a save made after loading an older chapter 2
+save keeps chapter 2 (base picture and title). The change shows only for a
+Severed run started (or a chapter begun) with the new archive.
 

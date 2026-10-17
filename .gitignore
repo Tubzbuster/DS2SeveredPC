@@ -41,3 +41,6 @@ __pycache__/
 # prebuilt XAS encoder (our own code, built by tools/research/native/build.sh)
 !/tools/research/ds2/*.pkl
 !/tools/research/native/xasenc.dll
+
+# Converter output (holds local paths)
+*.log

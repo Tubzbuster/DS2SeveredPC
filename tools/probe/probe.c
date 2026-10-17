@@ -2305,15 +2305,20 @@ static DrawIdx_t o_DrawIndexedPrimitive;
 static DrawPrimUP_t o_DrawPrimitiveUP;
 static DrawIdxUP_t o_DrawIndexedPrimitiveUP;
 
-/* ---- draw census (probe 42, F6) ------------------------------------------
- * The next 4000 draws after F6 are logged: primitive type and counts, the
- * stream 0 stride, the textures on stages 0 and 1 (size and format) and the
- * pixel shader, to match the draws against the converted meshes' tables
- * (index counts) and textures. Press it facing an artefact, then facing
- * away: the draws that disappear are the artefact's. */
-static volatile LONG g_census;
-static UINT g_stride0;
+/* ---- shader hiding (probe 43, F6/F5) --------------------------------------
+ * Probe 42's census could not tell the airless hallway's black shape apart
+ * (the world is drawn in passes whose material textures are not on stages 0
+ * and 1). F6 now collects the pixel shaders of the next 1500 draws (about
+ * two frames) and hides the first; each further F6 hides the next one
+ * instead, and after the last all are shown again. F5 marks the shader hidden
+ * now (press it when the artefact is gone). Each shader is logged with the
+ * textures of its first draw (stages 0-3), the stream 0 stride and counts. */
+#define MAX_SHADERS 128
 static void *g_ps;
+static UINT g_stride0;
+static void *g_shaders[MAX_SHADERS];
+static volatile LONG g_nshaders, g_collect, g_hide_k;
+static void *volatile g_hide_ps;
 
 static void tex_desc(void *t, char *out, int n)
 {
@@ -2322,33 +2327,66 @@ static void tex_desc(void *t, char *out, int n)
     DWORD desc[8] = {0};
     if (!t || !mem_ok(t, 4) || !mem_ok(*(void **)t, 18 * 4)) { wsprintfA(out, "-"); return; }
     if (((GetType_t)(*(void ***)t)[10])(t) == 3) ((GetLevelDesc_t)(*(void ***)t)[17])(t, 0, desc);
-    wsprintfA(out, "%p %lux%lu fmt %08lx", t, desc[6], desc[7], desc[0]);
+    wsprintfA(out, "%lux%lu/%08lx", desc[6], desc[7], desc[0]);
     (void)n;
 }
 
-static void census(const char *kind, DWORD t, UINT nv, UINT si, UINT pc, void *ret)
+static void collect(DWORD t, UINT nv, UINT pc, void *ret)
 {
-    char a[64], b[64], who[MAX_PATH + 32];
-    LONG k = InterlockedDecrement(&g_census);
-    if (k < 0) { g_census = 0; return; }
-    tex_desc(g_bound[0], a, sizeof a);
-    tex_desc(g_bound[1], b, sizeof b);
-    addr_name((DWORD)ret, who, sizeof who);
-    log_line("DRAW %s prim %lu verts %u start %u count %u stride %u ps %p tex0 %s tex1 %s from %s",
-             kind, t, nv, si, pc, g_stride0, g_ps, a, b, who);
-    if (k == 0) log_line("F6: draw census done");
+    LONG i, n = g_nshaders;
+    char a[4][40], who[MAX_PATH + 32];
+    for (i = 0; i < n; i++) if (g_shaders[i] == g_ps) break;
+    if (i == n && n < MAX_SHADERS && g_ps) {
+        g_shaders[n] = g_ps;
+        g_nshaders = n + 1;
+        for (i = 0; i < 4; i++) tex_desc(g_bound[i], a[i], sizeof a[i]);
+        addr_name((DWORD)ret, who, sizeof who);
+        log_line("  shader %ld: ps %p, first draw prim %lu verts %u count %u stride %u tex %s %s %s %s from %s",
+                 n + 1, g_ps, t, nv, pc, g_stride0, a[0], a[1], a[2], a[3], who);
+    }
+    if (InterlockedDecrement(&g_collect) == 0) {
+        log_line("F6: %ld shaders on screen; hiding shader 1 (ps %p)", g_nshaders, g_shaders[0]);
+        g_hide_k = 1;
+        g_hide_ps = g_shaders[0];
+    }
+}
+
+static void hide_next(void)
+{
+    if (g_collect > 0) return;
+    if (g_hide_k == 0 || g_hide_k >= g_nshaders) {
+        if (g_hide_k) log_line("F6: all shaders shown again (next F6 collects them anew)");
+        else {
+            log_line("F6: collecting the pixel shaders of the next 1500 draws");
+            g_nshaders = 0;
+            g_collect = 1500;
+        }
+        g_hide_ps = NULL;
+        g_hide_k = 0;
+        return;
+    }
+    g_hide_ps = g_shaders[g_hide_k];
+    g_hide_k++;
+    log_line("F6: hiding shader %ld of %ld (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
+}
+
+static int draw_hidden(DWORD t, UINT nv, UINT pc, void *ret)
+{
+    if (g_collect > 0) collect(t, nv, pc, ret);
+    return g_hide_ps && g_ps == g_hide_ps;
 }
 
 static HRESULT WINAPI g_DrawPrimitive(void *d, DWORD t, UINT s0, UINT n)
 {
     check_bound(d, __builtin_return_address(0));
-    if (g_census > 0) census("prim", t, 0, s0, n, __builtin_return_address(0));
+    if (draw_hidden(t, 0, n, __builtin_return_address(0))) return 0;
+    (void)s0;
     return o_DrawPrimitive(d, t, s0, n);
 }
 static HRESULT WINAPI g_DrawIndexedPrimitive(void *d, DWORD t, INT b, UINT mn, UINT nv, UINT si, UINT pc)
 {
     check_bound(d, __builtin_return_address(0));
-    if (g_census > 0) census("idx", t, nv, si, pc, __builtin_return_address(0));
+    if (draw_hidden(t, nv, pc, __builtin_return_address(0))) return 0;
     return o_DrawIndexedPrimitive(d, t, b, mn, nv, si, pc);
 }
 static HRESULT WINAPI g_DrawPrimitiveUP(void *d, DWORD t, UINT n, const void *v, UINT st)
@@ -2573,7 +2611,7 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         /* with Alt, Ctrl or Shift held the keys belong to other programs
            (Alt+F9 records in the Nvidia overlay) */
         if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
-            while ((GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
+            while ((GetAsyncKeyState(VK_F5) | GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
                     GetAsyncKeyState(VK_F10) | GetAsyncKeyState(VK_F11)) & 0x8000) Sleep(100);
             continue;
         }
@@ -2592,9 +2630,13 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
             while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
         }
         if (GetAsyncKeyState(VK_F6) & 0x8000) {
-            log_line("F6: draw census (next 4000 draws)");
-            g_census = 4000;
+            hide_next();
             while (GetAsyncKeyState(VK_F6) & 0x8000) Sleep(100);
+        }
+        if (GetAsyncKeyState(VK_F5) & 0x8000) {
+            if (g_hide_ps) log_line("F5: MARK - shader %ld of %ld hidden (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
+            else log_line("F5: MARK - nothing hidden");
+            while (GetAsyncKeyState(VK_F5) & 0x8000) Sleep(100);
         }
         if (GetAsyncKeyState(VK_F10) & 0x8000) {
             reflect_scan();
@@ -2624,7 +2666,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 42 - process %s", path);
+    log_line("severed probe 43 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
