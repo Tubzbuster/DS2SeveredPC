@@ -2373,23 +2373,90 @@ static void hide_next(void)
     log_line("F6: hiding shader %ld of %ld (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
 }
 
-static int draw_hidden(DWORD t, UINT nv, UINT pc, void *ret)
+/* ---- piece hiding (probe 45, F3) -------------------------------------------
+ * Probe 44's run: hiding single shaders never removed the hallway's black box
+ * except with the whole level (the lightmapped world shader). F3, pressed
+ * while F6 hides such a shader, splits it: the draws made with it over the
+ * next 1500 draws are collected as pieces (vertex buffer, index buffer,
+ * base vertex, start index, triangle count), the shader is drawn again and
+ * the first piece alone is hidden; each further F3 hides the next piece.
+ * Each piece is logged with its counts and textures (stages 0-3). */
+#define MAX_PIECES 256
+typedef struct { void *vb, *ib; INT b; UINT si, pc; } piece_t;
+static void *g_vb0, *g_ib;
+static piece_t g_pieces[MAX_PIECES];
+static void *volatile g_piece_ps;
+static volatile LONG g_npieces, g_pcollect, g_piece_k;
+static piece_t g_hide_piece;
+
+static int same_piece(const piece_t *a, INT b, UINT si, UINT pc)
+{
+    return a->vb == g_vb0 && a->ib == g_ib && a->b == b && a->si == si && a->pc == pc;
+}
+
+static void collect_piece(DWORD t, INT b, UINT nv, UINT si, UINT pc)
+{
+    LONG i, n = g_npieces;
+    char a[4][40];
+    for (i = 0; i < n; i++) if (same_piece(&g_pieces[i], b, si, pc)) break;
+    if (i == n && n < MAX_PIECES) {
+        g_pieces[n].vb = g_vb0; g_pieces[n].ib = g_ib; g_pieces[n].b = b;
+        g_pieces[n].si = si; g_pieces[n].pc = pc;
+        g_npieces = n + 1;
+        for (i = 0; i < 4; i++) tex_desc(g_bound[i], a[i], sizeof a[i]);
+        log_line("  piece %ld: prim %lu verts %u start %u count %u base %d stride %u vb %p ib %p tex %s %s %s %s",
+                 n + 1, t, nv, si, pc, b, g_stride0, g_vb0, g_ib, a[0], a[1], a[2], a[3]);
+    }
+    if (InterlockedDecrement(&g_pcollect) == 0) {
+        log_line("F3: %ld pieces drawn with ps %p; hiding piece 1", g_npieces, g_piece_ps);
+        g_hide_piece = g_pieces[0];
+        g_piece_k = 1;
+    }
+}
+
+static void piece_next(void)
+{
+    if (g_pcollect > 0) return;
+    if (!g_piece_k) {
+        if (!g_hide_ps) { log_line("F3: hide a shader with F6 first (the one that makes the level vanish)"); return; }
+        g_piece_ps = g_hide_ps;
+        g_hide_ps = NULL;
+        g_npieces = 0;
+        log_line("F3: collecting the pieces drawn with ps %p over the next 1500 draws", g_piece_ps);
+        g_pcollect = 1500;
+        return;
+    }
+    if (g_piece_k >= g_npieces) {
+        log_line("F3: all pieces shown again");
+        g_piece_k = 0;
+        g_piece_ps = NULL;
+        return;
+    }
+    g_hide_piece = g_pieces[g_piece_k];
+    g_piece_k++;
+    log_line("F3: hiding piece %ld of %ld (start %u count %u)", g_piece_k, g_npieces, g_hide_piece.si, g_hide_piece.pc);
+}
+
+static int draw_hidden(DWORD t, INT b, UINT nv, UINT si, UINT pc, void *ret)
 {
     if (g_collect > 0) collect(t, nv, pc, ret);
+    if (g_piece_ps && g_ps == g_piece_ps) {
+        if (g_pcollect > 0) collect_piece(t, b, nv, si, pc);
+        else if (g_piece_k && same_piece(&g_hide_piece, b, si, pc)) return 1;
+    }
     return g_hide_ps && g_ps == g_hide_ps;
 }
 
 static HRESULT WINAPI g_DrawPrimitive(void *d, DWORD t, UINT s0, UINT n)
 {
     check_bound(d, __builtin_return_address(0));
-    if (draw_hidden(t, 0, n, __builtin_return_address(0))) return 0;
-    (void)s0;
+    if (draw_hidden(t, 0, 0, s0, n, __builtin_return_address(0))) return 0;
     return o_DrawPrimitive(d, t, s0, n);
 }
 static HRESULT WINAPI g_DrawIndexedPrimitive(void *d, DWORD t, INT b, UINT mn, UINT nv, UINT si, UINT pc)
 {
     check_bound(d, __builtin_return_address(0));
-    if (draw_hidden(t, nv, pc, __builtin_return_address(0))) return 0;
+    if (draw_hidden(t, b, nv, si, pc, __builtin_return_address(0))) return 0;
     return o_DrawIndexedPrimitive(d, t, b, mn, nv, si, pc);
 }
 static HRESULT WINAPI g_DrawPrimitiveUP(void *d, DWORD t, UINT n, const void *v, UINT st)
@@ -2399,11 +2466,11 @@ static HRESULT WINAPI g_DrawIndexedPrimitiveUP(void *d, DWORD t, UINT mn, UINT n
 static HRESULT WINAPI g_SetStreamSource(void *d, UINT n, void *vb, UINT off, UINT stride)
 {
     if (!d3d_check("SetStreamSource", n, vb, __builtin_return_address(0), 1)) vb = NULL;
-    if (n == 0) g_stride0 = stride;
+    if (n == 0) { g_stride0 = stride; g_vb0 = vb; }
     return o_SetStreamSource(d, n, vb, off, stride);
 }
 static HRESULT WINAPI g_SetIndices(void *d, void *ib)
-{ if (!d3d_check("SetIndices", 0, ib, __builtin_return_address(0), 1)) ib = NULL; return o_SetIndices(d, ib); }
+{ if (!d3d_check("SetIndices", 0, ib, __builtin_return_address(0), 1)) ib = NULL; g_ib = ib; return o_SetIndices(d, ib); }
 static HRESULT WINAPI g_SetVertexDeclaration(void *d, void *v)
 { if (!d3d_check("SetVertexDeclaration", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetVertexDeclaration(d, v); }
 static HRESULT WINAPI g_SetVertexShader(void *d, void *v)
@@ -2614,7 +2681,7 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         /* with Alt, Ctrl or Shift held the keys belong to other programs
            (Alt+F9 records in the Nvidia overlay) */
         if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
-            while ((GetAsyncKeyState(VK_F4) | GetAsyncKeyState(VK_F5) | GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
+            while ((GetAsyncKeyState(VK_F3) | GetAsyncKeyState(VK_F4) | GetAsyncKeyState(VK_F5) | GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
                     GetAsyncKeyState(VK_F10) | GetAsyncKeyState(VK_F11)) & 0x8000) Sleep(100);
             continue;
         }
@@ -2632,19 +2699,27 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
             else queue_message_file();
             while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
         }
-        if (GetAsyncKeyState(VK_F6) & 0x8000) {
+        if (GetAsyncKeyState(VK_F6) & 0x8001) {
             hide_next();
             while (GetAsyncKeyState(VK_F6) & 0x8000) Sleep(100);
         }
-        if (GetAsyncKeyState(VK_F4) & 0x8000) {
-            if (g_hide_ps || g_hide_k) log_line("F4: shader hiding off, everything drawn again");
+        if (GetAsyncKeyState(VK_F3) & 0x8001) {
+            piece_next();
+            while (GetAsyncKeyState(VK_F3) & 0x8000) Sleep(100);
+        }
+        if (GetAsyncKeyState(VK_F4) & 0x8001) {
+            if (g_hide_ps || g_hide_k || g_piece_ps) log_line("F4: hiding off, everything drawn again");
             g_collect = 0;
             g_hide_ps = NULL;
             g_hide_k = 0;
+            g_pcollect = 0;
+            g_piece_ps = NULL;
+            g_piece_k = 0;
             while (GetAsyncKeyState(VK_F4) & 0x8000) Sleep(100);
         }
-        if (GetAsyncKeyState(VK_F5) & 0x8000) {
-            if (g_hide_ps) log_line("F5: MARK - shader %ld of %ld hidden (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
+        if (GetAsyncKeyState(VK_F5) & 0x8001) {
+            if (g_piece_k) log_line("F5: MARK - piece %ld of %ld hidden (ps %p, start %u count %u)", g_piece_k, g_npieces, g_piece_ps, g_hide_piece.si, g_hide_piece.pc);
+            else if (g_hide_ps) log_line("F5: MARK - shader %ld of %ld hidden (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
             else log_line("F5: MARK - nothing hidden");
             while (GetAsyncKeyState(VK_F5) & 0x8000) Sleep(100);
         }
@@ -2676,7 +2751,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 44 - process %s", path);
+    log_line("severed probe 45 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

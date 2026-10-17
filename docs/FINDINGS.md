@@ -1458,6 +1458,11 @@ the ordinary lightmapped world shader, not a glass one. Shader 34 draws a
 hallway's opt_model1 has a 424-vertex part): a candidate for the black
 shape. The run stopped at 19 and the hidden shader stayed hidden (Gabe and
 later rooms drawn black), so probe 44 adds F4 to stop hiding.
+Probe 44 run: all 46 shaders hidden in turn (twice); the black box only
+went with the whole level (the stride-20 lightmapped world shaders), so it
+is a piece of the lightmapped world drawn black (a lightmap/UV problem),
+not a separate effect. Probe 45's F3 splits the hidden shader into its
+draws (pieces) and hides them one at a time.
 
 Found while testing: `build.convert_stream` reused `w` (the stream writer)
 for the mesh's widened UV streams, so a first conversion of any stream with
