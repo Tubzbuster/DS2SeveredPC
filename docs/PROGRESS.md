@@ -39,11 +39,9 @@ entering the decompression room.
    picture should now be Severed's (the title stays "Chapter 16": the
    string tables can't be replaced from the test archive yet).
 3. Decompression room: fixed (`loop_split.ok`).
-4. Zero-oxygen hallway with probe 45: probe 44 showed no single shader
-   hides the black box short of the whole level. Face the box, F6 until
-   the level vanishes, then F3: the level comes back and each further F3
-   hides one piece of it; F5 the moment the black box goes, then F4 and
-   send the log.
+4. Zero-oxygen hallway with probe 46: as before (F6 until the level
+   vanishes, F3 through the pieces, F5 when the box goes), then wait 5
+   seconds before F4: F5 now also logs every draw of that piece.
 5. Gift shop: lights back to the second version (0.85-1.15x every 0.5 s,
    `calm_lights5.ok`); the livelier third version flashed too much.
 6. Bed room after the elevator: check again with F4 pressed (the black

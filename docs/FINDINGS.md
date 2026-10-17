@@ -1463,6 +1463,16 @@ went with the whole level (the stride-20 lightmapped world shaders), so it
 is a piece of the lightmapped world drawn black (a lightmap/UV problem),
 not a separate effect. Probe 45's F3 splits the hidden shader into its
 draws (pieces) and hides them one at a time.
+Probe 45 run: the box went when hiding piece 19 (or 20; quick presses) of
+shader 37, a depth-only pass at the start of each frame (stride-12
+positions, 1x1 textures): start index 14786, 4267 strip triangles, in a
+shared index buffer that also holds ranges 26242/3746, 29990/3660,
+44302/2399, 53458/2041 and more. So the box is geometry written to the
+depth buffer that nothing then draws in colour over: something meant to
+be invisible or see-through (glass, a blocker) is in the depth pass. No
+Severed mesh table has those index counts (nor runs of tables starting
+there), so probe 46 logs, after F5, every draw of the marked piece (and
+the one before) in any pass, with its textures.
 
 Found while testing: `build.convert_stream` reused `w` (the stream writer)
 for the mesh's widened UV streams, so a first conversion of any stream with

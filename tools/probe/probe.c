@@ -2437,8 +2437,34 @@ static void piece_next(void)
     log_line("F3: hiding piece %ld of %ld (start %u count %u)", g_piece_k, g_npieces, g_hide_piece.si, g_hide_piece.pc);
 }
 
+/* probe 46: after F5 marks a piece, the next 4000 draws that use the same
+ * index buffer with an overlapping index range are logged (any pass), with
+ * the pixel shader and the textures on stages 0-7: which material, if any,
+ * draws the piece in colour. */
+static volatile LONG g_trace;
+static piece_t g_trace_piece[2];
+static int g_ntrace;
+
+static void trace_piece(DWORD t, INT b, UINT nv, UINT si, UINT pc, void *ret)
+{
+    char a[8][40], who[MAX_PATH + 32];
+    int i, k;
+    if (InterlockedDecrement(&g_trace) <= 0) { g_trace = 0; log_line("F5: piece trace done"); return; }
+    for (k = 0; k < g_ntrace; k++) {
+        piece_t *q = &g_trace_piece[k];
+        if (g_ib == q->ib && si < q->si + q->pc + 2 && si + pc + 2 > q->si) break;
+    }
+    if (k == g_ntrace) return;
+    for (i = 0; i < 8; i++) tex_desc(g_bound[i], a[i], sizeof a[i]);
+    addr_name((DWORD)ret, who, sizeof who);
+    log_line("  %s piece: ps %p prim %lu verts %u start %u count %u base %d stride %u vb %p tex %s %s %s %s %s %s %s %s from %s",
+             k ? "earlier" : "marked", g_ps, t, nv, si, pc, b, g_stride0, g_vb0,
+             a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], who);
+}
+
 static int draw_hidden(DWORD t, INT b, UINT nv, UINT si, UINT pc, void *ret)
 {
+    if (g_trace > 0) trace_piece(t, b, nv, si, pc, ret);
     if (g_collect > 0) collect(t, nv, pc, ret);
     if (g_piece_ps && g_ps == g_piece_ps) {
         if (g_pcollect > 0) collect_piece(t, b, nv, si, pc);
@@ -2718,7 +2744,14 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
             while (GetAsyncKeyState(VK_F4) & 0x8000) Sleep(100);
         }
         if (GetAsyncKeyState(VK_F5) & 0x8001) {
-            if (g_piece_k) log_line("F5: MARK - piece %ld of %ld hidden (ps %p, start %u count %u)", g_piece_k, g_npieces, g_piece_ps, g_hide_piece.si, g_hide_piece.pc);
+            if (g_piece_k) {
+                log_line("F5: MARK - piece %ld of %ld hidden (ps %p, start %u count %u); tracing it and the one before",
+                         g_piece_k, g_npieces, g_piece_ps, g_hide_piece.si, g_hide_piece.pc);
+                g_trace_piece[0] = g_hide_piece;
+                g_ntrace = 1;
+                if (g_piece_k >= 2) g_trace_piece[g_ntrace++] = g_pieces[g_piece_k - 2];   /* quick presses */
+                g_trace = 4000;
+            }
             else if (g_hide_ps) log_line("F5: MARK - shader %ld of %ld hidden (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
             else log_line("F5: MARK - nothing hidden");
             while (GetAsyncKeyState(VK_F5) & 0x8000) Sleep(100);
@@ -2751,7 +2784,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 45 - process %s", path);
+    log_line("severed probe 46 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
