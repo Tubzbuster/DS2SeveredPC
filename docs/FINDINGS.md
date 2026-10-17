@@ -1450,6 +1450,20 @@ icn16 is 0xFCBFB7CB (`saveicons.G2_TENS`). Chapter 17 was
 avoided: PlayerSettings has only 16 per-chapter log entry lists
 (`CMD_SetChapter01..16EntryList`), which the game may read by chapter.
 
+Update (gunship float): chapter 16 is what stopped Gabe landing. At the
+landing, `mm_sync_02_01` starts `ses_player_02_01` (hash 01E927BB). Its
+state machine asks handler 0x14 (exe 0xECA605: bit 1 of [+0x5C], set when
+the player accepts the sequence), which returned 1 in the run that worked
+(probe 38, chapter 1) and 0 for good in both failing runs. One failing run
+was a new game with the chapter 16 build; the other loaded a Dock save
+made with it, so the player was still in chapter 16 there. Gabe then
+stays where `ses_player_02_02_initial` left him, above the ship.
+`player_set_chapter_2` only fires after this sequence ends, and the dock
+checkpoint sets no chapter, so the chapter from the save is still in force.
+Saves made with the chapter 16 build have to be set back to chapter 1
+(F7: `player_set_chapter_1`) or replaced. A separate chapter for Severed's
+save pictures is out (the hook in PROGRESS, To do for a release, instead).
+
 ## 53. The airless hallway: what is converted there
 
 The hallway's geometry is Severed's own `airless_hall_z01` section
