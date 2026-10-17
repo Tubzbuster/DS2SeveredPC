@@ -766,10 +766,15 @@ def main():
         restore_hall_parts(root, dst)
         open(os.path.join(work, 'hall_glass_back.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'chapters_restored.ok')):
-        log('Gunship landing test: chapters 1 and 2 as on the console, the hanging release as on the console')
+        log('Gunship landing test: chapters 1 and 2 as on the console')
         refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS now empty)
         refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET now empty)
         open(os.path.join(work, 'chapters_restored.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'hang_drop2.ok')):
+        log('Hanging fight: the hanging state ends 1 s before the drop sequence starts (Gabe falls to the grate)')
+        refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET)
+        refresh_simgroups(root, dst, 0x6DF50074)       # MultiManager (simgroup.DELAYS)
+        open(os.path.join(work, 'hang_drop2.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

@@ -81,10 +81,33 @@ NUDGE = {}
 # through it. Releasing it as the drop sequence starts (mm_ses_01_03_trigger
 # starts ses_player_01_03) lets him come down (F7 test: released early, he
 # fell straight to the floor). The end's own release finds no listener.
-# Tried {0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate',
-# b'mm_ses_01_03_trigger')}: Gabe still did not drop, so it is off again
-# (and a suspect for Gabe floating after the gunship landing).
-RETARGET = {}
+# First try: the release on mm_ses_01_03_trigger alone. Gabe still did not
+# drop: that message also starts ses_player_01_03 at once, whose
+# NO_GRAVITY_COLLISION flag holds him where he is. So the drop sequence is
+# now delayed by 1 s (DELAYS) and he falls under gravity in that second,
+# as he did when the release was sent by hand before the sequence.
+RETARGET = {
+    0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate', b'mm_ses_01_03_trigger'),
+}
+
+# MultiManager delays changed: {object hash: {record offset: (target
+# message hash, old delay, new delay)}}. mm_ses_01_03_trigger
+# (elevator_mini_globals) starts ses_player_01_03 at 0 s and ses_door_01_03
+# at 0.45 s; both move 1 s later, after the hanging release above.
+DELAYS = {
+    0x5EAA9249: {32: (0x95F3F281, 0.0, 1.0), 48: (0x06C1A7AE, 0.45, 1.45)},
+}
+
+
+def _delay(out, x, base, oh, stats):
+    for off, (target, old, new) in DELAYS[oh].items():
+        h = struct.unpack_from('>I', x, base + off - 12)[0]
+        d = struct.unpack_from('>f', x, base + off)[0]
+        if h != target or abs(d - old) > 1e-3:
+            stats['delay_skipped'] = stats.get('delay_skipped', 0) + 1
+            continue
+        struct.pack_into('<f', out, base + off, new)
+        stats['delays'] = stats.get('delays', 0) + 1
 
 # Chapter numbers (PlayerSetChapter): the PC load menu picks a save's
 # picture and title by chapter number alone, so both of Severed's chapters
@@ -305,6 +328,8 @@ def convert(x, stats=None):
         _record(out, x, B + ro, ln, cls, stats)
         if oh in RETARGET:
             _retarget(out, x, B + ro, ln, oh, stats)
+        if oh in DELAYS:
+            _delay(out, x, B + ro, oh, stats)
         if cls is not None and cls['name'] == 'AnimateLight':
             _calm_light(out, x, B + ro, cls, stats)
         if cls is not None and cls['name'] == 'PlayerSetChapter':

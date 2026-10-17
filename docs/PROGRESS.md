@@ -53,6 +53,9 @@ entering the decompression room.
   since: chapter numbers back to 1/2 and the hanging release as on the
   console (`chapters_restored.ok`); the save picture goes back to the base
   chapter pictures meanwhile.
+- hanging fight drop: the hanging state now ends 1 s before the drop
+  sequence starts (`hang_drop2.ok`): Gabe should fall to the grate as the
+  fight ends, then get up.
 - black stretched shapes in several hospital rooms: the hallway's box is
   the scratched-metal wall panels shaded black (lightmap-shader material);
   probe 46 trace pending.

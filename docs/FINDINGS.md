@@ -1324,6 +1324,19 @@ listener (object 0x29515ABF, `pdlc1_ch01_mng` SimGroup) from its own
 message to `mm_ses_01_03_trigger` (0x661A303D), which starts the drop
 sequence (`simgroup.RETARGET`): the state ends as the drop begins.
 
+Update (probe 46 log, retarget on): the release now fired with
+`mm_ses_01_03_trigger` (two listeners), but that message also starts
+`ses_player_01_03` in the same frame, and the sequence's
+NO_GRAVITY_COLLISION flag keeps Gabe at hanging height; the F7 release had
+come before the sequence, so gravity dropped him. The trigger is a timer:
+`mm_spawn_hanging_combat_npcs` (MultiManager 9D2BC61F) sends it 45 s after
+the spawns, not on the last death. `mm_ses_01_03_trigger` itself is
+MultiManager 5EAA9249 (elevator_mini_globals): ses_player_01_03 at 0 s,
+ses_door_01_03 at 0.45 s (MultiManager delays: CMD_SetDelayN at record
+offset 32 + 16 (N - 1), after a 12-byte target string field). Both delays
+now move 1 s later (`simgroup.DELAYS`, step `hang_drop2.ok`) with the
+release retargeted again, so Gabe has a second to fall before the sequence.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe
