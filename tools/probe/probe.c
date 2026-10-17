@@ -2311,7 +2311,10 @@ static DrawIdxUP_t o_DrawIndexedPrimitiveUP;
  * and 1). F6 now collects the pixel shaders of the next 1500 draws (about
  * two frames) and hides the first; each further F6 hides the next one
  * instead, and after the last all are shown again. F5 marks the shader hidden
- * now (press it when the artefact is gone). Each shader is logged with the
+ * now (press it when the artefact is gone), F4 (probe 44) stops hiding at
+ * once: the hidden shader otherwise stays hidden everywhere (probe 43's test
+ * left Gabe and the rooms after the hallway drawn black). Each shader is
+ * logged with the
  * textures of its first draw (stages 0-3), the stream 0 stride and counts. */
 #define MAX_SHADERS 128
 static void *g_ps;
@@ -2611,7 +2614,7 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         /* with Alt, Ctrl or Shift held the keys belong to other programs
            (Alt+F9 records in the Nvidia overlay) */
         if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
-            while ((GetAsyncKeyState(VK_F5) | GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
+            while ((GetAsyncKeyState(VK_F4) | GetAsyncKeyState(VK_F5) | GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
                     GetAsyncKeyState(VK_F10) | GetAsyncKeyState(VK_F11)) & 0x8000) Sleep(100);
             continue;
         }
@@ -2632,6 +2635,13 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         if (GetAsyncKeyState(VK_F6) & 0x8000) {
             hide_next();
             while (GetAsyncKeyState(VK_F6) & 0x8000) Sleep(100);
+        }
+        if (GetAsyncKeyState(VK_F4) & 0x8000) {
+            if (g_hide_ps || g_hide_k) log_line("F4: shader hiding off, everything drawn again");
+            g_collect = 0;
+            g_hide_ps = NULL;
+            g_hide_k = 0;
+            while (GetAsyncKeyState(VK_F4) & 0x8000) Sleep(100);
         }
         if (GetAsyncKeyState(VK_F5) & 0x8000) {
             if (g_hide_ps) log_line("F5: MARK - shader %ld of %ld hidden (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
@@ -2666,7 +2676,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 43 - process %s", path);
+    log_line("severed probe 44 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

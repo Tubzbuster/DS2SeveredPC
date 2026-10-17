@@ -757,10 +757,10 @@ def main():
         refresh_assets(root, dst, 'SBK', convert.CONVERTERS['SBK'],
                        keep=lambda a: a.name.lower() not in loops or pcassets.key(a.type, a.name, a.ids) in own)
         open(os.path.join(work, 'loop_split.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'calm_lights2.ok')):
+    if not os.path.exists(os.path.join(work, 'calm_lights3.ok')):
         log('Comfort: Severed\'s strobing lights flicker gently and slowly (no flashes)')
         refresh_simgroups(root, dst, 0x30754D75)       # AnimateLight (simgroup.CALM_RANGE, CALM_SLOW)
-        open(os.path.join(work, 'calm_lights2.ok'), 'w').write('ok')
+        open(os.path.join(work, 'calm_lights3.ok'), 'w').write('ok')
     if os.path.exists(os.path.join(work, 'hall_glass_test.ok')) and not os.path.exists(os.path.join(work, 'hall_glass_back.ok')):
         log('Airless hallway: glass test over (no change), the glass parts back')
         restore_hall_parts(root, dst)

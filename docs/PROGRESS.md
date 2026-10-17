@@ -35,18 +35,17 @@ entering the decompression room.
 **Tests waiting on you:**
 1. Hanging fight drop with probe 40: the release still had a listener at
    the drop's end; the probe now names it.
-2. Save pictures and titles: start Severed fresh from Episode Select (a
-   loaded older save keeps its chapter number), then save in chapter 1 and
-   chapter 2: both should show Severed's picture and the title "Severed".
-3. Decompression room: fix pushed (`loop_split.ok`): the oil drip loop
-   sound crashed the audio decoder.
-4. Zero-oxygen hallway with probe 43: face the black shape, press F6 once
-   (collects the shaders on screen and hides the first), then F6 again
-   about once a second; press F5 the moment the black shape (or the beige
-   windows) changes, then send the log.
-5. Gift shop (balloons): the lights should now flicker slowly and gently
-   (`calm_lights2.ok`; the first calming kept their 6.5-a-second flashes).
-   If the build window looks wrong, send `tools\test\make_severed_test.log`.
+2. Save pictures: start Severed fresh from Episode Select and save: the
+   picture should now be Severed's (the title stays "Chapter 16": the
+   string tables can't be replaced from the test archive yet).
+3. Decompression room: fixed (`loop_split.ok`).
+4. Zero-oxygen hallway with probe 44: face the black shape, F6 once, then
+   F6 about once a second; F5 when the black shape changes; carry on to
+   at least shader 35, then F4 (stops hiding) and send the log.
+5. Gift shop: lights now 0.75-1.25x every 0.4 s (`calm_lights3.ok`), a
+   little more flicker than the "flat" second try.
+6. Bed room after the elevator: check again with F4 pressed (the black
+   bar may have been probe 43's hidden shader).
 
 **Open bugs** (strike out any that are no longer bugs):
 - ~~crash entering the decompression room~~ fixed (looping sound split)

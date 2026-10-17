@@ -21,7 +21,11 @@ streams:
 
 Asset ids: textures (type hash, 0, type hash, crc32(folder),
 crc32(folder + name)); VFX (type hash, g, g, g, g2) where g is the sdbm hash
-of the source path and the table's GUID is g, g, g, g2.
+of the source path (g2: see _guid) and the table's GUID is g, g, g, g2.
+
+The string tables are in DS2DAT0.DAT, which wins over the test archive
+(the lowest-numbered archive holding a file is used), so the title stays
+the base "Chapter 16" for now.
 """
 import struct
 import zlib
@@ -162,9 +166,19 @@ def texture_data(png, w=128, h=64, mips=3):
 
 # ---- assets ---------------------------------------------------------------
 
+# The GUID's last word: not reproduced from any name hash tried, but along
+# the base pictures it grows by exactly 0x3F17455 / 4 per chapter within each
+# tens group (icn10-icn15: ((4 * 0xF6D5894C + 1) + n * 0x3F17455) >> 2, 34-bit),
+# which gives icn16 0xFCBFB7CB. (The first version used a crc32, which
+# matches none of the base pictures: the picture came out blank.)
+G2_TENS = (4 * 0xF6D5894C + 1, 0x3F17455)
+
+
 def _guid(ch):
     g = sdbm(VFX_SRC % ch)
-    return (g, g, g, zlib.crc32((VFX_SRC % ch).encode('latin1')))
+    base, step = G2_TENS
+    assert 10 <= ch <= 19
+    return (g, g, g, ((base + (ch - 10) * step) % (1 << 34)) >> 2)
 
 
 def _table(p, stats):

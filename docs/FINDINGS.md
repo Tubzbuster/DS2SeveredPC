@@ -1419,7 +1419,13 @@ to 16 (`simgroup.CHAPTERS`), the base game's defined but unused chapter
 ("Chapter 16" text; no picture key), and `saveicons.py` adds the picture
 (Severed's 64x64 Xbox icon `weller1_ch1.png`, stretched), its VFX, the
 table entry (ch00 renamed ch16, new GUID appended to the SimGroup) and the
-title "Severed" to the PC streams at packaging time. Chapter 17 was
+title "Severed" to the PC streams at packaging time. Test result: "Chapter 16" with a blank picture. The title: the string
+tables (`text_assets\text\*.str`, `text_assets_global.str`) are in
+DS2DAT0.DAT, which wins over DS2DAT2 (section 18), so the patched copy is
+never read; the title stays "Chapter 16" for now. The picture: the VFX
+GUID's last word was a crc32 guess matching none of the base pictures; along
+icn10-icn15 it is ((4 * 0xF6D5894C + 1) + n * 0x3F17455) >> 2 (34-bit), so
+icn16 is 0xFCBFB7CB (`saveicons.G2_TENS`). Chapter 17 was
 avoided: PlayerSettings has only 16 per-chapter log entry lists
 (`CMD_SetChapter01..16EntryList`), which the game may read by chapter.
 
@@ -1444,7 +1450,14 @@ step `hall_glass_back.ok`. Probe 42's F6 draw census was inconclusive:
 the frames facing and away share no draws to compare (different views),
 and the world passes keep their material textures off stages 0-1. Probe 43
 instead hides one pixel shader at a time (F6), with F5 marking the shader
-hidden when the artefact goes.
+hidden when the artefact goes. First run: 46 shaders facing the hallway;
+the windows went black at shader 19 (ps with stride-20 lightmapped world
+geometry, 1024x1024 + 512x512 DXT1), i.e. the beige windows are drawn by
+the ordinary lightmapped world shader, not a glass one. Shader 34 draws a
+424-vertex / 620-triangle stride-20 mesh with no textures bound (the
+hallway's opt_model1 has a 424-vertex part): a candidate for the black
+shape. The run stopped at 19 and the hidden shader stayed hidden (Gabe and
+later rooms drawn black), so probe 44 adds F4 to stop hiding.
 
 Found while testing: `build.convert_stream` reused `w` (the stream writer)
 for the mesh's widened UV streams, so a first conversion of any stream with

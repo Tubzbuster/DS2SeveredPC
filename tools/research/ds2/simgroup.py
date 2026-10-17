@@ -99,11 +99,12 @@ CHAPTERS = {1: 16, 2: 16}
 # 32 of Severed's 695 swing from (near) black to 1.5-2.5x brightness 4-30
 # times a second, e.g. the gift shop's two key lights (Function 1, 0.15 s,
 # duty 0.7, 0 to 2x): the whole room strobes (~6.5 flashes/s). A 0.7-1.3x
-# range at the same speed was still a strobe to the eye, so their range is
-# narrowed to 0.85-1.15x and their period lengthened to 0.5 s (2 a second).
+# range at the same speed was still a strobe to the eye; 0.85-1.15x every
+# 0.5 s looked flat, so now 0.75-1.25x every 0.4 s (2.5 a second, under the
+# 3 flashes a second photosensitivity guidance).
 CALM_PERIOD = 0.25
-CALM_RANGE = (0.85, 1.15)
-CALM_SLOW = 0.5
+CALM_RANGE = (0.75, 1.25)
+CALM_SLOW = 0.4
 
 
 def _calm_light(out, x, base, cls, stats):
