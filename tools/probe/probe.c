@@ -2305,16 +2305,62 @@ static DrawIdx_t o_DrawIndexedPrimitive;
 static DrawPrimUP_t o_DrawPrimitiveUP;
 static DrawIdxUP_t o_DrawIndexedPrimitiveUP;
 
+/* ---- draw census (probe 42, F6) ------------------------------------------
+ * The next 4000 draws after F6 are logged: primitive type and counts, the
+ * stream 0 stride, the textures on stages 0 and 1 (size and format) and the
+ * pixel shader, to match the draws against the converted meshes' tables
+ * (index counts) and textures. Press it facing an artefact, then facing
+ * away: the draws that disappear are the artefact's. */
+static volatile LONG g_census;
+static UINT g_stride0;
+static void *g_ps;
+
+static void tex_desc(void *t, char *out, int n)
+{
+    typedef DWORD (WINAPI *GetType_t)(void *);
+    typedef HRESULT (WINAPI *GetLevelDesc_t)(void *, UINT, DWORD *);
+    DWORD desc[8] = {0};
+    if (!t || !mem_ok(t, 4) || !mem_ok(*(void **)t, 18 * 4)) { wsprintfA(out, "-"); return; }
+    if (((GetType_t)(*(void ***)t)[10])(t) == 3) ((GetLevelDesc_t)(*(void ***)t)[17])(t, 0, desc);
+    wsprintfA(out, "%p %lux%lu fmt %08lx", t, desc[6], desc[7], desc[0]);
+    (void)n;
+}
+
+static void census(const char *kind, DWORD t, UINT nv, UINT si, UINT pc, void *ret)
+{
+    char a[64], b[64], who[MAX_PATH + 32];
+    LONG k = InterlockedDecrement(&g_census);
+    if (k < 0) { g_census = 0; return; }
+    tex_desc(g_bound[0], a, sizeof a);
+    tex_desc(g_bound[1], b, sizeof b);
+    addr_name((DWORD)ret, who, sizeof who);
+    log_line("DRAW %s prim %lu verts %u start %u count %u stride %u ps %p tex0 %s tex1 %s from %s",
+             kind, t, nv, si, pc, g_stride0, g_ps, a, b, who);
+    if (k == 0) log_line("F6: draw census done");
+}
+
 static HRESULT WINAPI g_DrawPrimitive(void *d, DWORD t, UINT s0, UINT n)
-{ check_bound(d, __builtin_return_address(0)); return o_DrawPrimitive(d, t, s0, n); }
+{
+    check_bound(d, __builtin_return_address(0));
+    if (g_census > 0) census("prim", t, 0, s0, n, __builtin_return_address(0));
+    return o_DrawPrimitive(d, t, s0, n);
+}
 static HRESULT WINAPI g_DrawIndexedPrimitive(void *d, DWORD t, INT b, UINT mn, UINT nv, UINT si, UINT pc)
-{ check_bound(d, __builtin_return_address(0)); return o_DrawIndexedPrimitive(d, t, b, mn, nv, si, pc); }
+{
+    check_bound(d, __builtin_return_address(0));
+    if (g_census > 0) census("idx", t, nv, si, pc, __builtin_return_address(0));
+    return o_DrawIndexedPrimitive(d, t, b, mn, nv, si, pc);
+}
 static HRESULT WINAPI g_DrawPrimitiveUP(void *d, DWORD t, UINT n, const void *v, UINT st)
 { check_bound(d, __builtin_return_address(0)); return o_DrawPrimitiveUP(d, t, n, v, st); }
 static HRESULT WINAPI g_DrawIndexedPrimitiveUP(void *d, DWORD t, UINT mn, UINT nv, UINT pc, const void *i, DWORD f, const void *v, UINT st)
 { check_bound(d, __builtin_return_address(0)); return o_DrawIndexedPrimitiveUP(d, t, mn, nv, pc, i, f, v, st); }
 static HRESULT WINAPI g_SetStreamSource(void *d, UINT n, void *vb, UINT off, UINT stride)
-{ if (!d3d_check("SetStreamSource", n, vb, __builtin_return_address(0), 1)) vb = NULL; return o_SetStreamSource(d, n, vb, off, stride); }
+{
+    if (!d3d_check("SetStreamSource", n, vb, __builtin_return_address(0), 1)) vb = NULL;
+    if (n == 0) g_stride0 = stride;
+    return o_SetStreamSource(d, n, vb, off, stride);
+}
 static HRESULT WINAPI g_SetIndices(void *d, void *ib)
 { if (!d3d_check("SetIndices", 0, ib, __builtin_return_address(0), 1)) ib = NULL; return o_SetIndices(d, ib); }
 static HRESULT WINAPI g_SetVertexDeclaration(void *d, void *v)
@@ -2322,7 +2368,11 @@ static HRESULT WINAPI g_SetVertexDeclaration(void *d, void *v)
 static HRESULT WINAPI g_SetVertexShader(void *d, void *v)
 { if (!d3d_check("SetVertexShader", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetVertexShader(d, v); }
 static HRESULT WINAPI g_SetPixelShader(void *d, void *v)
-{ if (!d3d_check("SetPixelShader", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetPixelShader(d, v); }
+{
+    if (!d3d_check("SetPixelShader", 0, v, __builtin_return_address(0), 1)) v = NULL;
+    g_ps = v;
+    return o_SetPixelShader(d, v);
+}
 static HRESULT WINAPI g_SetRenderTarget(void *d, DWORD i, void *v)
 { d3d_check("SetRenderTarget", i, v, __builtin_return_address(0), 0); return o_SetRenderTarget(d, i, v); }
 static HRESULT WINAPI g_SetDepthStencil(void *d, void *v)
@@ -2523,7 +2573,7 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         /* with Alt, Ctrl or Shift held the keys belong to other programs
            (Alt+F9 records in the Nvidia overlay) */
         if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
-            while ((GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
+            while ((GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
                     GetAsyncKeyState(VK_F10) | GetAsyncKeyState(VK_F11)) & 0x8000) Sleep(100);
             continue;
         }
@@ -2540,6 +2590,11 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
             if (!g_game_thread) log_line("F7: game thread not known yet (start a level first)");
             else queue_message_file();
             while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
+        }
+        if (GetAsyncKeyState(VK_F6) & 0x8000) {
+            log_line("F6: draw census (next 4000 draws)");
+            g_census = 4000;
+            while (GetAsyncKeyState(VK_F6) & 0x8000) Sleep(100);
         }
         if (GetAsyncKeyState(VK_F10) & 0x8000) {
             reflect_scan();
@@ -2569,7 +2624,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 41 - process %s", path);
+    log_line("severed probe 42 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

@@ -369,38 +369,14 @@ def vb68_meshes(x, g, w):
                for t in g.tables)
 
 
-# Test (airless hallway, flat beige windows and a black shape): the parts of
-# the hallway's own geometry drawn with the window glass and the three
-# broken-glass overlays, made invisible (their indices all point at one
-# vertex). If both artefacts go, one of these is the culprit.
-HALL_MESH = 'pdlc_airless_hall_z01\\opt_model1'
-HALL_HIDE = {0xD8B6AC1D: 'cln_glassclean01', 0x3A9DBC8A: 'ovl_glassshatter01',
-             0xA394ED30: 'ovl_glassshatter02', 0xD493DDA6: 'ovl_glassshatter03'}
-
-
-def hide_hall_parts(dst):
-    from ds2 import geo
+def restore_hall_parts(root, dst):
+    """undo the glass test (an earlier build hid the airless hallway's window
+    glass and broken-glass overlays; nothing changed): the hallway
+    section's meshes converted again"""
     for d, _, fs in os.walk(dst):
-        for f in fs:
-            if f.lower() != 'airless_hall_z01.str':
-                continue
-            p = os.path.join(d, f)
-            w = streamwrite.Writer()
-            n = 0
-            for a in streamfile.read(open(p, 'rb').read())[1]:
-                y = a.payload()
-                if a.type == 'Mesh' and HALL_MESH in a.path.lower().replace('/', '\\'):
-                    y = bytearray(y)
-                    for t in geo.parse(bytes(y), False).tables:
-                        if struct.unpack_from('<I', y, t.entry + 0x0C)[0] in HALL_HIDE:
-                            cnt, ptr = struct.unpack_from('<I', y, t.entry + 0x30)[0], struct.unpack_from('<I', y, t.entry + 0x88)[0]
-                            if ptr + 2 * cnt <= len(y):
-                                y[ptr:ptr + 2 * cnt] = y[ptr:ptr + 2] * cnt
-                                n += 1
-                    y = bytes(y)
-                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
-            open(p, 'wb').write(w.data())
-            log('  %d glass part(s) hidden in %s' % (n, os.path.relpath(p, dst)))
+        if 'airless_hall_z01.str' in [f.lower() for f in fs]:
+            rel = os.path.relpath(d, dst)
+            refresh_uv_streams(os.path.join(root, rel), d, pick=lambda x, g, w: True)
 
 
 def refresh_uv_streams(root, dst, pick=None):
@@ -774,10 +750,10 @@ def main():
         log('Comfort: Severed\'s strobing lights flicker gently (no black-to-bright flashes)')
         refresh_simgroups(root, dst, 0x30754D75)       # AnimateLight (simgroup.CALM_RANGE)
         open(os.path.join(work, 'calm_lights.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'hall_glass_test.ok')):
-        log('Airless hallway test: its window glass and broken-glass overlays hidden')
-        hide_hall_parts(dst)
-        open(os.path.join(work, 'hall_glass_test.ok'), 'w').write('ok')
+    if os.path.exists(os.path.join(work, 'hall_glass_test.ok')) and not os.path.exists(os.path.join(work, 'hall_glass_back.ok')):
+        log('Airless hallway: glass test over (no change), the glass parts back')
+        restore_hall_parts(root, dst)
+        open(os.path.join(work, 'hall_glass_back.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'chapter_numbers2.ok')):
         log('Save pictures: both of Severed\'s chapters become chapter 16 (its own picture and title)')
         refresh_simgroups(root, dst, 0xF3D5D68C)       # PlayerSetChapter (simgroup.CHAPTERS)

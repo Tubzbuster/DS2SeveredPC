@@ -40,13 +40,14 @@ entering the decompression room.
    title "Severed"; older saves keep their old labels.
 3. Decompression room: fix pushed (`loop_split.ok`): the oil drip loop
    sound crashed the audio decoder.
-4. Zero-oxygen hallway: test build (`hall_glass_test.ok`) with the
-   hallway geometry's window glass and three broken-glass overlays hidden:
-   do the beige panes and the black shape go?
+4. Zero-oxygen hallway with probe 42: press F6 facing the black shape /
+   beige windows, then F6 again facing away from them, and send the log
+   (the glass test changed nothing; the glass is back, `hall_glass_back.ok`).
+5. Gift shop (balloons): the strobing lights should now only flicker
+   gently (`calm_lights.ok`).
 
 **Open bugs** (strike out any that are no longer bugs):
-- crash entering the decompression room (audio thread, sample decoder):
-  fix pushed, to test
+- ~~crash entering the decompression room~~ fixed (looping sound split)
 - black shape in the zero-oxygen hallway (ruled out: the depth-of-field
   effect's file, which is the PC game's own; the floating debris meshes,
   the PC game's own; the hallway's glass, which converts exactly like the

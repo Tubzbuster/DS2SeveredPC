@@ -1439,6 +1439,10 @@ and the broken-glass overlays (`ovl_glassshatter01-03`). Test step
 `hall_glass_test.ok` makes those 4 parts invisible (indices collapsed to
 one vertex).
 
+Result: no change in game (glass not the cause); the glass is restored by
+step `hall_glass_back.ok`. Next: probe 42's F6 draw census (each draw's
+primitive counts, stride, textures) facing the artefacts and away.
+
 Found while testing: `build.convert_stream` reused `w` (the stream writer)
 for the mesh's widened UV streams, so a first conversion of any stream with
 a mesh failed; existing builds were converted before that change.
