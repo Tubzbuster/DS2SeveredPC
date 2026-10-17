@@ -80,8 +80,9 @@ hall, the psych arrival hall and the landing bay finale.
 - thump in the opening scene (not the two corpses, Gabe's gun or the
   tunnel's 4 physics props, tests 1-4)
 - the Pulse Rifle sits oddly in Gabe's hands (other weapons are fine): deferred to a future release
-- saves show as "Chapter 1" with chapter 1's picture: fix pushed, to test
-  (both chapters numbered 16, with Severed's own picture and title)
+- saves show the base "Chapter 1"/"Chapter 2" titles and pictures: the
+  chapter 16 numbering was reverted (suspected of the gunship float); a
+  release hook will give Severed saves their own (see To do for a release)
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)
@@ -204,6 +205,19 @@ intro terminal, the alt-tab hang, the gunship hull textures.
   - the shipped list holds only file names and hashes, no game data;
   - on a mismatch, the app names the files that differ and stops, rather
     than building a broken archive.
+- **Severed save pictures and titles (release hook):** the load menu
+  (exe 0xBAE170) builds the picture key `chNN` and title `CHNN_TitleString`
+  from the save's chapter number alone, so Severed's chapters 1 and 2 share
+  the base game's. A small `dinput8.dll` shipped with the mod hooks that
+  function in memory (the exe on disk and its DRM are untouched): when the
+  save's level is a Severed one, it swaps in Severed's picture key and
+  title. Separate from the test probe, without its logging and test keys.
+  Must be proofed for performance before shipping:
+  - frame time with and without the hook, in a heavy area (the gift shop,
+    the drill tunnel) and on the load menu;
+  - the hook runs only when the load menu draws a save slot, with no
+    per-frame or per-draw work, no heap checks and no file writes;
+  - load times unchanged.
 - **Bundle ffmpeg with the app**, replacing the third path the `.bat` asks
   for now (`ffmpeg.exe`, used to decode the Xbox XMA audio). Use an LGPL
   build with its licence and source offer included.
