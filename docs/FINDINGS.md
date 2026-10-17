@@ -1245,3 +1245,26 @@ buffer flags too).
 Update to 44: after the LUT conversion (45) the user confirmed the DLC's
 overall lighting looks right; the darkness had been the quarry's colour
 grading only.
+
+## 47. CPU-skinned parts: the vertex buffer index at DT1 +0x68 (gunship crash)
+
+The game crashed on reaching the docking station, in the same place as the
+earlier store kiosk crash (39): exe 0x7C2CB0 locks a vertex buffer through
+a garbage pointer (exe+0xFD284E reads it). Probe 35 named the mesh,
+`exterior_black_win` (the gunship).
+
+How the pointer is found:
+- exe 0x7C2C20 groups the mesh's CPU-skinned tables (DT1 byte +6 non-zero)
+  by the vertex buffer at +0x64, into one skinning job each (0x7C2AE0);
+- each frame, 0x7C5146 sets the job's buffer from the table's +0x64 or
+  +0x68 (two buffers, alternating frames);
+- the file stores dt2 indices there, which the loader turns into buffers.
+
+Our converter left the u32 at +0x68 unswapped: the learned DT1 template
+copies it raw, as it is almost always 0. With index 1 it became 0x01000000,
+and the loader built a pointer far outside the mesh. On the pairs, +0x68
+was wrong on 5 tables and is now right on all 13,430 tables where the 360
+and PC values agree. Severed has 30 such meshes (14 names: the gunship and
+`exterior`, the docking bay and hospital doors, `locker_vertical05_am`,
+`powercell_dispenser_mm`, the kiosk, ...). `meshconv.convert` now swaps
+it, and the test script re-converts those meshes (step `mesh_vb68.ok`).

@@ -300,10 +300,18 @@ def refresh_luts(root, dst):
                 open(p, 'wb').write(y)
 
 
-def refresh_uv_streams(root, dst):
+def vb68_meshes(x, g, w):
+    """meshes whose tables have a second vertex buffer index at DT1 +0x68
+    (left unswapped by converters before the fix: the CPU skinning job then
+    locks a garbage buffer)"""
+    return any(x[t.entry + 0x68:t.entry + 0x6C] != x[t.entry + 0x68:t.entry + 0x6C][::-1]
+               for t in g.tables)
+
+
+def refresh_uv_streams(root, dst, pick=None):
     """meshes with lightmap materials (ds2/uvwide.py): re-convert Severed's
     own ones and their volatiles with the PC's 20-byte UV streams; PC copies
-    untouched"""
+    untouched. pick(x, g, w): re-convert other meshes too"""
     from ds2 import pcassets
     own = pcassets.load()
     sizes = {}
@@ -322,9 +330,10 @@ def refresh_uv_streams(root, dst):
             fresh, mesh = {}, None
             for a in assets:
                 if a.type == 'Mesh':
-                    y, g, w = build.convert_mesh(a.payload(), lm)
+                    x = a.payload()
+                    y, g, w = build.convert_mesh(x, lm)
                     mesh = (g, w) if w else None
-                    if w and y is not None:
+                    if y is not None and (w or pick and pick(x, g, w)):
                         fresh[(a.type, a.name, a.ids)] = y
                 elif a.type == 'MeshVolatile' and mesh:
                     y = build.convert_volatile(*mesh, a.payload())
@@ -579,14 +588,18 @@ def main():
         log('Re-converting the meshes with lightmap materials (20-byte UV streams)')
         refresh_uv_streams(root, dst)
         open(os.path.join(work, 'uv_streams.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'mesh_vb68.ok')):
+        log('Re-converting the meshes with CPU-skinned parts (vertex buffer index fix)')
+        refresh_uv_streams(root, dst, vb68_meshes)
+        open(os.path.join(work, 'mesh_vb68.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'store_suits.ok')):
         log('Removing the suit-pack suits from Severed\'s stores')
         refresh_simgroups(root, dst, 0xE6CACE4C)       # ItemStoreList (simgroup.STORE_HIDDEN)
         open(os.path.join(work, 'store_suits.ok'), 'w').write('ok')
-    if not os.path.exists(os.path.join(work, 'corpse_test.ok')):
-        log('Moving the opening scene\'s corpses (test: the one by Gabe\'s gun goes below the level)')
+    if not os.path.exists(os.path.join(work, 'corpse_test2.ok')):
+        log('Moving the opening scene\'s corpses (test: the one by the PowerUp goes below the level)')
         refresh_simgroups(root, dst, 0x1AADC065)       # DismemberableProp (simgroup.NUDGE)
-        open(os.path.join(work, 'corpse_test.ok'), 'w').write('ok')
+        open(os.path.join(work, 'corpse_test2.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

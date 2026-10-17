@@ -85,6 +85,8 @@ def convert(x, tmpl):
     out[8:12] = struct.pack('<I', 3)                    # platform: PC
     templ(a.data_table1, a.data_table1 + geo.DT1_ENTRY * a.table_count, 'dt1', geo.DT1_ENTRY)
     templ(a.data_table2, a.data_table2 + 16 * len(a.dt2), 'dt2', 16)
+    for t in a.tables:   # u32 at +0x68: second vertex buffer index of CPU-skinned tables (the template leaves it raw)
+        out[t.entry + 0x68:t.entry + 0x6C] = x[t.entry + 0x68:t.entry + 0x6C][::-1]
     for t in a.tables:   # u16 at +0xAE: the 360 sometimes stores face count + 1, the PC the face count
         v = struct.unpack_from('>H', x, t.entry + 0xAE)[0]
         if v == t.face_count + 1:
