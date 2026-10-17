@@ -338,7 +338,8 @@ These were used to map the formats. You don't need them to try Severed.
   |   `-- DESIGN.md ............. plan
   |-- tools/
   |   |-- research/ds2/ ......... the converters (Python), one module per format
-  |   |-- research/native/ ...... EA-XAS encoder (C, built with zig)
+  |   |-- research/native/ ...... EA-XAS encoder + RefPack decompressor (C),
+  |   |                           reusable in other projects: see its README
   |   |-- test/ ................. Make-SeveredTest / Remove-SeveredTest
   |   |-- probe/ ................ dinput8.dll log + hook (C, built with zig)
   |   |-- scan/ export/ samples/ index/ archive/ ... research scripts
