@@ -92,6 +92,25 @@ RETARGET = {
 # only 16 per-chapter log lists, so it is not used.
 CHAPTERS = {1: 16, 2: 16}
 
+# Comfort: Severed's strobing lights. AnimateLight objects flicker a light's
+# intensity between IntensityJitterMin and IntensityJitter every Frequency
+# seconds. 32 of Severed's 695 swing from (near) black to 1.5-2.5x
+# brightness 4-30 times a second, e.g. the gift shop's two key lights
+# (0.15 s, 0 to 2x): the whole room strobes (measured ~6.5 flashes/s). Their range is narrowed to
+# 0.7-1.3x (timing kept), so they still flicker but no longer flash.
+CALM_PERIOD = 0.25
+CALM_RANGE = (0.7, 1.3)
+
+
+def _calm_light(out, x, base, cls, stats):
+    off = {f[2]: f[0] for f in cls['fields']}
+    jit, jmin, freq = (struct.unpack_from('>f', x, base + off[k])[0]
+                       for k in ('CMD_IntensityJitter', 'CMD_IntensityJitterMin', 'CMD_Frequency'))
+    if 0 < freq < CALM_PERIOD and jit - jmin > 1.0:
+        struct.pack_into('<f', out, base + off['CMD_IntensityJitterMin'], CALM_RANGE[0])
+        struct.pack_into('<f', out, base + off['CMD_IntensityJitter'], CALM_RANGE[1])
+        stats['lights_calmed'] = stats.get('lights_calmed', 0) + 1
+
 
 def msg_hash(name):
     """message names: sdbm of the lower-case name, multiplier 0x1003F"""
@@ -275,6 +294,8 @@ def convert(x, stats=None):
         _record(out, x, B + ro, ln, cls, stats)
         if oh in RETARGET:
             _retarget(out, x, B + ro, ln, oh, stats)
+        if cls is not None and cls['name'] == 'AnimateLight':
+            _calm_light(out, x, B + ro, cls, stats)
         if cls is not None and cls['name'] == 'PlayerSetChapter':
             c = struct.unpack_from('>I', x, B + ro + 12)[0]
             if c in CHAPTERS:

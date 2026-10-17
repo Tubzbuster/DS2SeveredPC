@@ -1462,3 +1462,17 @@ a mesh failed; existing builds were converted before that change.
   where such words are right 7,800 times in 7,811. So no converted data
   explains the grip yet.
 
+## 55. Strobing lights (gift shop, decomp_hall_z01)
+
+The user's video of the gift shop (balloons) shows the whole room flashing
+from near black to full brightness about 6.5 times a second (2-4 bright
+frames in every 9-10 at 60 fps). The room's two key lights are driven by
+AnimateLight objects with Frequency 0.15 s, DutyCycle 0.7, IntensityJitter
+2.0 and IntensityJitterMin 0. The fields convert correctly and base-game
+lights use the same kinds of values (periods of 0.1-0.2 s on 857 of 1,367;
+jitter 2 on 119), so this is most likely the console's behaviour too; what
+makes it harsh is a range from 0 to 2x on a room's main lights. As a
+comfort change, `simgroup.CALM_RANGE` narrows every Severed AnimateLight
+with a period under 0.25 s and a range wider than 1.0 (32 of 695) to
+0.7-1.3x, timing kept. Step `calm_lights.ok`.
+
