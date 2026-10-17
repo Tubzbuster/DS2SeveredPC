@@ -65,7 +65,7 @@ and is corrected as we play.
 | RIG health spine | works | since the PC game's own RIG bar meshes are used |
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle upgrades | fix pending | probe 34 sets the 10 nodes in the PC UpgradeManager (`pulse rifle upgrades:` log lines); RIG upgrades not looked at yet |
-| Twitchers | broken | stunlock confirmed on Normal and Casual: Gabe never regains control. Their animations, rig and AI code are the PC game's own; their `Zombie` objects and grapple settings (`ZombieGrappleAttacherComponent`: break threshold 10, decay 2.5) are our conversion and look sane. Suspect the grapple (escape by mashing) not breaking. Waiting for a clip with probe 34 |
+| Twitchers | broken | stunlock on Normal and Casual: repeated slashes, no grab (no zoom, no E prompt), Gabe never regains control. Their animations, rig, AI code and Gabe's player settings object are the PC game's own; their `Zombie` objects (attack settings) and Gabe's `Player` object are our conversion, field values plausible. Waiting for a clip and log with probe 34 |
 | Scripted hang after the cargo lift | partial | Gabe hangs upside down from a set piece; stomp is accepted there and moves him into the ceiling |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
