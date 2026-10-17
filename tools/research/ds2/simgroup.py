@@ -101,9 +101,10 @@ CHAPTERS = {1: 16, 2: 16}
 # duty 0.7, 0 to 2x): the whole room strobes (~6.5 flashes/s). A 0.7-1.3x
 # range at the same speed was still a strobe to the eye; 0.85-1.15x every
 # 0.5 s looked flat, so now 0.75-1.25x every 0.4 s (2.5 a second, under the
-# 3 flashes a second photosensitivity guidance).
+# 3 flashes a second photosensitivity guidance), and 10% dimmer at the
+# user's request: 0.675-1.125x.
 CALM_PERIOD = 0.25
-CALM_RANGE = (0.75, 1.25)
+CALM_RANGE = (0.675, 1.125)
 CALM_SLOW = 0.4
 
 

@@ -42,8 +42,8 @@ entering the decompression room.
 4. Zero-oxygen hallway with probe 44: face the black shape, F6 once, then
    F6 about once a second; F5 when the black shape changes; carry on to
    at least shader 35, then F4 (stops hiding) and send the log.
-5. Gift shop: lights now 0.75-1.25x every 0.4 s (`calm_lights3.ok`), a
-   little more flicker than the "flat" second try.
+5. Gift shop: lights now 0.675-1.125x every 0.4 s (`calm_lights4.ok`):
+   a little more flicker than the "flat" second try, 10% dimmer.
 6. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
 
