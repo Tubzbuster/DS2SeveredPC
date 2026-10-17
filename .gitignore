@@ -44,3 +44,4 @@ __pycache__/
 
 # Converter output (holds local paths)
 *.log
+*.addoninfo.txt
