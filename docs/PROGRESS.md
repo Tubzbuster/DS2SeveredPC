@@ -64,15 +64,15 @@ and is corrected as we play.
 | Cutscene audio (5.1 streams) | fix pending | stereo downmix |
 | RIG health spine | works | since the PC game's own RIG bar meshes are used |
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
-| Gabe's Pulse Rifle upgrades | fix pending | probe 34 sets the 10 nodes in the PC UpgradeManager (`pulse rifle upgrades:` log lines); RIG upgrades not looked at yet |
+| Gabe's Pulse Rifle upgrades | works (log) | probe 34 log: `10 node(s) set, 0 missing` (tree of 24 nodes); bench stats still to confirm. RIG upgrades not looked at yet |
 | Twitchers | broken | one Twitcher alone keeps Gabe in his flinch: each slash lands before the flinch ends (Normal and Casual; no grab). Their `Zombie` settings differ from the slashers' in an authored way (pain interrupt delays 4/2 s, dodge 0.9, turn speeds doubled, 8 damage per hit), nothing that looks like a conversion error. Next: A/B against the base game's own Twitchers (Government Sector) on the same PC, and a 60 fps cap test (the user plays at 75 fps with external V-Sync) |
-| Scripted hang after the cargo lift | partial | Gabe hangs upside down from a set piece; stomp is accepted there and moves him into the ceiling |
+| Scripted hang after the cargo lift | partial | Gabe hangs upside down from a set piece and shoots (works); in the escape animation he climbs up through the rock overhang and the camera ends inside it (video, no stomp pressed). Earlier, stomp while hanging put him in the ceiling. To compare with console footage |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
 | Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
 | Crash in the quarry | works | fixed by the LUT conversion; probe 31 stays as a safety net |
 | Save stations | partial | saving and loading a save work; the second use of a save station locked up once (recheck); saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). On console the load menu shows "Severed, chapter N" with its own picture (Gabe in a corridor, from footage); Severed's files hold only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`), so that picture is probably in a front-end file still to find |
-| Stores, benches | works | the store lists the base game's suits too (on console Gabe only changes suit in chapter 2); possibly from the PC profile's unlocks, to check |
+| Stores, benches | fix pending | Severed's store lists held Gabe versions of the suit packs (Advanced, Quick Draw, EarthGov, Brushed Aluminium, Bloody, ...); choosing one crashed the game (a suit model part not loaded). The converter now leaves those 10 suits out of the stores (`simgroup.STORE_HIDDEN`, step `store_suits.ok`); Gabe's starting suit stays |
 | Performance near some lights | partial | frame drops in the drill tunnel |
 | Overall brightness | works | confirmed by the user after the LUT fix: the darkness was only the quarry's colour grading (FINDINGS 45). Lighting data audit in FINDINGS 44 |
 | Gabe's pain sounds | works | Isaac's grunts and damage lines, as on console (the DLC reuses them) |
