@@ -1316,6 +1316,14 @@ drops Gabe a storey. Untested idea: the hanging state stays on until
 by hand (F7, severed_send.txt) when the fight ends shows whether the
 state holds him up.
 
+Update (F7 test): sending `PlayerChangeState_hanging_combat_deactivate`
+after the last enemy died dropped Gabe straight to the floor, so the
+hanging state is what holds him up, and the script releases it only on
+`ses_player_01_03_end`. The converter now moves that PlayerChangeState's
+listener (object 0x29515ABF, `pdlc1_ch01_mng` SimGroup) from its own
+message to `mm_ses_01_03_trigger` (0x661A303D), which starts the drop
+sequence (`simgroup.RETARGET`): the state ends as the drop begins.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe

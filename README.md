@@ -69,7 +69,7 @@ fight and the zero-oxygen hallway. Fixes in this round:
 - the black screen after the gunship scene (an animation blend value left
   unswapped kept chapter 2's opening from starting)
 - the gunship hull is now built from the PC game's own mesh (its textures
-  were smeared; to confirm)
+  were smeared)
 
 Known problems: crash entering the decompression room (audio), a black
 shape in the zero-oxygen hallway, Gabe does not drop to the floor after the
@@ -154,8 +154,8 @@ How it works:
 | Playing as Gabe (security suit), HUD, inventory | Works (the held weapon floats a little off his hands) |
 | Dialogue, audio logs, videos, music, ambience | Works |
 | Necromorph AI, Tormentor boss | Works |
-| Chapter 1: drill tunnel to the docking station | Works (Gabe does not drop to the floor after the hanging fight) |
-| Gunship fight, boarding | Works (hull textures: fix pending) |
+| Chapter 1: drill tunnel to the docking station | Works (Gabe does not drop to the floor after the hanging fight: fix pending) |
+| Gunship fight, boarding | Works |
 | Chapter 2: crash landing, Tormentor, zero-oxygen hallway | Works |
 | Chapter 2: decompression room | Crashes (audio): being investigated |
 | Stores, benches, save stations | Work (saves show as "Chapter 1"; suit packs removed from the stores) |

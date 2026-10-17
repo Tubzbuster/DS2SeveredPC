@@ -662,6 +662,11 @@ def main():
         log('Opening scene test: the tunnel\'s 4 physics props go below the level, Gabe\'s gun back in place')
         refresh_simgroups(root, dst, 0x1AADC065)       # DismemberableProp: corpses back (simgroup.NUDGE)
         open(os.path.join(work, 'prop_test.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'hang_release.ok')):
+        log('Hanging fight: the hanging state ends as the drop starts; the tunnel\'s physics props back in place')
+        refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET)
+        refresh_simgroups(root, dst, 0x31714328)       # ScriptableProp (simgroup.NUDGE emptied)
+        open(os.path.join(work, 'hang_release.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

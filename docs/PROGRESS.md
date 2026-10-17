@@ -30,18 +30,15 @@ entering the decompression room.
 - suit packs removed from the stores (choosing one crashed)
 - crash at the docking station (gunship vertex buffer index)
 - black screen after the gunship scene (chapter 2 opening)
-- gunship hull built from the PC game's own mesh (smeared textures):
-  *pushed, to test*
+- gunship hull textures (built from the PC game's own mesh)
 
 **Tests waiting on you:**
-1. Gunship hull textures (docking station): fix pushed (`gunship_hull.ok`).
-2. Opening scene thump: test 4, the tunnel's 4 physics props moved away
-   (`prop_test.ok`).
-3. Hanging fight drop: F7 with `severed_send.txt` containing
-   `PlayerChangeState_hanging_combat_deactivate`, pressed as the last
-   enemy dies.
-4. Decompression room: enter it again with probe 39 and send the log if it
+1. Hanging fight drop: the hanging state now ends as the drop starts
+   (`hang_release.ok`); no F7 needed. Delete `severed_send.txt` first.
+2. Decompression room: enter it again with probe 39 and send the log if it
    crashes.
+3. Zero-oxygen hallway: F7 tests turning the hallway's effects off one at
+   a time (below).
 
 **Open bugs** (strike out any that are no longer bugs):
 - crash entering the decompression room (audio thread, sample decoder)
@@ -52,9 +49,10 @@ entering the decompression room.
   time (`msg_vfx_airless_dof_stop`, `lt_airless_hall_post_fx_off`,
   `msg_vfx_airless_stop`)
 - Gabe does not drop to the floor after the hanging fight (plays the
-  get-up inside the rock overhang). Stomping during the hang no longer
-  misbehaves on its own; this position issue is what remains
-- thump in the opening scene
+  get-up inside the rock overhang): fix pushed, to test. The F7 test
+  showed the hanging state holds him up until the drop animation ends
+- thump in the opening scene (not the two corpses, Gabe's gun or the
+  tunnel's 4 physics props, tests 1-4)
 - the held weapon floats a little off Gabe's hands
 - saves show as "Chapter 1" with chapter 1's picture
 - save station lock-up: happens when the terminal is used again during
@@ -63,7 +61,7 @@ entering the decompression room.
 - frame drops near some lights in the drill tunnel
 
 **No longer bugs** (confirmed by the user): the stretched slabs after the
-intro terminal, the alt-tab hang.
+intro terminal, the alt-tab hang, the gunship hull textures.
 
 ## Start-up
 

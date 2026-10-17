@@ -67,20 +67,43 @@ STORE_HIDDEN = {
     (0x31CBB1C6, 0xD0F37D3D),   # PDLC Bloody Suit
 }
 
-# Objects moved (metres, +Y up) by the converter. The two corpses in
-# drill_tunnel_01 are posed with their origins at floor height; something
-# kept one bouncing (audibly) through the opening scene on PC until the
-# player had control. Raising both 12 cm did not stop it. Test build: the
-# corpse by Gabe's gun (0.6 m from it, 2.7 m from his spot in the scene) is
-# moved 200 m below the level, out of the way, to find out whether it is
-# the one.
-NUDGE = {
-    # test 4: the opening tunnel's physics props (ScriptableProp) below the level
-    (0x30CB98AE, 0x0BC0B00F, 0x5A544946, 0x30343354): (0.0, -200.0, 0.0),   # 2.7 m from Gabe's gun
-    (0x58CB2AA0, 0x419AC8FA, 0x30393730, 0x58585858): (0.0, -200.0, 0.0),
-    (0x4FCB8B8A, 0xC4309FBC, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),   # by the PowerUp corpse
-    (0x4FCB9CAB, 0x38C4FC3A, 0x4952414D, 0x4C4C454E): (0.0, -200.0, 0.0),
+# Objects moved (metres, +Y up) by the converter: none at present. Tests
+# 1-4 (the two corpses in drill_tunnel_01 raised 12 cm, then each moved
+# 200 m below the level, then Gabe's gun proxy, then the tunnel's 4
+# ScriptableProps) did not stop the thump in the opening scene.
+NUDGE = {}
+
+# Message listeners moved to another message: {object hash: (old message,
+# new message)} (CMD_SetTargetName, the record's first field: hash, 0,
+# string offset). The hanging state (PlayerChangeState) holds Gabe at
+# hanging height; the script releases it on ses_player_01_03_end, after the
+# drop animation, so on PC he finishes the drop at ceiling height and pops
+# through it. Releasing it as the drop sequence starts (mm_ses_01_03_trigger
+# starts ses_player_01_03) lets him come down (F7 test: released early, he
+# fell straight to the floor). The end's own release finds no listener.
+RETARGET = {
+    0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate', b'mm_ses_01_03_trigger'),
 }
+
+
+def msg_hash(name):
+    """message names: sdbm of the lower-case name, multiplier 0x1003F"""
+    h = 0
+    for c in name.lower():
+        h = (h * 0x1003F + c) & M
+    return h
+
+
+def _retarget(out, x, base, length, oh, stats):
+    old, new = RETARGET[oh]
+    h, z, rel = struct.unpack_from('>III', x, base)
+    t = base + 8 + rel
+    if h != msg_hash(old) or z or x[t:t + len(old) + 1] != old + b'\0' or len(new) > len(old):
+        stats['retarget_skipped'] = stats.get('retarget_skipped', 0) + 1
+        return
+    struct.pack_into('<I', out, base, msg_hash(new))
+    out[t:t + len(old) + 1] = new + bytes(len(old) + 1 - len(new))
+    stats['retargeted'] = stats.get('retargeted', 0) + 1
 
 
 def schema():
@@ -243,6 +266,8 @@ def convert(x, stats=None):
             out[B + ro:B + ro + ln] = bytes(ln)      # blank NavFolder
             continue
         _record(out, x, B + ro, ln, cls, stats)
+        if oh in RETARGET:
+            _retarget(out, x, B + ro, ln, oh, stats)
     # group hashes: sdbm over the members' class-name hashes, PC byte order
     if o10:
         for i in range(n18):
