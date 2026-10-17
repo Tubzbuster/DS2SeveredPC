@@ -382,6 +382,10 @@ own risk. Back up your saves.
   * Rick (Gibbed) - Gibbed.Visceral ...... archive, stream and SimGroup
                                            formats (zlib licence)
   * vgmstream (ISC licence) ............ EA audio format reference
+                                           (our XAS encoder, xasenc.dll,
+                                           is built on its decoder notes)
+  * Velocity ........................... Xbox 360 STFS package layout
+                                           (reimplemented, no code used)
   * 4Kodda - DS1-3 Modding Toolkit ..... mesh format reference (no code used)
   * Havok .............................. for shipping class descriptions
   * GameFAQs FAQ writers of the 2000s .. for the vibes
