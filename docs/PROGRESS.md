@@ -61,7 +61,7 @@ entering the decompression room.
   end (probe 40 names it)
 - thump in the opening scene (not the two corpses, Gabe's gun or the
   tunnel's 4 physics props, tests 1-4)
-- the held weapon floats a little off Gabe's hands
+- the Pulse Rifle sits oddly in Gabe's hands (other weapons are fine): deferred to a future release
 - saves show as "Chapter 1" with chapter 1's picture: fix pushed, to test
   (both chapters numbered 16, with Severed's own picture and title)
 - save station lock-up: happens when the terminal is used again during
@@ -132,7 +132,7 @@ intro terminal, the alt-tab hang, the gunship hull textures.
 | Scripted hang after the cargo lift | partial | the entry into the hang looks like the console. Gabe still does not drop to the floor at the end. Probe 37: `ses_player_01_03` runs and finishes; its anchor is the origin (no transform, as on the 360) and the hanging proxy offset is tiny, so neither explains it (FINDINGS 48). Next: F7 test sending `PlayerChangeState_hanging_combat_deactivate` as the fight ends |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
-| Weapon in Gabe's hands | wrong | the held weapon floats a little off his hands (screenshot at the docking station). To investigate: Gabe's weapon attachment offsets |
+| Weapon in Gabe's hands | partial | only the Pulse Rifle sits oddly (other weapons are held properly); not caused by its upgrades (tested without them). Deferred to a future release: the rifle's files are the PC's own, the likeliest cause is Gabe's converted animation bank `pc_nolegs_patrol.bnk` (Severed-only, nothing to check it against) |
 | Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
 | Crash in the quarry | works | fixed by the LUT conversion; probe 31 stays as a safety net |
 | Save stations | partial | saving and loading a save work; using the terminal again during its closing animation locks it up; saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). On console the load menu shows "Severed, chapter N" with its own picture (Gabe in a corridor, from footage); Severed's files hold only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`), so that picture is probably in a front-end file still to find |

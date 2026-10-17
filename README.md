@@ -151,7 +151,7 @@ How it works:
 | Severed in the episode select | Works (via the probe DLL) |
 | Intro terminal cutscene, RIG call scene, hand-over | Works, with subtitles (a thump in the opening scene) |
 | Level geometry, textures, lighting, collision | Works in the areas reached (a black shape in the zero-oxygen hallway) |
-| Playing as Gabe (security suit), HUD, inventory | Works (the held weapon floats a little off his hands) |
+| Playing as Gabe (security suit), HUD, inventory | Works (the Pulse Rifle sits oddly in his hands: future release) |
 | Dialogue, audio logs, videos, music, ambience | Works |
 | Necromorph AI, Tormentor boss | Works |
 | Chapter 1: drill tunnel to the docking station | Works (Gabe does not drop to the floor after the hanging fight: fix pending) |

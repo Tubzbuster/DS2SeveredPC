@@ -1465,6 +1465,11 @@ a mesh failed; existing builds were converted before that change.
   (round floats left raw) occurs 5 times in Gabe's bank, as in base banks
   where such words are right 7,800 times in 7,811. So no converted data
   explains the grip yet.
+- The user confirmed only the Pulse Rifle is affected, and it stays so
+  without the probe's upgrade step (probe 41, `severed_noupgrade.on`), so
+  the upgrades are kept. Gabe's helmet (the only converted mesh on his suit)
+  converts like the base security helmet (bone palettes and all 3,480
+  vertex bone indices match the PC file). Deferred to a future release.
 
 ## 55. Strobing lights (gift shop, decomp_hall_z01)
 
