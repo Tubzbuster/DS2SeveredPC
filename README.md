@@ -20,10 +20,10 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
                                                 FAQ / README / Port Guide
 ================================================================================
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
-  DLC .......... Dead Space 2: Severed (Xbox 360 add-on, your own copy)
+  DLC .......... Dead Space 2: Severed 
   Platform ..... Windows (PC)
   Version ...... 0.4.0 (pre-alpha, test builds only)
-  Author ....... tubzbuster & DS2SeveredPC contributors
+  Author ....... tubzbuster
   Updated ...... 2026-10-17
 ================================================================================
 Use Ctrl+F with the codes below to jump to a section.
