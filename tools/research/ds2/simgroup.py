@@ -49,6 +49,24 @@ REMAP = {
     0xA1C89AA7: 'UIEndOfGameData',           # UIEndOfGameDataExt: end of DLC (1); 20 extra zero bytes
 }
 
+# Store lists (ItemStoreList, one array of item GUIDs): Severed lists Gabe
+# versions of the suit packs next to his starting suit. Gabe does not
+# change suits through the store in Severed, and choosing one on PC
+# crashed the game, so these entries are left out of the lists (the rest
+# move up). Kept: the starting "PDLC Weller Suit" {31CB97F2-70FE-C517-...}.
+STORE_HIDDEN = {
+    (0x31CBB1C2, 0xACB209C3),   # Security Suit
+    (0x31CBB1C3, 0x3916B805),   # (hacker suit)
+    (0x31CBB1C3, 0xFB56CB01),   # PDLC Miner Suit
+    (0x31CBB1C4, 0x8FBB6FD5),   # PDLC Security Suit
+    (0x31CBB1C4, 0xE85D26F3),   # PDLC Advanced Suit
+    (0x31CBB1C5, 0x57992363),   # PDLC Heavy Damage
+    (0x31CBB1C5, 0xC2AB6BA9),   # PDLC Quick Draw Suit
+    (0x31CBB1C6, 0x2FCEFA83),   # PDLC EarthGov Suit
+    (0x31CBB1C6, 0x8AB40943),   # PDLC Brushed Alum Suit
+    (0x31CBB1C6, 0xD0F37D3D),   # PDLC Bloody Suit
+}
+
 
 def schema():
     global _SCHEMA
@@ -97,6 +115,17 @@ def _record(out, x, base, length, cls, stats):
     if length < cls['size']:
         raise Unknown('record shorter than its class')
     _struct(out, x, base, cls)
+    if cls['name'] == 'ItemStoreList':
+        _hide_store_items(out, x, base, cls, stats)
+
+
+def _hide_store_items(out, x, base, cls, stats):
+    off, _, _, count = cls['fields'][0][:4]
+    o = base + off
+    keep = [out[o + 16 * i:o + 16 * i + 16] for i in range(count)
+            if struct.unpack_from('>II', x, o + 16 * i) not in STORE_HIDDEN]
+    stats['store_items_hidden'] = stats.get('store_items_hidden', 0) + count - len(keep)
+    out[o:o + 16 * count] = b''.join(keep) + bytes(16 * (count - len(keep)))
 
 
 def _struct(out, x, base, cls):

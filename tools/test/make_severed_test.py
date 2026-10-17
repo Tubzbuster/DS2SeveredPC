@@ -579,6 +579,10 @@ def main():
         log('Re-converting the meshes with lightmap materials (20-byte UV streams)')
         refresh_uv_streams(root, dst)
         open(os.path.join(work, 'uv_streams.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'store_suits.ok')):
+        log('Removing the suit-pack suits from Severed\'s stores')
+        refresh_simgroups(root, dst, 0xE6CACE4C)       # ItemStoreList (simgroup.STORE_HIDDEN)
+        open(os.path.join(work, 'store_suits.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
