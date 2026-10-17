@@ -1529,6 +1529,30 @@ static DWORD **g_msg_table;
 static BYTE g_msg_count[1 << 16];          /* by low 16 bits of the hash: sends logged (max 3) */
 static volatile LONG g_msg_logs;
 
+/* probe 40: who listens to the hanging fight's messages
+ * (PlayerChangeState_hanging_combat_deactivate, mm_ses_01_03_trigger,
+ * ses_player_01_03): the listener list's first words, and for each word
+ * that points at an object (or at one of whose first 3 words points at an
+ * object; word -1 = the word itself) whose first word lies in the exe, that
+ * vtable (exe offset) - the listener's class */
+static void dump_listeners(DWORD h, DWORD *lst)
+{
+    DWORD exe = (DWORD)GetModuleHandleA(NULL);
+    int k, j;
+    if (!lst || !mem_ok(lst, 0x20)) return;
+    log_line("  listeners %08lx at %08lx: %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx", h, (DWORD)lst,
+             lst[0], lst[1], lst[2], lst[3], lst[4], lst[5], lst[6], lst[7]);
+    for (k = 0; k < 8; k++) {
+        DWORD *o = (DWORD *)lst[k];
+        if (!o || !mem_ok(o, 0x10)) continue;
+        for (j = 0; j < 4; j++) {
+            DWORD *q = j ? (DWORD *)o[j - 1] : o;
+            if (q && mem_ok(q, 4) && q[0] - exe < 0x2000000)
+                log_line("    word %d -> object (word %d) vtable exe+0x%lx", k, j - 1, q[0] - exe);
+        }
+    }
+}
+
 static void __cdecl note_msgsend(const char *arg)
 {
     const DWORD *msg = (const DWORD *)arg;
@@ -1548,6 +1572,8 @@ static void __cdecl note_msgsend(const char *arg)
         node = (DWORD *)node[0];
     }
     log_line("MSG %08lx %s", h, listeners > 0 ? "" : listeners == 0 ? "(no listeners - dropped)" : "(unknown - dropped)");
+    if (listeners > 0 && (h == 0x5B9D1871 || h == 0x661A303D || h == 0x95F3F281))
+        dump_listeners(h, (DWORD *)node[1]);
 }
 
 /* ---- Gabe's pre-upgraded Pulse Rifle (probe 34) ---------------------------
@@ -2530,7 +2556,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 39 - process %s", path);
+    log_line("severed probe 40 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
