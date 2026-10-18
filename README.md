@@ -168,7 +168,7 @@ so you start it the way you do on console:
 ```text
   Main Menu > Single Player > New Game > Episode Select
       Dead Space 2
-      Dead Space 2: Severed      <-- this one
+      Dead Space 2: Severed
 ```
 
 How it works:
@@ -177,10 +177,6 @@ How it works:
 - A small hook DLL adds the menu entry while the game runs.
 - `deadspace2.exe` and the game's own files are never modified.
 - The copy protection is left alone.
-
-> **This is pre-alpha.** Both chapters play from start to finish, but some
-> levels and textures still need work (see [SV02]). Every test run helps, so
-> please send your log (see [SV06]).
 
 ```text
 ================================================================================
