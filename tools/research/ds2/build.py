@@ -122,34 +122,42 @@ def build(src, dst, log=print):
     report = collections.defaultdict(list)
     sizes = {}
     tocs = []
-    for d, _, files in os.walk(src):
-        for f in sorted(files):
-            p = os.path.join(d, f)
-            rel = os.path.relpath(p, src)
-            q = os.path.join(dst, rel)
-            os.makedirs(os.path.dirname(q), exist_ok=True)
-            ext = os.path.splitext(f)[1].lower()
-            if ext == '.str':
-                out, total = convert_stream(open(p, 'rb').read(), report)
-                open(q, 'wb').write(out)
-                sizes[os.path.splitext(rel)[0].replace('/', '\\').lower()] = total
-                log('stream %s: %d bytes' % (rel, len(out)))
-            elif ext == '.toc':
-                tocs.append((p, q))
-            elif ext == '.snu':
-                if os.path.exists(q) and os.path.getsize(q):
-                    continue                      # converted by an earlier run
-                from . import snu
-                y = snu.convert(open(p, 'rb').read())
-                if y is None:
-                    report['not converted: snu'].append(rel)
-                else:
-                    open(q, 'wb').write(y)
-            elif ext in COPY:
-                open(q, 'wb').write(open(p, 'rb').read())
+    todo = [os.path.join(d, f) for d, _, files in os.walk(src) for f in sorted(files)]
+    count = len(todo)
+    for i, p in enumerate(todo, 1):
+        f = os.path.basename(p)
+        rel = os.path.relpath(p, src)
+        q = os.path.join(dst, rel)
+        os.makedirs(os.path.dirname(q), exist_ok=True)
+        ext = os.path.splitext(f)[1].lower()
+        step = '  [%d/%d]' % (i, count)
+        if ext == '.str':
+            out, total = convert_stream(open(p, 'rb').read(), report)
+            open(q, 'wb').write(out)
+            sizes[os.path.splitext(rel)[0].replace('/', '\\').lower()] = total
+            log('%s stream %s: %d bytes' % (step, rel, len(out)))
+        elif ext == '.toc':
+            tocs.append((p, q))
+        elif ext == '.snu':
+            if os.path.exists(q) and os.path.getsize(q):
+                log('%s audio %s: converted by an earlier run' % (step, rel))
+                continue
+            from . import snu
+            y = snu.convert(open(p, 'rb').read())
+            if y is None:
+                report['not converted: snu'].append(rel)
+                log('%s audio %s: not converted' % (step, rel))
             else:
-                report['unknown file'].append(rel)
+                open(q, 'wb').write(y)
+                log('%s audio %s' % (step, rel))
+        elif ext in COPY:
+            open(q, 'wb').write(open(p, 'rb').read())
+            log('%s copied %s' % (step, rel))
+        else:
+            report['unknown file'].append(rel)
+            log('%s unknown file %s' % (step, rel))
     for p, q in tocs:
+        log('  table of contents %s' % os.path.relpath(p, src))
         x = open(p, 'rb').read()
         names = toc.parse(x)['stream_names']
         known = {n: sizes[n.lower()] for n in names if n.lower() in sizes}

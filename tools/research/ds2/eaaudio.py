@@ -13,7 +13,7 @@ then codec data.
   codec 4 XAS v1 (PC): per 128 samples, 0x4C bytes per channel
     (4 group headers u32 LE + 15 rows of 4 bytes).
 """
-import os, struct, subprocess
+import os, struct, subprocess, sys
 
 CODEC_EAXMA, CODEC_XAS1 = 3, 4
 FFMPEG = os.environ.get('DS2_FFMPEG', 'ffmpeg')    # needs the xma2 decoder
@@ -85,6 +85,10 @@ def eaxma_layers(blk_iter, channels):
     return layers
 
 
+# ffmpeg runs hidden: from a windowed app each run would open its own console
+NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+
+
 def decode_eaxma(blk_iter, channels, rate, samples, ffmpeg=None):
     """interleaved int16 PCM bytes"""
     ffmpeg = ffmpeg or FFMPEG
@@ -95,7 +99,7 @@ def decode_eaxma(blk_iter, channels, rate, samples, ffmpeg=None):
         lc = 1 if (i + 1 == len(layers) and channels % 2) else 2
         riff = _xma2_riff(bytes(d), lc, rate, samples)
         r = subprocess.run([ffmpeg, '-v', 'error', '-f', 'wav', '-i', '-', '-f', 's16le', '-acodec', 'pcm_s16le', '-'],
-                           input=riff, capture_output=True)
+                           input=riff, capture_output=True, creationflags=NO_WINDOW)
         if r.returncode:
             raise RuntimeError(r.stderr.decode()[:300])
         a = array.array('h', r.stdout)

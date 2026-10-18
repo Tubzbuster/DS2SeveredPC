@@ -254,8 +254,7 @@ class Wizard:
             '\nThis wizard converts your own copy of the Xbox 360 add-on "Dead Space 2: '
             'Severed" for the PC version of Dead Space 2. Severed is then started from '
             'Single Player > New Game > Episode Select.\n\n'
-            'Converting takes about an hour. It can be stopped and started again: it '
-            'picks up where it left off.\n\n'
+            'Converting can be stopped and started again: it picks up where it left off.\n\n'
             'DS2SeveredPC contains no game files. It adds one archive (DS2DAT2.DAT) and the '
             'hook that puts Severed in the menu (dinput8.dll) to the game folder. A free fan project, not made or endorsed by Electronic Arts.\n\n'
             'What would you like to do?')).pack(anchor='w')
@@ -310,7 +309,7 @@ class Wizard:
     def page_installing(self):
         install = self.mode.get() == 'install'
         f = self.head_page('Installing' if install else 'Removing',
-                           'Please wait while Severed is converted. This takes about an hour.' if install
+                           'Please wait while Severed is converted.' if install
                            else 'Please wait.')
         self.status = ttk.Label(f, text='Starting...')
         self.status.pack(anchor='w')
@@ -498,7 +497,8 @@ def selftest():
     ff = bundled_ffmpeg()
     ffv = 'not found'
     if ff:
-        r = subprocess.run([ff, '-hide_banner', '-decoders'], capture_output=True, text=True)
+        r = subprocess.run([ff, '-hide_banner', '-decoders'], capture_output=True, text=True,
+                           creationflags=subprocess.CREATE_NO_WINDOW if WIN else 0)
         ffv = 'xma2 decoder ' + ('present' if ' xma2 ' in r.stdout else 'MISSING')
     hook = bundled_hook()
     hv = 'present' if hook and is_our_hook(hook) else 'MISSING'

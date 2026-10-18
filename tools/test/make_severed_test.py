@@ -669,6 +669,7 @@ def main():
         log('Unpacking the Severed package')
         pkg = stfs.Package(open(a.severed, 'rb').read())
         for path, data in pkg.files():
+            log('  ' + path)
             q = os.path.join(src, *path.replace('\\', '/').split('/'))
             os.makedirs(os.path.dirname(q), exist_ok=True)
             open(q, 'wb').write(data)
@@ -696,7 +697,7 @@ def main():
 
     left_out = {}
     if not os.path.exists(os.path.join(work, 'converted.ok')):
-        log('Converting (this takes a while: about an hour)')
+        log('Converting the add-on\'s files')
         report = build.build(root, dst, log=log)
         left_out = {k: v for k, v in report.items() if not k.startswith(('converted', 'dropped'))}
         for k, v in sorted(report.items()):
