@@ -974,10 +974,9 @@ def main():
         derive_pc_meshes(root, dst, idx)               # pcassets.DERIVED: the Oracle corpse
         open(os.path.join(work, 'oracle_corpses.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'vfx_headers.ok')):
-        log('Effects with rare header sizes: their step times converted (the ending\'s end screens showed all texts at once)')
-        from ds2 import pcassets
-        own = pcassets.load()
-        refresh_assets(root, dst, 'VFX', build._vfx, keep=lambda a: pcassets.key(a.type, a.name, a.ids) in own)
+        log('The finale\'s effects: their step times converted (the end screens showed all texts at once)')
+        refresh_assets(root, dst, 'VFX', lambda x: build._vfx(x, True),
+                       keep=lambda a: a.name not in build.VFX_HEADER_FIX)
         open(os.path.join(work, 'vfx_headers.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)

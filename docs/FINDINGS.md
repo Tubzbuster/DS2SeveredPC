@@ -2023,9 +2023,11 @@ showed (zero there) as stored, among them 25 of the step times (12.5 s at
 Gabe's picture stayed under Lexine's name. Headers of sizes seen in fewer
 than 30 pairs now take the entry layout of the well-sampled sizes
 (`build._vfx_header`). 10 of Severed's 514 own effects have such headers;
-words change in 4: pdlc_outro (25), igc02_06_grenade_splode (-100.0),
+words would change in 4: pdlc_outro (25), igc02_06_grenade_splode (-100.0),
 pdlc1_bay_fusesplode (two -0.5), pdlc_intro_static (16.0 and a flag
-word). Step `vfx_headers.ok`.
+word). Applied only to the three finale effects (`build.VFX_HEADER_FIX`):
+the intro looks right as it is, and is left unchanged. Step
+`vfx_headers.ok`.
 
 Compared with the console footage, still open:
 - after `all_fuses_destroyed` Gabe has his legs again for the last

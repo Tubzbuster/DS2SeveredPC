@@ -92,8 +92,8 @@ screens and the credits. Fixes in this round:
   locked): the Oracle corpses were thrown about where the Infectors could
   not reach them; they now hold their pose, and are built from the PC
   game's Oracle mesh
-- the end screens showing all their texts at once (timed steps in rare
-  effect headers left unconverted; fix waiting for a test)
+- the end screens showing all their texts at once (timed steps in the
+  finale's effects left unconverted; fix waiting for a test)
 - the installer app: installs the hook DLL itself, shows the conversion
   file by file without console windows, has its own icon, and the build is
   named DS2SeveredPC-Converter with a "keep all files together" note
