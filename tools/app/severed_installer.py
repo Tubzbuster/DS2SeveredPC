@@ -162,6 +162,9 @@ class Wizard:
     def __init__(self, root):
         self.root = root
         root.title('%s Setup' % TITLE)
+        icon = os.path.join(getattr(sys, '_MEIPASS', HERE), 'icon.ico')   # icon by youngpotart (SteamGridDB)
+        if WIN and os.path.isfile(icon):
+            root.iconbitmap(default=icon)
         root.geometry('720x520')
         root.minsize(640, 480)
         style = ttk.Style(root)
