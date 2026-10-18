@@ -29,6 +29,10 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
 Use Ctrl+F with the codes below to jump to a section.
 ```
 
+
+
+
+I'm not gonna sugercoat it, I don't know the first thing about how the xbox 360 files work but I heavily vibecoded Claude to help decrypt and map the files to the pc version, then from the ground up testing and logging, checking for how the textures look in the pc version, checking against numerous let's play footage of the console version to see what's missing and what isn't rendering, and going through numerous bug crash test dumps to make this thing that I wanted 
 ```text
 ================================================================================
                            TABLE OF CONTENTS
