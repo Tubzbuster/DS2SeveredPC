@@ -49,3 +49,4 @@ tools/app/build/
 tools/app/dist/
 tools/app/*.spec
 tools/app/ffmpeg/
+tools/research/base_sections.zip
