@@ -40,10 +40,8 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Chapter 2 texture check (probe 48): play through the rest of chapter 2
-   and note any remaining black shapes or wrong surfaces, with the room
-   and a screenshot. The zero-oxygen hallway and most of the hospital are
-   confirmed good since `mesh_positions.ok`.
+- none: the hospital's textures are confirmed good throughout (since
+  `mesh_positions.ok`).
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -65,8 +63,7 @@ hall, the psych arrival hall and the landing bay finale.
   slab in front of a pickup. Material links, vertex colour and table data
   checked and ruled out (FINDINGS 58); the probe trace can be taken there
   as well as in the hallway.
-  **Fixed and confirmed** in the zero-oxygen hallway and most of the
-  hospital (the rest of chapter 2 is being checked): found by comparing
+  **Fixed and confirmed** across the whole hospital: found by comparing
   with the base game's own hallway: vertex positions left half-converted
   (some words read as text), 173 words in 17 meshes, most in the hospital
   (FINDINGS 59). Step `mesh_positions.ok`.
