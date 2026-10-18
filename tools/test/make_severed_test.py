@@ -515,7 +515,7 @@ def refresh_uv_streams(root, dst, pick=None):
 
 def derive_pc_meshes(root, dst, idx):
     """Severed meshes built from the PC game's own mesh with Severed's
-    materials (pcassets.DERIVED: the gunship hull)"""
+    materials (pcassets.DERIVED: the gunship hull, the Oracle corpse)"""
     sizes = {}
     for d, _, fs in os.walk(dst):
         for f in fs:
@@ -727,7 +727,7 @@ CATCH_UP = (
     'hang_release.ok', 'loop_split.ok', 'calm_lights5.ok', 'hall_glass_back.ok', 'chapters_restored.ok',
     'hang_drop2.ok', 'hang_console.ok', 'corpse_freeze.ok', 'hang_gravity.ok', 'hang_place.ok',
     'hang_console2.ok', 'hang_gravity2.ok', 'hang_door.ok', 'hang_door2.ok', 'corpse_freeze2.ok',
-    'gunship_audio.ok', 'mesh_positions.ok', 'anim_tracks.ok',
+    'gunship_audio.ok', 'mesh_positions.ok', 'anim_tracks.ok', 'oracle_corpses.ok',
 )
 
 
@@ -968,6 +968,11 @@ def main():
         from ds2 import convert
         refresh_assets(root, dst, 'ANIM', convert.CONVERTERS['ANIM'])
         open(os.path.join(work, 'anim_tracks.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'oracle_corpses.ok')):
+        log('Final fight: the two Oracle corpses stay where the Infectors find them, built from the PC game\'s Oracle mesh')
+        refresh_simgroups(root, dst, 0x4C8A721A)       # RagdollComponent (simgroup.RAGDOLL_SETS)
+        derive_pc_meshes(root, dst, idx)               # pcassets.DERIVED: the Oracle corpse
+        open(os.path.join(work, 'oracle_corpses.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

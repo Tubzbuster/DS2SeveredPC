@@ -66,6 +66,15 @@ DERIVED = {
         '2E72F4DC',
         'Mesh|exterior.dae|01961BED.36BD9CD9.36BD9CD9.36BD9CD9.4D8D3C4E',
         'MeshVolatile|exterior.dae.volatile|E2BA6D49.C9426326.C9426326.C9426326.B272C3B1'),
+    # the Oracle corpse (pdlc_npcmoraclecorpse): on the 360 its body and RIG
+    # tables are byte for byte the live Oracle's npcmoracle.dae (which the
+    # PC game has); only the face and the materials differ. Converted, part
+    # of the body stretched into a pale sheet to the floor when an Infector
+    # lifted it. Built from the live Oracle's PC mesh (the live face).
+    'Mesh|npcmoracle.dae|01961BED.EE058239.EE058239.EE058239.F5E9BC45': (
+        'B9D946A6',
+        'Mesh|npcmoracle.dae|01961BED.8EBB08BD.8EBB08BD.8EBB08BD.D3A87D1E',
+        'MeshVolatile|npcmoracle.dae.volatile|E2BA6D49.7144F742.7144F742.7144F742.2C5782E1'),
 }
 
 

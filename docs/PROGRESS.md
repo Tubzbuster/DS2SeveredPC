@@ -42,12 +42,11 @@ test, see below), the final boss and the end of the DLC (credits).
 - the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
-1. Final hack (the ending): after the Twitcher fight, the hacking panel
-   next to the gunship lights up (a red console on a stand; the locator
-   points to it). Use it and play on to the credits. Send the log.
-2. A screenshot of the "light mesh" behind the Infectors in the cutscene,
-   to compare with the console (their wings are pale flat membranes there
-   too).
+1. Final fight (fix `oracle_corpses.ok`): rerun the converter, load the
+   final-battle checkpoint. The two Oracle corpses should stay put for
+   the Infectors, the pale sheet should be gone, and after the last kill
+   the dialogue plays and the hacking panel unlocks. Then use the panel
+   and play on to the credits. Send the log.
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -91,11 +90,14 @@ test, see below), the final boss and the end of the DLC (credits).
   spot moved 0.35 m, the door started 2 s after the drop (FINDINGS 48)
 - ~~thump in the opening scene~~ fixed and confirmed: gone since the
   drill tunnel's two bodies hold still (`corpse_freeze`, FINDINGS 56)
-- final fight sometimes does not end: in one of two runs no
-  `twitcher_combat_over` after the last kill (no dialogue, the hacking
-  panel stays locked). The end needs more than 3 `oracle_dead` (each enemy
-  sends it on death and again on going to sleep); probe 50 logs every one.
-  Way past it: `twitcher_combat_over` in `severed_send.txt`, then F7
+- final fight sometimes does not end (no dialogue, the hacking panel stays
+  locked): the two Oracle corpses were thrown about where the Infectors
+  could not reach them, so too few Oracle Twitchers came for the tally
+  (probe 50: 2 `oracle_dead` in the stuck run, 4+ in the good one). Fix
+  pending (`oracle_corpses.ok`, FINDINGS 62): the corpses freeze on limp;
+  the pale sheet stretching off a corpse's back is addressed too (its mesh
+  built from the PC game's Oracle). Way past it: `twitcher_combat_over`
+  in `severed_send.txt`, then F7
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)

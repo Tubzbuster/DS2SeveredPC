@@ -162,7 +162,7 @@ def _delay(out, x, base, oh, stats):
 # Ragdoll flags set by the converter: {object hash: flags}. RagdollComponent
 # CMD_RagdollFlags (record offset 16; exe 0xB74B80 names the bits: 1 Freeze
 # on limp, 2 Do not jitter detect, 4 Large object bodies on limp, 8 Key
-# object bodies on limp). All of Severed's ragdolls have 0. The two bodies in
+# object bodies on limp). Severed's ragdolls have 0 (one 8). The two bodies in
 # drill_tunnel_01 (Corpse_deadpose1) land somewhere different on every new
 # game on PC, where the console has them in place (one draped on a spike):
 # Freeze on limp should hold them where the level puts them.
@@ -171,10 +171,18 @@ def _delay(out, x, base, oh, stats):
 # mining_camp's quarantine area, the bomb_run NPC set), which then also lay
 # frozen until shot; so the flags apply only in a SimGroup that holds all of
 # these objects, which only drill_tunnel_01 does.
-RAGDOLL_FLAGS = {
-    0x2E30A6F6: 1,      # corpse 21B88F09 (with the impale-reaction component)
-    0xAF37A013: 1,      # corpse 10ED3773
-}
+# The landing bay's final fight (landing_bay_psycho_z02): two Infectors turn
+# the two Oracle corpses (pdlc_npcmoraclecorpse) into Oracle Twitchers. On
+# PC the corpses were thrown about the bay where the Infectors could not
+# reach them, so no Twitcher came and the fight's tally (oracle_dead past 3)
+# never ended it. Freeze on limp (the second keeps its Key object bit).
+# Each set applies only in a SimGroup that holds all of its objects.
+RAGDOLL_SETS = (
+    {0x2E30A6F6: 1,     # drill_tunnel_01: corpse 21B88F09 (with the impale-reaction component)
+     0xAF37A013: 1},    # corpse 10ED3773
+    {0x3CB7C77C: 1,     # landing_bay_psycho_z02: Oracle corpse
+     0x49D4A20B: 9},    # Oracle corpse (8 on the console: Key object bodies on limp)
+)
 
 # ScriptedEventSequence settings flags (record offset 116) changed:
 # {object hash: (old flags, new flags)}. ses_player_01_03, the drop after
@@ -406,7 +414,7 @@ def convert(x, stats=None):
     by_obj = {}
     by_rec = {}
     present = {struct.unpack_from('>I', x, B + toff + 16 * i + 4)[0] for i in range(cnt)}
-    ragdoll_here = all(h in present for h in RAGDOLL_FLAGS)
+    ragdoll = {h: f for rs in RAGDOLL_SETS if all(h in present for h in rs) for h, f in rs.items()}
     for i in range(cnt):
         e = B + toff + 16 * i
         ro, oh, ln, a, b = struct.unpack_from('>IIIHH', x, e)
@@ -431,8 +439,8 @@ def convert(x, stats=None):
             _field_retarget(out, x, B + ro, ln, oh, stats)
         if oh in DELAYS:
             _delay(out, x, B + ro, oh, stats)
-        if ragdoll_here and oh in RAGDOLL_FLAGS and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:
-            struct.pack_into('<I', out, B + ro + 16, RAGDOLL_FLAGS[oh])
+        if oh in ragdoll and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:
+            struct.pack_into('<I', out, B + ro + 16, ragdoll[oh])
             stats['ragdoll_flags'] = stats.get('ragdoll_flags', 0) + 1
         if oh in SES_FLAGS and cls is not None and cls['name'] == 'ScriptedEventSequence':
             was, now = SES_FLAGS[oh]

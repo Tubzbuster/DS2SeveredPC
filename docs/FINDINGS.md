@@ -1968,3 +1968,34 @@ by that log line.
 Confirmed: with the fix the cutscene and the Oracle Twitcher fight play
 without a crash, and the Twitchers look like the console's (grey flesh,
 cyan eyes).
+
+## 62. The final fight's end: the Oracle corpses
+
+The fight after the landing bay cutscene ends on `twitcher_combat_over`,
+sent by a VariableWatcher (468043FA: condition 4, threshold 3) on a
+variable that a VariableOperator (2C29EF15) adds 1 to on each
+`oracle_dead`. The Infectors (landing_bay.str E6124E59) and the Oracle
+Twitcher template (B0A29C40) send `oracle_dead`. Probe 50 (every send
+logged): the run that ended had at least 4, the run that stuck only 2. The
+Infectors turn corpses into Oracle Twitchers (Infector `SpawnedNPC`); the
+user saw the two corpses thrown about the bay, out of the Infectors' reach,
+so no Twitcher came and the count stayed short.
+
+The corpses are `landing_bay_psycho_z02`'s two DismemberableProps
+42ACC715 and 29672AD6 (`Corpse_deadpose1`, template
+`pdlc_npcmoraclecorpse.str`), with RagdollComponents 3CB7C77C (flags 0) and
+49D4A20B (flags 8, Key object bodies on limp), only in that section. As
+with the drill tunnel bodies (section 56) they get Freeze on limp
+(`simgroup.RAGDOLL_SETS`: 1 and 9).
+
+The pale sheet: in the user's screenshot, as an Infector lifts a corpse, a
+white translucent strip of the body stretches from the back to the floor
+(vertices not following the skeleton). The corpse's mesh `npcmoracle.dae`
+is ours (converted); the live Oracle's `npcmoracle.dae`
+(`pdlc_npcmoracle.str`) is the PC game's own. On the 360 the two meshes
+have the same size and tables, and the body (`MergedMesh0000`) and RIG
+(`mesh_rig_B_dismShape`) vertices and faces are identical; only the two
+face tables and the materials differ. `pcassets.DERIVED` now builds the
+corpse from the live Oracle's PC mesh and volatile (entry B9D946A6) with
+the corpse's material ids (`derive_mesh`): the corpse has the live
+Oracle's face. Step `oracle_corpses.ok` (both changes).
