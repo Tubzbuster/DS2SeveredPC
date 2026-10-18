@@ -3,16 +3,10 @@ name: Build installer app
 # Builds the DS2SeveredPC wizard for Windows from the repository's code alone
 # (no game files): its own Python (PyInstaller) and an LGPL ffmpeg build.
 # The result is the "DS2SeveredPC-app" artifact of the run.
+# Manual only (Actions > Build installer app > Run workflow) while the DLC is
+# still being made playable; builds on push come back for the release.
 on:
   workflow_dispatch:
-  push:
-    branches: [DS2PCDLC-Main]
-    paths:
-      - 'tools/app/**'
-      - 'tools/test/make_severed_test.py'
-      - 'tools/research/ds2/**'
-      - 'tools/research/native/**'
-      - '.github/workflows/build-app.yml'
 
 permissions:
   contents: read

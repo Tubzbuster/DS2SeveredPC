@@ -233,6 +233,9 @@ intro terminal, the alt-tab hang, the gunship hull textures.
   xma2 decoder) and uploads the app as the run's artifact. Checked on Linux:
   the build, the self-test, every
   wizard page. Still to do: a real conversion through it on Windows.
+  On hold until the DLC plays start to finish: the workflow now runs only
+  when started by hand (no build on every push); testing goes through
+  `Make-SeveredTest.bat`.
 
 - **Check the user's add-on before converting.** People's copies can have
   any file name, so the app identifies the add-on by its contents, not its
