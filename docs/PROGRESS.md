@@ -50,11 +50,6 @@ hall, the psych arrival hall and the landing bay finale.
    seconds before F4: F5 now also logs every draw of that piece.
 3. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
-4. Quarry Twitchers coming out of vents: shots pass through them. Do they
-   stay unshootable after they land, or only during the climb out? Do the
-   shots leave marks on the wall behind? Do Slashers coming out of vents
-   elsewhere take hits? Base game check: Twitchers leaving vents in the
-   Government Sector, can they be shot during the climb out?
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition~~ fixed:
@@ -72,11 +67,6 @@ hall, the psych arrival hall and the landing bay finale.
   confirmed: both get "Freeze on limp" (`corpse_freeze.ok`, FINDINGS 56).
   They stay put through the scene and react to shots and stomps. (No body
   is on a spike, on the console either.)
-- quarry Twitchers can't be hit as they leave their vents (shots go
-  through). Their character files (model, `twitcher.rcb`,
-  `slashersecurity.hkx`, animation banks) are the PC game's own; the
-  vents are VentMarker objects in `pdlc1_ch01_mng.str`. Questions pending
-  (test 4)
 - ~~the clinic overlook room's reflections are sideways~~ not a bug: the
   base game's chapter 1 clinic window (same glass files) looks the same on
   PC (FINDINGS 57).
@@ -89,11 +79,9 @@ hall, the psych arrival hall and the landing bay finale.
   base game's). `msg_vfx_airless_dof_stop` changed nothing; the broken
   windows there also show flat beige. Next F7 tests:
   `lt_airless_hall_post_fx_off`, `msg_vfx_airless_stop`
-- Gabe does not drop to the floor after the hanging fight (plays the
-  get-up inside the rock overhang). The F7 test showed the hanging state
-  holds him up until the drop animation ends; releasing it at the drop's
-  start did not help, and the release message still had a listener at the
-  end (probe 40 names it)
+- ~~Gabe does not drop to the floor after the hanging fight~~ fixed
+  (worked once, more runs to come): gravity on during the drop, hanging
+  spot moved 0.35 m, the door started 2 s after the drop (FINDINGS 48)
 - thump in the opening scene (not the two corpses, Gabe's gun or the
   tunnel's 4 physics props, tests 1-4)
 - the Pulse Rifle sits oddly in Gabe's hands (other weapons are fine): deferred to a future release
@@ -107,6 +95,16 @@ hall, the psych arrival hall and the landing bay finale.
 
 **No longer bugs** (confirmed by the user): the stretched slabs after the
 intro terminal, the alt-tab hang, the gunship hull textures.
+
+**To double-check sometime** (notes, not counted as bugs):
+- quarry Twitchers seemed not to take hits while climbing out of their
+  vents (shots went through). May be normal: their character files
+  (model, `twitcher.rcb`, `slashersecurity.hkx`, animation banks) are the
+  PC game's own, and enemies may not be hittable mid-climb in the base
+  game either. When convenient: can they be hit once they have landed,
+  and can the base game's Twitchers (Government Sector) be shot while
+  climbing out of a vent? The vents are VentMarker objects in
+  `pdlc1_ch01_mng.str`.
 
 ## Start-up
 
