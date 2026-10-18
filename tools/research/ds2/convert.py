@@ -235,7 +235,27 @@ def _postmpl(typ, x):
 
 
 def anim(x):
-    return _postmpl('ANIM', x)
+    """ANIM (camera and scripted animations): a header (magic, two floats,
+    track count at 0x0C, track list offset at 0x10), the tracks (two hashes
+    and a header offset each), the track headers (count, type as two u16,
+    data offset) and float keys. All 32-bit words except the type, two u16.
+    Exact on all 51 PC/360 pairs; the position template it replaces (37/51)
+    swapped the type as one word in files laid out unlike the pairs (the
+    landing bay camera se_02_16_cam read its tracks as type 0)."""
+    if len(x) < 0x14 or len(x) % 4:
+        return _postmpl('ANIM', x)
+    n, lst = struct.unpack_from('>II', x, 0x0C)
+    if lst + 12 * n > len(x):
+        return _postmpl('ANIM', x)
+    out = bytearray(len(x))
+    for o in range(0, len(x), 4):
+        out[o:o + 4] = x[o:o + 4][::-1]
+    for i in range(n):
+        h = struct.unpack_from('>I', x, lst + 12 * i + 8)[0]
+        if h + 12 > len(x):
+            return _postmpl('ANIM', x)
+        out[h + 4:h + 8] = x[h + 4:h + 6][::-1] + x[h + 6:h + 8][::-1]
+    return bytes(out)
 
 
 def png(x):

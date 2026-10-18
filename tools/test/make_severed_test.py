@@ -691,7 +691,7 @@ CATCH_UP = (
     'hang_release.ok', 'loop_split.ok', 'calm_lights5.ok', 'hall_glass_back.ok', 'chapters_restored.ok',
     'hang_drop2.ok', 'hang_console.ok', 'corpse_freeze.ok', 'hang_gravity.ok', 'hang_place.ok',
     'hang_console2.ok', 'hang_gravity2.ok', 'hang_door.ok', 'hang_door2.ok', 'corpse_freeze2.ok',
-    'gunship_audio.ok', 'mesh_positions.ok',
+    'gunship_audio.ok', 'mesh_positions.ok', 'anim_tracks.ok',
 )
 
 
@@ -923,6 +923,11 @@ def main():
         log('Level meshes: vertex positions that read as text are converted too (the black slabs in the hospital)')
         refresh_mesh_positions(root, dst)
         open(os.path.join(work, 'mesh_positions.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'anim_tracks.ok')):
+        log('Landing bay camera: its animation tracks keep their types (the final cutscene looked at the sky)')
+        from ds2 import convert
+        refresh_assets(root, dst, 'ANIM', convert.CONVERTERS['ANIM'])
+        open(os.path.join(work, 'anim_tracks.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

@@ -1892,3 +1892,38 @@ is 4.7 m as in the base game. Existing conversions are patched by step
 the 360 source (patched mesh identical to a fresh conversion; stream sizes
 unchanged).
 
+## 60. The landing bay's final cutscene: camera tracks (and a crash)
+
+Reported: after the battery-swap door in the landing bay, the final
+cutscene (IGC 02_02) showed a camera zoomed in on the skybox, and the game
+crashed a few seconds later. Probe 49 log: checkpoint
+`set_pdlc1_ch02_checkpoint_final_battle_game`, `mm_trigger_igc_02_02`,
+Lexine and two infector Twitchers spawned, `ses_lexine_02_02` and
+`ses_gunship_02_02` started, `push_cam_se_02_16_single_splinecam` at
+813.8 s, `pop_cam_...` at 817.8 s (door lock, `oracle_invincibility_on`, a
+scripted sequence starting), then an access violation at exe 0x8347EA
+0.6 s later. Console footage (a longplay, 52:30-52:50): the door opens onto
+the landing bay with the gunship parked, Lexine runs to it and Gabe is
+grabbed.
+
+The camera: `se_02_16_cam.anim` in `landing_bay_psycho_z02` is Severed's
+only ANIM asset. ANIM was converted with a per-position template learned
+from 51 PC/360 pairs (37 exact). The format, from the pairs: magic, two
+floats, track count (0x0C), track list offset (0x10); per track two hashes
+and a header offset; each header holds a count, a type stored as two u16
+(360 `00 02 00 00`, PC `02 00 00 00`) and a data offset; the keys are
+floats. The template swapped the camera's type words as one 32-bit word, so
+its six typed tracks (types 1, 2, 3) read as type 0. `convert.anim` now
+follows the structure: exact on all 51 pairs (110,487 words). Step
+`anim_tracks.ok`.
+
+The crash: the faulting code (0x8347C0, queueing an object for drawing)
+reads [object+0x54]+8, the object's +0x50 being a `mesh_body_dism` mesh
+(a Twitcher body); +0x54 was null. Checked and ruled out: every Twitcher
+body in Severed has a consistent mesh/volatile pair (both PC or both
+ours); the Oracle Twitcher's claws are our own matched pair (the
+pairs rule keeps them together); the Twitcher MetaModels convert; the
+gunship hull in the landing bay is the same asset the hull fix builds
+(section 51). Whether the crash follows from the broken camera is to be
+seen with the camera fixed.
+

@@ -40,8 +40,10 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-- none: the hospital's textures are confirmed good throughout (since
-  `mesh_positions.ok`).
+1. Landing bay final cutscene (fix `anim_tracks.ok`): rerun the converter,
+   load the final-battle checkpoint, open the door after the battery swap.
+   The camera should follow the scene (console: the gunship parked, Lexine
+   running to it, Gabe grabbed). Send the log, crash or not (FINDINGS 60).
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
