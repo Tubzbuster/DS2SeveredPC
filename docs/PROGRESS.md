@@ -46,9 +46,11 @@ hall, the psych arrival hall and the landing bay finale.
    seconds before F4: F5 now also logs every draw of that piece.
 3. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
-4. Drill tunnel bodies (`corpse_freeze.ok`): new game, are the bodies where
-   the console has them (one on the spike), and the same on a second new
-   game? Does the opening thump change? Shoot one afterwards: does it react?
+4. Quarry Twitchers coming out of vents: shots pass through them. Do they
+   stay unshootable after they land, or only during the climb out? Do the
+   shots leave marks on the wall behind? Do Slashers coming out of vents
+   elsewhere take hits? Base game check: Twitchers leaving vents in the
+   Government Sector, can they be shot during the climb out?
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition~~ fixed:
@@ -62,10 +64,15 @@ hall, the psych arrival hall and the landing bay finale.
 - black stretched shapes in several hospital rooms: the hallway's box is
   the scratched-metal wall panels shaded black (lightmap-shader material);
   probe 46 trace pending.
-- bodies in the drill tunnel lie in different places on each new game (on
-  the console one lies draped on a spike). Nothing in the level pins them:
-  both are ragdoll corpses in a dead pose, ragdoll flags 0. Test build: both
-  get "Freeze on limp" (`corpse_freeze.ok`, FINDINGS 56)
+- ~~bodies in the drill tunnel move during the opening scene~~ fixed and
+  confirmed: both get "Freeze on limp" (`corpse_freeze.ok`, FINDINGS 56).
+  They stay put through the scene and react to shots and stomps. (No body
+  is on a spike, on the console either.)
+- quarry Twitchers can't be hit as they leave their vents (shots go
+  through). Their character files (model, `twitcher.rcb`,
+  `slashersecurity.hkx`, animation banks) are the PC game's own; the
+  vents are VentMarker objects in `pdlc1_ch01_mng.str`. Questions pending
+  (test 4)
 - ~~the clinic overlook room's reflections are sideways~~ not a bug: the
   base game's chapter 1 clinic window (same glass files) looks the same on
   PC (FINDINGS 57).

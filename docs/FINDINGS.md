@@ -1607,6 +1607,10 @@ On PC the two bodies settle somewhere different on every new game. Test:
 both get Freeze on limp (`simgroup.RAGDOLL_FLAGS`, step `corpse_freeze.ok`)
 so they should hold the placed pose.
 
+Result: the bodies hold still through the opening scene, then react to
+shots and stomps (the ragdoll wakes on impact). The console has no body on
+a spike either.
+
 ## 57. Level mesh normals and tangents checked against the geometry
 
 The level vertex stream (`001c0002`, 28 bytes: colour, 4 floats, normal,
