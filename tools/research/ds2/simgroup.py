@@ -119,6 +119,36 @@ DELAYS = {
 }
 
 
+# Message fields other than the first moved to another message: {object
+# hash: [(record offset, old message, new message)]}; the new name must fit
+# in the old one's string. The gunship's death (msg_gunship_death) sends
+# prime_01_05_coming_for_you, which preloads the gunship cutscene's two
+# audio streams (pdlc1_igc_01_05 and its sfx). If that happens while Gabe's
+# radio log pdlc1_at_01_11 is still playing (the gunship killed quickly),
+# the chapter 2 landing's voice stream (pdlc1_gps_02_08) is later never
+# loaded, and ses_player_02_01, which waits for it (prime type 3), never
+# starts: Gabe hangs above the ship (all 4 failing logs; the one good log
+# killed the gunship after the log ended). Their prime now comes with
+# pdlc1_at_01_12_start, the next radio log, which always starts 5 s after
+# both the death and the end of at_01_11.
+FIELD_RETARGET = {
+    0xE5EF38AC: [(244, b'prime_01_05_coming_for_you', b'pdlc1_at_01_12_start')],   # ses_player_igc_01_05
+    0xA997200F: [(28, b'prime_01_05_coming_for_you', b'pdlc1_at_01_12_start')],    # its PlayAudioStream
+}
+
+
+def _field_retarget(out, x, base, length, oh, stats):
+    for off, old, new in FIELD_RETARGET[oh]:
+        h, z, rel = struct.unpack_from('>III', x, base + off)
+        t = base + off + 8 + rel
+        if h != msg_hash(old) or z or x[t:t + len(old) + 1] != old + b'\0' or len(new) > len(old):
+            stats['retarget_skipped'] = stats.get('retarget_skipped', 0) + 1
+            continue
+        struct.pack_into('<I', out, base + off, msg_hash(new))
+        out[t:t + len(old) + 1] = new + bytes(len(old) + 1 - len(new))
+        stats['retargeted'] = stats.get('retargeted', 0) + 1
+
+
 def _delay(out, x, base, oh, stats):
     for off, (target, old, new) in DELAYS[oh].items():
         h = struct.unpack_from('>I', x, base + off - 12)[0]
@@ -397,6 +427,8 @@ def convert(x, stats=None):
             by_rec[oh] = B + ro
         if oh in RETARGET:
             _retarget(out, x, B + ro, ln, oh, stats)
+        if oh in FIELD_RETARGET:
+            _field_retarget(out, x, B + ro, ln, oh, stats)
         if oh in DELAYS:
             _delay(out, x, B + ro, oh, stats)
         if ragdoll_here and oh in RAGDOLL_FLAGS and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:

@@ -1608,6 +1608,34 @@ chapter 16 build (the earlier fix re-saved a save slot, not the Continue
 checkpoint). To confirm: F7 `player_set_chapter_1` on that checkpoint
 before boarding, then a fresh save at the dock overwrites it.
 
+Update (F7 log): ruled out. `player_set_chapter_1` was sent after the
+checkpoint reload and before the gunship, and the landing still stalled
+the same way. The real difference, across all five logs that reach the
+landing (one good, probe 38; four failing, probes 46-47):
+- `ses_player_02_01` (7B074282, `emergency_arrival_z01`) has an audio
+  file, prime type 3 and prime message `ses_player_02_02_initial`: it
+  preloads Gabe's landing voice stream `pdlc1_gps_02_08` (archive hash
+  746FA88B) and only starts once it is loaded. The good run reads that
+  stream 309 times from the moment `ses_player_02_02_initial` fires; the
+  four failing runs never request it at all (the PlayAudioStream primed
+  at the same moment, `pdlc_gps_02_01`, loads in all of them). Handler
+  0x14 is that wait;
+- the failing runs all killed the gunship while Gabe's radio log
+  `pdlc1_at_01_11` was still playing (death 1-2 s after the log started,
+  8-9 s before it ended); the good run killed it after the log ended.
+  The death sends `prime_01_05_coming_for_you`, which preloads the
+  gunship cutscene's two streams (`pdlc1_igc_01_05`, `pdlc_igc_01_05_sfx`)
+  on top of the playing log. Streams are read whole into buffers of about
+  0xBE000 bytes; the guess is that this overlap leaves one stream buffer
+  taken for good on PC, so the landing's voice stream gets none later.
+
+Test (`gunship_audio.ok`, `simgroup.FIELD_RETARGET`): the two listeners
+of that prime (`ses_player_igc_01_05` E5EF38AC, its PlayAudioStream
+A997200F) take `pdlc1_at_01_12_start` instead, the next radio log, which
+always starts 5 s after both the death and the end of `at_01_11`; the
+cutscene starts 17-20 s later, so the preload has time. This reproduces
+the good run's order however fast the gunship dies.
+
 ## 53. The airless hallway: what is converted there
 
 The hallway's geometry is Severed's own `airless_hall_z01` section

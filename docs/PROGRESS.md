@@ -40,6 +40,10 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
+0. Gunship landing (`gunship_audio.ok`): rebuild, load the dock save
+   station checkpoint and kill the gunship as fast as you can, while
+   Gabe's second radio message is still playing (that is what broke it
+   every time). Gabe should land on the ship. Send the log either way.
 1. Hanging fight drop: worked on two runs; one more before it is marked
    confirmed. (Bodies confirmed: the quarantine area's react normally, the
    freeze is confined to the drill tunnel's two.)

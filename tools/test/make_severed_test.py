@@ -848,6 +848,10 @@ def main():
         log('Bodies: "Freeze on limp" only for the drill tunnel\'s two (the same IDs froze bodies elsewhere)')
         refresh_simgroups(root, dst, 0x4C8A721A)       # RagdollComponent (simgroup.RAGDOLL_FLAGS)
         open(os.path.join(work, 'corpse_freeze2.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'gunship_audio.ok')):
+        log('Gunship: its cutscene audio is preloaded with the next radio log, not at its death (the landing\'s voice never loaded)')
+        refresh_simgroups(root, dst, 0x4FE92B71)       # ScriptedEventSequence (simgroup.FIELD_RETARGET)
+        open(os.path.join(work, 'gunship_audio.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
