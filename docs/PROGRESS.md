@@ -14,7 +14,8 @@ and is corrected as we play.
 
 ## Summary (2026-10-18)
 
-**Where we are:** Severed plays from the start through to the final boss.
+**Where we are:** Severed plays from the start through the final boss fight
+(the Oracle Twitchers); the final hack and the ending are still to play.
 All of chapter 1 and chapter 2 up to the landing bay finale play, with only
 minor fixes left here and there (listed under Open bugs). The hospital's
 black shapes and the zero-oxygen hallway are fixed and confirmed. Not
@@ -41,13 +42,12 @@ test, see below), the final boss and the end of the DLC (credits).
 - the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
-1. Landing bay final cutscene, crash fix (`pc_mesh_materials.ok`): rerun
-   the converter (its log should list `pdlc_twitcher_oracle.str` meshes
-   with a material change), load the final-battle checkpoint and open the
-   door after the battery swap. The camera fix is confirmed; the game then
-   crashed drawing the Oracle Twitchers spawned in the scene, whose PC
-   meshes named a material that is not loaded (FINDINGS 61). Send the
-   log, crash or not.
+1. Final hack (the ending): after the Twitcher fight, the hacking panel
+   next to the gunship lights up (a red console on a stand; the locator
+   points to it). Use it and play on to the credits. Send the log.
+2. A screenshot of the "light mesh" behind the Infectors in the cutscene,
+   to compare with the console (their wings are pale flat membranes there
+   too).
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -158,7 +158,7 @@ release).
 | psych_ward: psych_hall_z01/z03/z04, chase_hall_saferoom_z01 | works | passed |
 | security: security_z01, security_hall_z01; psych_ward: isaacs_cell_z01 | works | passed |
 | chase_hall: chase_hall_z01/z02; psych_ward: psych_arrival_hall_z01 | works | passed |
-| psych_ward: landing_bay_psycho_z01/z02 | fix pending | the finale: the final battle and the battery swap play. The final cutscene's camera is fixed and confirmed (`anim_tracks.ok`, FINDINGS 60): Lexine runs to the gunship and the Oracle Twitchers spawn. It then crashed drawing them (material, FINDINGS 61): fix `pc_mesh_materials.ok` waiting for a test. The final boss is not reached yet |
+| psych_ward: landing_bay_psycho_z01/z02 | fix pending | the finale: the final battle, the battery swap, the final cutscene (camera fixed, FINDINGS 60) and the Oracle Twitcher fight play (crash fixed: material, FINDINGS 61; confirmed). The Oracle Twitchers look like the console's. Final hack panel not used yet |
 | Also in the DLC: entry_hall, pre_moonquake | works | played in chapter 1 (mining camp to the docking station) |
 | End of the DLC (credits) | untested | |
 

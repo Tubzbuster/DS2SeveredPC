@@ -1964,3 +1964,7 @@ differ (only when the tables line up by name; the gunship hull's
 `pc_mesh_materials.ok`; the log names each mesh changed, with the old and
 new ids. The PC data was not available here, so the PC ids are confirmed
 by that log line.
+
+Confirmed: with the fix the cutscene and the Oracle Twitcher fight play
+without a crash, and the Twitchers look like the console's (grey flesh,
+cyan eyes).
