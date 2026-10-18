@@ -1607,3 +1607,16 @@ On PC the two bodies settle somewhere different on every new game. Test:
 both get Freeze on limp (`simgroup.RAGDOLL_FLAGS`, step `corpse_freeze.ok`)
 so they should hold the placed pose.
 
+## 57. Level mesh normals and tangents checked against the geometry
+
+The level vertex stream (`001c0002`, 28 bytes: colour, 4 floats, normal,
+tangent) had no PC pairs to check against (section 44). Checked instead
+against the 360 geometry itself (observation_z01, `opt_model1.dae`): the
+decoded DEC3N normal lies along the triangle's face normal (444 of 465
+sampled triangles within 0.9, the sign following the strip winding), and the
+tangent read as the converter reads it (`tangent20`, stored w z y x) points
+along the texture's u direction worked out from positions and UVs in 370 of
+381 triangles (other byte orders: about 50). So the level normals and
+tangents convert as the props' do, and the slanted reflections in the
+clinic overlook's window are not a tangent-frame error.
+
