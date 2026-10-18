@@ -105,7 +105,15 @@ RETARGET = {}
 # at 0.45 s. Moving both 1 s later went with the early release above and is
 # off with it. Form: {0x5EAA9249: {32: (0x95F3F281, 0.0, 1.0),
 # 48: (0x06C1A7AE, 0.45, 1.45)}}.
-DELAYS = {}
+# Now (with the gravity drop, SES_FLAGS): the door's opening animation
+# (B3634A9C, pdlc1_igc_01_03_door_pubh01_ind.bnk) is 188 frames like
+# Gabe's drop, so the two are made to run together; started 0.45 s after
+# him, the leaves are still in his way when he reaches the doorway (on the
+# console he passes through them, collision being off). The door now starts
+# with him.
+DELAYS = {
+    0x5EAA9249: {48: (0x06C1A7AE, 0.45, 0.0)},
+}
 
 
 def _delay(out, x, base, oh, stats):

@@ -1445,6 +1445,22 @@ The matrix is shared by three sequences of the elevator scene
 all three move with it. If he passes the door he is past the missing floor
 when the hanging state ends.
 
+Result (hang_gravity2, probe 47): the drop and the line-up both work: at
+3.9 s Gabe is at X -97.92, Z -44.15, the door's middle (Z -44.13). Then
+something in the doorway pushes him 0.35 m sideways and holds him at
+X -98.05; at the release he falls out as before.
+
+The door (`door_pubh01_ind`, PC copies of its model, RCB and HKX) has two
+collision bodies, `_door_pubHL_BBX` and `_door_pubHR_BBX` (its two
+leaves), plus `door_pubh01_ind_blk.hkx` (`ragdoll_block_collision`). Its
+opening in this scene is Severed's own animation B3634A9C
+(`pdlc1_igc_01_03_door_pubh01_ind.bnk`), 188 frames (0xBC), the same
+length as Gabe's drop animation 6B377EC2: the two are authored to play
+together. `mm_ses_01_03_trigger` starts the door 0.45 s after Gabe, so the
+leaves trail him and are still across the doorway when he gets there (on
+the console he walks through them, collision off). Test (`hang_door.ok`,
+`simgroup.DELAYS`): the door starts with him (0.45 -> 0 s).
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe

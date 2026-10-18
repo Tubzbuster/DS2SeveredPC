@@ -40,10 +40,11 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Hanging fight, gravity drop with the hanging spot moved 0.35 m
-   (`hang_gravity2.ok`, rebuild with `Make-SeveredTest.bat`; keep probe 47
-   in): does Gabe drop, run through the middle of the door and stay on the
-   floor after the scene? Send the log either way.
+1. Hanging fight, door opening together with the drop (`hang_door.ok`,
+   rebuild with `Make-SeveredTest.bat`; keep probe 47 in): does Gabe get
+   through the door now and stay on the floor after the scene? If he is
+   still stopped, note whether the door looks open at that moment. Send
+   the log either way.
 2. Zero-oxygen hallway with probe 46: as before (F6 until the level
    vanishes, F3 through the pieces, F5 when the box goes), then wait 5
    seconds before F4: F5 now also logs every draw of that piece.
