@@ -21,9 +21,9 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -36,7 +36,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $rel = gh release view latest --repo BtbN/FFmpeg-Builds --json assets | ConvertFrom-Json
-          $a = $rel.assets | Where-Object { $_.name -match '^ffmpeg-n7\.1-latest-win64-lgpl-7\.1\.zip$' } | Select-Object -First 1
+          # newest release branch (ffmpeg-nX.Y-latest-win64-lgpl-X.Y.zip), else the master build
+          $a = $rel.assets | Where-Object { $_.name -match '^ffmpeg-n[\d.]+-latest-win64-lgpl-[\d.]+\.zip$' } |
+               Sort-Object { [version](($_.name -replace '^ffmpeg-n([\d.]+)-.*$', '$1') + '.0') } -Descending | Select-Object -First 1
           if (-not $a) { $a = $rel.assets | Where-Object { $_.name -match '^ffmpeg-master-latest-win64-lgpl\.zip$' } | Select-Object -First 1 }
           if (-not $a) { throw 'no LGPL win64 ffmpeg build found' }
           gh release download latest --repo BtbN/FFmpeg-Builds --pattern $a.name --dir ffdl
@@ -51,6 +53,8 @@ jobs:
 
       - name: Build
         shell: cmd
+        env:
+          PYTHON: python
         run: cd tools\app && build_app.bat nopause
 
       - name: Self-test

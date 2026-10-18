@@ -7,8 +7,8 @@ rem LGPL build; the GitHub Actions workflow downloads one) and they are copied i
 setlocal
 cd /d "%~dp0"
 set R=..\research
-set PY=py -3
-where py >nul 2>nul || set PY=python
+rem PYTHON (environment) picks the Python to build with; else the py launcher
+if defined PYTHON (set "PY=%PYTHON%") else (set "PY=py -3")
 %PY% -m PyInstaller --noconfirm --clean --onedir --windowed --name DS2SeveredPC ^
   --paths ..\test --paths %R% --hidden-import make_severed_test --collect-submodules ds2 ^
   --add-data "%R%\ds2\*.pkl;ds2" --add-data "%R%\ds2\*.json;ds2" --add-data "%R%\ds2\*.txt;ds2" ^
