@@ -86,17 +86,21 @@ NUDGE = {}
 # NO_GRAVITY_COLLISION flag holds him where he is. So the drop sequence is
 # now delayed by 1 s (DELAYS) and he falls under gravity in that second,
 # as he did when the release was sent by hand before the sequence.
-RETARGET = {
-    0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate', b'mm_ses_01_03_trigger'),
-}
+# Result: he fell, flipped upright, then the drop animation carried him up
+# into the ceiling. The animation expects the hanging state (upside down),
+# so the release stays where the console has it (ses_player_01_03_end), and
+# the missing fall is looked for in the animation instead (FINDINGS 48).
+# Form: {0x29515ABF: (b'PlayerChangeState_hanging_combat_deactivate',
+# b'mm_ses_01_03_trigger')}.
+RETARGET = {}
 
 # MultiManager delays changed: {object hash: {record offset: (target
 # message hash, old delay, new delay)}}. mm_ses_01_03_trigger
 # (elevator_mini_globals) starts ses_player_01_03 at 0 s and ses_door_01_03
-# at 0.45 s; both move 1 s later, after the hanging release above.
-DELAYS = {
-    0x5EAA9249: {32: (0x95F3F281, 0.0, 1.0), 48: (0x06C1A7AE, 0.45, 1.45)},
-}
+# at 0.45 s. Moving both 1 s later went with the early release above and is
+# off with it. Form: {0x5EAA9249: {32: (0x95F3F281, 0.0, 1.0),
+# 48: (0x06C1A7AE, 0.45, 1.45)}}.
+DELAYS = {}
 
 
 def _delay(out, x, base, oh, stats):

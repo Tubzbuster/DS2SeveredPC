@@ -40,12 +40,11 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Hanging fight drop (`hang_drop2.ok`), see below.
-2. Gunship landing after the docking transition (`chapters_restored.ok`).
-3. Zero-oxygen hallway with probe 46: as before (F6 until the level
+1. Hanging fight back to the console flow (`hang_console.ok`): Gabe should get up inside the overhang as before, not go into the ceiling.
+2. Zero-oxygen hallway with probe 46: as before (F6 until the level
    vanishes, F3 through the pieces, F5 when the box goes), then wait 5
    seconds before F4: F5 now also logs every draw of that piece.
-4. Bed room after the elevator: check again with F4 pressed (the black
+3. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
 
 **Reported in the replay (new game):**
@@ -53,9 +52,10 @@ hall, the psych arrival hall and the landing bay finale.
   caused by the chapter 16 numbering (FINDINGS 52). Chapters stay 1 and 2
   for good. Saves made with the chapter 16 build need `player_set_chapter_1`
   sent once with F7 (`severed_send.txt`), confirmed working.
-- hanging fight drop: the hanging state now ends 1 s before the drop
-  sequence starts (`hang_drop2.ok`): Gabe should fall to the grate as the
-  fight ends, then get up.
+- hanging fight drop: releasing the hanging state early (`hang_drop2.ok`)
+  flipped Gabe upright and the drop animation took him into the ceiling.
+  Back to the console's flow (`hang_console.ok`); the fall is now looked
+  for in the animation (FINDINGS 48)
 - black stretched shapes in several hospital rooms: the hallway's box is
   the scratched-metal wall panels shaded black (lightmap-shader material);
   probe 46 trace pending.

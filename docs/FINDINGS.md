@@ -1345,6 +1345,17 @@ offset 32 + 16 (N - 1), after a 12-byte target string field). Both delays
 now move 1 s later (`simgroup.DELAYS`, step `hang_drop2.ok`) with the
 release retargeted again, so Gabe has a second to fall before the sequence.
 
+Result (hang_drop2): the release came 1 s before the sequence as planned
+(probe log: `mm_ses_01_03_trigger`, then `ses_player_01_03` 1.0 s later).
+Gabe fell, turned upright, and the drop animation then carried him up
+into the ceiling. The animation is authored for the hanging state (upside
+down) and does not work without it, so releasing early is a dead end. Both
+changes are off again (`hang_console.ok`): the console's own flow, with
+the get-up inside the overhang. The missing storey of fall has to come
+from the animation or the hanging state's exit, not the script timing.
+Next: log Gabe's position through the sequence (probe) to see whether the
+root motion moves him down at all on PC.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe
