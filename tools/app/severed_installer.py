@@ -5,7 +5,9 @@ Pages: Welcome (install or remove), Locations (the Severed add-on, the
 Dead Space 2 folder; ffmpeg only when it is not bundled), Ready, Installing
 (progress and the converter's log in a terminal box), Finish. Temporary
 files go to severed_work next to the program and are deleted at the end
-(kept when setup stops, so a new run picks up where it left off).
+(kept when setup stops, so a new run picks up where it left off). The app
+also installs and removes the hook dinput8.dll it carries, so nothing is
+copied by hand; another mod's dinput8.dll is set aside and put back.
 
     py -3 severed_installer.py              the wizard
     py -3 severed_installer.py --selftest   checks a built app carries all its parts
@@ -38,6 +40,9 @@ WIN = sys.platform == 'win32'
 FONT = 'Segoe UI' if WIN else 'DejaVu Sans'
 MONO = 'Consolas' if WIN else 'DejaVu Sans Mono'
 BANNER_BG, BANNER_FG, ACCENT = '#14171a', '#d8dde2', '#b3261e'
+HOOK = 'dinput8.dll'
+HOOK_BACKUP = 'dinput8.dll.other'               # another mod's dinput8.dll, put back on removal
+HOOK_TAGS = (b'severed_probe.log',)             # text only our hook carries
 
 
 def bundled_ffmpeg():
@@ -45,6 +50,48 @@ def bundled_ffmpeg():
         if os.path.isfile(p):
             return p
     return shutil.which('ffmpeg')
+
+
+def bundled_hook():
+    base = getattr(sys, '_MEIPASS', None)
+    p = (os.path.join(base, 'hook', HOOK) if base
+         else os.path.join(HERE, '..', 'probe', 'bin', HOOK))
+    return p if os.path.isfile(p) else None
+
+
+def is_our_hook(p):
+    try:
+        with open(p, 'rb') as f:
+            data = f.read()
+    except OSError:
+        return False
+    return any(t in data for t in HOOK_TAGS)
+
+
+def install_hook(game, log):
+    """copies the hook next to deadspace2.exe, setting another mod's aside"""
+    src = bundled_hook()
+    if not src:
+        raise SystemExit('The app is missing its %s: download it again.' % HOOK)
+    dst, bak = os.path.join(game, HOOK), os.path.join(game, HOOK_BACKUP)
+    if os.path.exists(dst) and not is_our_hook(dst):
+        if os.path.exists(bak):
+            raise SystemExit('%s belongs to another mod and %s is already taken: move one of them '
+                             'out of the game folder and run the app again.' % (dst, bak))
+        os.replace(dst, bak)
+        log('Another mod\'s %s set aside as %s (put back when Severed is removed)' % (HOOK, bak))
+    shutil.copyfile(src, dst)
+    log('Installed', dst)
+
+
+def remove_hook(game, log):
+    dst, bak = os.path.join(game, HOOK), os.path.join(game, HOOK_BACKUP)
+    if os.path.exists(dst) and is_our_hook(dst):
+        os.remove(dst)
+        log('Removed', dst)
+    if os.path.exists(bak) and not os.path.exists(dst):
+        os.replace(bak, dst)
+        log('Put the other mod\'s %s back' % HOOK)
 
 
 def free_gb(path):
@@ -209,8 +256,8 @@ class Wizard:
             'Single Player > New Game > Episode Select.\n\n'
             'Converting takes about an hour. It can be stopped and started again: it '
             'picks up where it left off.\n\n'
-            'DS2SeveredPC contains no game files and adds one archive (DS2DAT2.DAT) to the '
-            'game folder. A free fan project, not made or endorsed by Electronic Arts.\n\n'
+            'DS2SeveredPC contains no game files. It adds one archive (DS2DAT2.DAT) and the '
+            'hook that puts Severed in the menu (dinput8.dll) to the game folder. A free fan project, not made or endorsed by Electronic Arts.\n\n'
             'What would you like to do?')).pack(anchor='w')
         for v, t in (('install', 'Install Severed'), ('remove', 'Remove Severed from the game')):
             ttk.Radiobutton(f, text=t, value=v, variable=self.mode, style='White.TRadiobutton').pack(
@@ -272,7 +319,7 @@ class Wizard:
         self.bar.start(15)
         frame = tk.Frame(f, bg='#0c0c0c', bd=1, relief='sunken')
         frame.pack(fill='both', expand=True)
-        self.term = tk.Text(frame, bg='#0c0c0c', fg='#cccccc', insertbackground='#cccccc', font=(MONO, 9),
+        self.term = tk.Text(frame, height=10, bg='#0c0c0c', fg='#cccccc', insertbackground='#cccccc', font=(MONO, 9),
                             wrap='none', relief='flat', padx=6, pady=4, state='disabled')
         sb = ttk.Scrollbar(frame, command=self.term.yview)
         self.term.config(yscrollcommand=sb.set)
@@ -392,6 +439,12 @@ class Wizard:
         try:
             import make_severed_test
             make_severed_test.main()
+            game = args[args.index('--game') + 1]
+            if '--remove' in args:
+                remove_hook(game, make_severed_test.log)
+            else:
+                make_severed_test.log('Installing the hook that adds Severed to the episode select')
+                install_hook(game, make_severed_test.log)
         except SystemExit as e:
             if e.code not in (None, 0):
                 ok, msg = False, str(e.code)
@@ -447,8 +500,10 @@ def selftest():
     if ff:
         r = subprocess.run([ff, '-hide_banner', '-decoders'], capture_output=True, text=True)
         ffv = 'xma2 decoder ' + ('present' if ' xma2 ' in r.stdout else 'MISSING')
-    msg = ('selftest ok: %d data files, %d expected add-on files, native library loaded, ffmpeg %s'
-           % (len(names), len(addoncheck.expected()), ffv))
+    hook = bundled_hook()
+    hv = 'present' if hook and is_our_hook(hook) else 'MISSING'
+    msg = ('selftest ok: %d data files, %d expected add-on files, native library loaded, ffmpeg %s, hook %s'
+           % (len(names), len(addoncheck.expected()), ffv, hv))
     with open(os.path.join(APP_DIR, 'selftest.txt'), 'w') as f:
         f.write(msg + '\n')
     if sys.stdout:

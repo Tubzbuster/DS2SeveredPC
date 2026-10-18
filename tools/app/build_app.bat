@@ -17,6 +17,7 @@ if defined PYTHON (set "PY=%PYTHON%") else (set "PY=py -3")
   --paths ..\test --paths %R% --hidden-import make_severed_test --collect-submodules ds2 ^
   --add-data "%R%\ds2\*.pkl;ds2" --add-data "%R%\ds2\*.json;ds2" --add-data "%R%\ds2\*.txt;ds2" ^
   --add-binary "%R%\native\xasenc.dll;native" ^
+  --add-data "..\probe\bin\dinput8.dll;hook" ^
   severed_installer.py || exit /b 1
 if exist ffmpeg\ffmpeg.exe (
   xcopy /y /i ffmpeg dist\DS2SeveredPC\ffmpeg >nul

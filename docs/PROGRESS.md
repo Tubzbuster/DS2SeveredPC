@@ -241,19 +241,16 @@ release).
   `Make-SeveredTest.bat`.
 
 - **The app installs `dinput8.dll` itself (all-in-one, decided by the
-  user).** Users should not copy any file by hand. The release app carries
-  the release `dinput8.dll` (the hook, not the test probe), copies it next to
-  `deadspace2.exe` on install, and deletes it on removal. If another mod's
-  `dinput8.dll` is already there, the app sets it aside and puts it back on
-  removal. Then drop the manual copy step from the README's Installation
-  and Uninstallation sections ([SV03], [SV04]).
-
-- **App: the Installing/Removing page hides the button bar.** The log box
-  (a `tk.Text` with its default 24-line height) pushes the bottom bar, and
-  its Cancel button, out of the 720x520 window. Seen in the README
-  screenshots (`docs/img/install/install_4_installing.png`). Fix: give the
-  log box a small height (it still expands) or pack the bar before the
-  body. Refresh those screenshots after.
+  user): done.** The app carries the hook (`_internal/hook/dinput8.dll`),
+  copies it next to `deadspace2.exe` after the conversion and deletes it on
+  removal. Another mod's `dinput8.dll` is renamed to `dinput8.dll.other`
+  and put back on removal. Our hook is recognised by the text
+  `severed_probe.log` inside it (`HOOK_TAGS`). The app's `--selftest` checks
+  the hook is there. For now it carries the test probe; when the release
+  hook replaces it, add a text it carries to `HOOK_TAGS`.
+- **App: the Installing/Removing page hid the button bar: fixed.** The log
+  box now starts 10 lines high (it still grows with the window), so the
+  bar and its Cancel button stay visible. Screenshots retaken.
 
 - **Check the user's add-on before converting.** People's copies can have
   any file name, so the app identifies the add-on by its contents, not its

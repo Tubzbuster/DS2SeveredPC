@@ -258,16 +258,16 @@ How it works:
 
    <p align="center"><img src="docs/img/install/install_5_finish.png" alt="Finish page" width="540"></p>
 
-6. Copy `tools\probe\bin\dinput8.dll` from this repository into the Dead
-   Space 2 folder, next to `deadspace2.exe`. It adds Severed to the episode
-   select. If a `dinput8.dll` from another mod is already there, move it
-   somewhere safe first.
-7. Start the game as normal. Go to **Single Player > New Game > Episode
+6. Start the game as normal. Go to **Single Player > New Game > Episode
    Select** and pick **Dead Space 2: Severed**.
 
-The app only adds two files to the game folder: the archive `DS2DAT2.DAT`
-and its marker file `DS2DAT2.DAT.severed`. Keep the marker: the app uses it
-to update or remove the archive later.
+The app adds three files to the game folder:
+- the archive `DS2DAT2.DAT`, which holds the converted DLC;
+- its marker file `DS2DAT2.DAT.severed`. Keep it: the app uses it to update
+  or remove the archive later;
+- the hook `dinput8.dll`, which adds Severed to the episode select. If
+  another mod's `dinput8.dll` is already there, the app renames it to
+  `dinput8.dll.other` and puts it back when you remove Severed.
 
 > If Gabe's RIG call scene doesn't hand control back, press **F8**. This
 > sends the scene's own "finished" message, and you get the normal camera,
@@ -300,12 +300,12 @@ to update or remove the archive later.
 
    <p align="center"><img src="docs/img/install/remove_5_finish.png" alt="Severed is removed" width="540"></p>
 
-5. Delete `dinput8.dll` from the Dead Space 2 folder (and put back any
-   `dinput8.dll` from another mod you moved away).
-
-Your game is back to normal. The app only deletes an archive it created
-itself: it checks for the marker file `DS2DAT2.DAT.severed` first (older
-test builds named it `.severedtest`, which the app recognises too).
+Your game is back to normal. The app removes the archive, its marker and the
+hook `dinput8.dll`, and puts back another mod's `dinput8.dll` if it set one
+aside. It only deletes files it created itself: it checks for the marker
+file `DS2DAT2.DAT.severed` first (older test builds named it `.severedtest`,
+which the app recognises too), and only removes a `dinput8.dll` that is its
+own hook.
 
 ```text
 ================================================================================
@@ -366,7 +366,8 @@ drive the app runs from. Move the app folder to a drive with more space.
 The full source is `tools/probe/probe.c`.
 
 **Severed isn't in the episode list**: check that `dinput8.dll` is next to
-`deadspace2.exe`, and that `DS2DAT2.DAT` exists in the game folder.
+`deadspace2.exe`, and that `DS2DAT2.DAT` exists in the game folder. If
+either is missing, run the app's install again.
 
 ```text
 ================================================================================

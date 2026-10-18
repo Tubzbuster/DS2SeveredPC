@@ -8,6 +8,7 @@ ${PYTHON:-python3} -m PyInstaller --noconfirm --clean --onedir --windowed --name
   --paths ../test --paths $R --hidden-import make_severed_test --collect-submodules ds2 \
   $(for f in $R/ds2/*.pkl $R/ds2/*.json $R/ds2/*.txt; do printf -- '--add-data %s:ds2 ' "$f"; done) \
   --add-binary $R/native/libxasenc.so:native \
+  --add-data ../probe/bin/dinput8.dll:hook \
   severed_installer.py
 if [ -x ffmpeg/ffmpeg ] || [ -f ffmpeg/ffmpeg.exe ]; then cp -r ffmpeg dist/DS2SeveredPC/; fi
 cp ../../LICENSE dist/DS2SeveredPC/LICENSE.txt
