@@ -1812,3 +1812,42 @@ Result: the user's screenshot of the base game's chapter 1 clinic window on
 PC shows the same slanted reflections. It is how the PC game draws this
 glass; nothing to fix.
 
+## 58. Black shapes in the hospital: what was ruled out (operating room)
+
+Reported again away from the airless hallway: a large smooth dark slab
+across the view in the operating theatre, drawn in front of a pickup's
+hologram (probe 47 log, no trace keys pressed). The last sections streamed
+were `surgery_pit_z01`, `elev_surg_pit_z01` and `surgery_observation_z01`.
+
+Checked against the converted streams, with nothing found:
+- **Material links.** The section's baked materials
+  (`opt_model1_lightmaps_*`) point at textures present in the stream (their
+  AO/lightmap texture `ao_lmp_<section>_<group>`, colour, normal and
+  specular maps). Shared materials bind AoMapSampler to the engine-named
+  texture `color` (0x3D115391) and LightMapSampler to `lightmap_ycocg`
+  (0x99C4A910), not to nothing.
+- **Shared materials with the lightmap pass.** On the 360, shared
+  materials such as `common_mat_com_wallpanel04` use shader 0x3E8BBBF9 in
+  all three passes; on PC (ours and the PC game's copies) pass 2 is the
+  lightmap shader 0x0E155D33. But the hallway's black material
+  (`industrial_mat_ind_metalscratched02_diffuse`) is the lightmap shader in
+  all three passes on the 360 too, and level tables using shared materials
+  with a lightmap pass are in nearly every section (thousands of tables,
+  whole rooms such as the morgue), so this is not the cause by itself.
+- **Mesh table data.** The hallway's black tables (2 and 11) have the same
+  UV size (28), vertex buffers (0/1, 65,533 vertices, as on the 360) and
+  layout as the neighbouring tables that draw correctly.
+- **Vertex colour.** The level stream (`001c0002`) colour slot is copied
+  as stored (`raw`, never checked against PC data, section 57); on every
+  table checked it is the constant `00 00 00 ff`, the PC's own default
+  colour in widened UV streams (section 46). Not the cause.
+- **LightTOC** holds the section's lights, not lightmaps.
+
+A note on probe 45's reading: if the renderer draws colour with an
+"equal depth" test after its depth pre-pass, hiding a piece's depth draw
+also stops its colour draw. So the box may be drawn in colour, black,
+rather than drawn in depth only. Probe 46's colour-pass trace (what is
+bound to the AO and lightmap samplers for the marked piece) is still the
+next step; it works anywhere, so the operating room is a second place to
+take it.
+

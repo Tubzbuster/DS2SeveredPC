@@ -62,6 +62,10 @@ hall, the psych arrival hall and the landing bay finale.
 - black stretched shapes in several hospital rooms: the hallway's box is
   the scratched-metal wall panels shaded black (lightmap-shader material);
   probe 46 trace pending.
+  Seen again in the operating theatre (`surgery_pit_z01`): a large dark
+  slab in front of a pickup. Material links, vertex colour and table data
+  checked and ruled out (FINDINGS 58); the probe trace can be taken there
+  as well as in the hallway.
 - ~~bodies in the drill tunnel move during the opening scene~~ fixed and
   confirmed: both get "Freeze on limp" (`corpse_freeze.ok`, FINDINGS 56).
   They stay put through the scene and react to shots and stomps. (No body
