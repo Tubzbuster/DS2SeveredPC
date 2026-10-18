@@ -236,9 +236,8 @@ Remove-SeveredTest.bat "<Dead Space 2 folder>"
 
 Then delete `dinput8.dll` from the game folder. Your game is back to normal.
 The script only deletes an archive it created itself. It checks for its
-marker file, `DS2DAT2.DAT.ds2severedpc` (keep it while Severed is
-installed; older builds named it `DS2DAT2.DAT.severedtest`, which the next
-run renames).
+marker file, `DS2DAT2.DAT.severed` (keep it while Severed is installed;
+older builds named it `.severedtest`, which the next run renames).
 
 ```text
 ================================================================================

@@ -13,8 +13,8 @@ the ds_2 episode's names, chapter 1's stream sets blanked, level list
 entry patched).
 Nothing else is changed; remove it with --remove (the game is normal
 again). Never overwrites an archive it did not create (marker file
-DS2DAT2.DAT.ds2severedpc next to it; older builds used .severedtest,
-which is renamed on the next run).
+DS2DAT2.DAT.severed next to it; older builds' .severedtest or
+.ds2severedpc is renamed on the next run).
 
     py -3 make_severed_test.py --severed <addon file> --game "<Dead Space 2 folder>" [--ffmpeg <ffmpeg.exe>] [--work <folder>]
     py -3 make_severed_test.py --game "<Dead Space 2 folder>" --remove
@@ -32,18 +32,20 @@ except ImportError:
 
 LEVEL_LIST = 0xE4529CFE        # level list (text), identical on PC and 360
 SLOT = 'DS2DAT2.DAT'
-MARKER = '.ds2severedpc'        # next to SLOT: this archive is ours
-OLD_MARKER = '.severedtest'     # the name earlier builds used
+MARKER = '.severed'             # next to SLOT: this archive is ours
+OLD_MARKERS = ('.severedtest', '.ds2severedpc')     # names earlier builds used
 
 
 def _marker(target):
     """the marker's path, renaming one left by an earlier build"""
-    m, old = target + MARKER, target + OLD_MARKER
-    if os.path.exists(old):
-        if os.path.exists(m):
-            os.remove(old)
-        else:
-            os.rename(old, m)
+    m = target + MARKER
+    for o in OLD_MARKERS:
+        old = target + o
+        if os.path.exists(old):
+            if os.path.exists(m):
+                os.remove(old)
+            else:
+                os.rename(old, m)
     return m
 
 
