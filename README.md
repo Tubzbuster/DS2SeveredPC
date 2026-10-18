@@ -32,7 +32,7 @@ Use Ctrl+F with the codes below to jump to a section.
 
 
 
-I'm not gonna sugercoat it, I don't know the first thing about how the xbox 360 files work but I heavily vibecoded w/Claude to help decrypt and map the files to the pc version, then from the ground up testing and logging, checking for how the textures look in the pc version, checking against numerous let's play footage of the console version to see what's missing and what isn't rendering, and going through numerous bug crash test dumps to make this thing that I wanted 
+I'm not going to sugarcoat it: I don't know the first thing about how Xbox 360 files work. I heavily vibecoded this project with Claude, which helped me decode the files and map them to the PC version. From there, it was built from the ground up through testing and logging: checking how the textures look in the PC version, comparing against numerous let's plays of the console version to see what's missing and what isn't rendering, and going through countless crash dumps to make the thing I wanted.
 
 ```text
 ================================================================================
@@ -59,15 +59,14 @@ I'm not gonna sugercoat it, I don't know the first thing about how the xbox 360 
   [SV00] ........ Version History
   [SV01] ........ Introduction 
   [SV02] ........ What Works / What Doesn't
-  [SV03] ........ What You Need
-  [SV04] ........ Trying the Test Build
-  [SV05] ........ Removing It
-  [SV06] ........ How It Works
-  [SV07] ........ Troubleshooting
-  [SV08] ........ Research Tools
-  [SV09] ........ For Developers
-  [SV10] ........ Disclaimer & Legal
-  [SV11] ........ Credits
+  [SV03] ........ Installation
+  [SV04] ........ Uninstallation
+  [SV05] ........ How It Works
+  [SV06] ........ Troubleshooting
+  [SV07] ........ Research Tools
+  [SV08] ........ For Developers
+  [SV09] ........ Disclaimer & Legal
+  [SV10] ........ Credits
 ================================================================================
 ```
 
@@ -148,7 +147,7 @@ this round:
 - audio streams go where the PC looks for them (untested)
 
 **v0.0.x (2026-10)**: Research phase. File format scans of both platforms,
-then converters for every asset type Severed uses (see [SV06]). The first
+then converters for every asset type Severed uses (see [SV05]). The first
 in-game tests started from chapter 1. Later builds started from the episode
 select.
 
@@ -179,9 +178,9 @@ How it works:
 - `deadspace2.exe` and the game's own files are never modified.
 - The copy protection is left alone.
 
-> **This is pre-alpha.** You can load in and walk around. It is not yet a
-> playable DLC (see [SV02]). Every test run helps, so please send your log
-> (see [SV07]).
+> **This is pre-alpha.** Both chapters play from start to finish, but some
+> levels and textures still need work (see [SV02]). Every test run helps, so
+> please send your log (see [SV06]).
 
 ```text
 ================================================================================
@@ -191,80 +190,110 @@ How it works:
 
 | Area | Status |
 |---|---|
-| Severed in the episode select | Works (via the probe DLL) |
-| Intro terminal cutscene, RIG call scene, hand-over | Works, with subtitles (a thump in the opening scene) |
-| Level geometry, textures, lighting, collision | Works in the areas reached (some surfaces in the hospital draw black: being fixed) |
-| Playing as Gabe (security suit), HUD, inventory | Works (the Pulse Rifle sits oddly in his hands: future release) |
-| Dialogue, audio logs, videos, music, ambience | Works |
-| Necromorph AI, Tormentor boss | Works |
-| Chapter 1: drill tunnel to the docking station | Works (Gabe does not drop to the floor after the hanging fight: fix pending) |
-| Gunship fight, boarding | Works (on one replay Gabe floated above the ship after the transition: fix pending) |
-| Chapter 2: crash landing to the psych ward saferoom (about 75%) | Works (black surfaces, beige hallway windows, sideways reflections in one room) |
-| Stores, benches, save stations | Work (saves show as "Chapter 1"; suit packs removed from the stores) |
-| Gabe's starting weapons | Given, with the Pulse Rifle upgrades |
-| Performance near some lights | Drops; not investigated yet |
-| Security room, chase hall, landing bay finale, ending | Not reached yet |
-| One-click installer | Not yet (the test script does the job for now) |
+| Severed in the episode select | Works (via the hook DLL) |
+| Chapter 1: drill tunnel, quarry, mining camp, hanging fight, docking station, gunship | Fully playable |
+| Chapter 2: crash landing, hospital, psych ward, security room, chase hall, landing bay finale | Fully playable |
+| Sound, dialogue, audio logs, videos, music | Works |
+| Cutscenes and animations | Works |
+| Necromorph AI and navigation, Tormentor boss | Works |
+| Physics and collision | Works |
+| Playing as Gabe (security suit), HUD, inventory, starting weapons with the Pulse Rifle upgrades | Works |
+| Stores, benches, save stations | Work (suit packs removed from the stores; saves show the base game's chapter titles and pictures for now) |
+| Levels and geometry | In progress: black panels and flat beige windows in the zero-oxygen hallway, sideways reflections in the clinic overlook room |
+| Textures | In progress |
+| Save stations | Can lock up if used again while the terminal is closing |
+| Performance | Frame drops near some lights in the drill tunnel |
+| Installer app | Works (see [SV03]) |
 
 ```text
 ================================================================================
-[SV03]                          WHAT YOU NEED
+[SV03]                           INSTALLATION
 ================================================================================
 ```
 
+**What you need:**
 - **Dead Space 2 for PC** (Steam or retail), installed and working.
-- **Your own Severed add-on file** from your Xbox 360: the package file named
-  `29E2FCC04BEF1D2532C48269EC42EF2E3DBFC45845`. **Nothing from the game or the
-  DLC is in this repo, and none ever will be.**
-- **64-bit Python 3** from python.org (with the `py` launcher).
-- **ffmpeg** (`ffmpeg.exe`), used to decode the Xbox audio.
-- About **10 GB** free next to the add-on file, and **3.5 GB** in the game
-  folder.
+- **Your own Severed add-on** from your Xbox 360: either the package file
+  named `29E2FCC04BEF1D2532C48269EC42EF2E3DBFC45845`, or a folder it has
+  been fully extracted to (for example with xdvdfs). **Nothing from the game
+  or the DLC is in this repo, and none ever will be.**
+- **The DS2SeveredPC app.** It carries its own Python and ffmpeg, so you
+  don't need to install anything else.
+- **Free space:** about **10 GB** where you run the app (for temporary
+  files) and **3.5 GB** in the game folder.
+
+**Steps:**
+
+1. Unzip the DS2SeveredPC app into a folder on a drive with at least 10 GB
+   free, for example `Downloads\DS2SeveredPC`. The app keeps its temporary
+   files in a `severed_work` folder next to itself while it converts, and
+   deletes them when it finishes.
+2. Run `DS2SeveredPC.exe`. Choose **Install Severed** and click **Next**.
+
+   <p align="center"><img src="docs/img/install/1_welcome.png" alt="Welcome page" width="540"></p>
+
+3. Point the app at your files:
+   - **Severed add-on:** click **Browse...** and pick the package file, or
+     any file inside the folder you extracted the add-on to.
+   - **Dead Space 2 folder:** the folder that holds `deadspace2.exe`. Steam
+     installs are usually found automatically.
+
+   The page shows how much free space each location has. If either one
+   says "not enough", free some space or move the app to another drive.
+
+   <p align="center"><img src="docs/img/install/2_locations.png" alt="Choose locations page" width="540"></p>
+
+4. Check the summary and click **Install**. Converting takes about an hour.
+   If it stops or you cancel it, run the app again: it picks up where it
+   left off.
+
+   <p align="center"><img src="docs/img/install/3_ready.png" alt="Ready to install page" width="540"></p>
+
+5. When it's done, leave **Delete the temporary files** ticked and click
+   **Finish**. The `severed_work` folder is removed.
+
+   <p align="center"><img src="docs/img/install/5_finish.png" alt="Finish page" width="540"></p>
+
+6. Copy `tools\probe\bin\dinput8.dll` from this repository into the Dead
+   Space 2 folder, next to `deadspace2.exe`. It adds Severed to the episode
+   select. If a `dinput8.dll` from another mod is already there, move it
+   somewhere safe first.
+7. Start the game as normal. Go to **Single Player > New Game > Episode
+   Select** and pick **Dead Space 2: Severed**.
+
+The app only adds two files to the game folder: the archive `DS2DAT2.DAT`
+and its marker file `DS2DAT2.DAT.severed`. Keep the marker: the app uses it
+to update or remove the archive later.
+
+> If Gabe's RIG call scene doesn't hand control back, press **F8**. This
+> sends the scene's own "finished" message, and you get the normal camera,
+> control and Gabe's starting gear (you'll hear the Windows asterisk sound).
 
 ```text
 ================================================================================
-[SV04]                       TRYING THE TEST BUILD
+[SV04]                          UNINSTALLATION
 ================================================================================
 ```
 
-1. Download this repository as a zip (Code > Download ZIP) and unpack it.
-   Keep the folder structure: the test script needs `tools\research` next
-   to it.
-2. Build the Severed archive. Run this from `tools\test`:
+1. Run `DS2SeveredPC.exe`, choose **Remove Severed from the game** and click
+   **Next**.
+2. Check that the Dead Space 2 folder is right, click **Next**, then
+   **Remove**.
 
-   ```bat
-   Make-SeveredTest.bat "<Severed add-on file>" "<Dead Space 2 folder>" "<ffmpeg.exe>"
-   ```
+   <p align="center"><img src="docs/img/install/7_remove_locations.png" alt="Choose the game folder to remove Severed from" width="540"></p>
 
-   The first run unpacks and converts everything (this takes a while).
-   Later runs only redo what changed.
-3. Copy `tools\probe\bin\dinput8.dll` into the Dead Space 2 folder, next to
-   `deadspace2.exe`. If a `dinput8.dll` from another mod is already there,
-   move it somewhere safe first.
-4. Start the game as normal. Go to **Single Player > New Game > Episode Select** and
-   pick **Dead Space 2: Severed**.
-5. If Gabe's RIG call scene doesn't hand control back, press **F8**. This
-   sends the scene's own "finished" message: you get the normal camera,
-   control and Gabe's starting gear. You'll hear the Windows asterisk sound.
+3. Delete `dinput8.dll` from the Dead Space 2 folder (and put back any
+   `dinput8.dll` from another mod you moved away).
+
+   <p align="center"><img src="docs/img/install/8_removed.png" alt="Severed is removed" width="540"></p>
+
+Your game is back to normal. The app only deletes an archive it created
+itself: it checks for the marker file `DS2DAT2.DAT.severed` first (older
+test builds named it `.severedtest`, which the app recognises too).
 
 ```text
 ================================================================================
-[SV05]                           REMOVING IT
-================================================================================
-```
-
-```bat
-Remove-SeveredTest.bat "<Dead Space 2 folder>"
-```
-
-Then delete `dinput8.dll` from the game folder. Your game is back to normal.
-The script only deletes an archive it created itself. It checks for its
-marker file, `DS2DAT2.DAT.severed` (keep it while Severed is installed;
-older builds named it `.severedtest`, which the next run renames).
-
-```text
-================================================================================
-[SV06]                           HOW IT WORKS
+[SV05]                           HOW IT WORKS
 ================================================================================
 ```
 
@@ -301,7 +330,7 @@ is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ```text
 ================================================================================
-[SV07]                         TROUBLESHOOTING
+[SV06]                         TROUBLESHOOTING
 ================================================================================
 ```
 
@@ -310,11 +339,12 @@ is in [`docs/DESIGN.md`](docs/DESIGN.md).
 report. It contains your Windows user name in some paths, so edit those out
 if you like.
 
-**`ModuleNotFoundError: No module named 'ds2'`**: you copied only the test
-script. Download and unpack the whole repository.
+**Setup did not finish**: the app saves its log as `make_severed_test.log`
+next to `DS2SeveredPC.exe`. Please attach it to your bug report. Running the
+app again picks up where it stopped.
 
-**The window closes straight away**: run the `.bat` from a command prompt
-with all three arguments in quotes, so you can read the message.
+**"Not enough" free space**: the temporary files need about 10 GB on the
+drive the app runs from. Move the app folder to a drive with more space.
 
 **Antivirus flags `dinput8.dll`**: it is unsigned and hooks file functions.
 The full source is `tools/probe/probe.c`.
@@ -324,7 +354,7 @@ The full source is `tools/probe/probe.c`.
 
 ```text
 ================================================================================
-[SV08]                          RESEARCH TOOLS
+[SV07]                          RESEARCH TOOLS
 ================================================================================
 ```
 
@@ -351,7 +381,7 @@ These were used to map the formats. You don't need them to try Severed.
 
 ```text
 ================================================================================
-[SV09]                          FOR DEVELOPERS
+[SV08]                          FOR DEVELOPERS
 ================================================================================
 ```
 
@@ -381,7 +411,7 @@ These were used to map the formats. You don't need them to try Severed.
 
 ```text
 ================================================================================
-[SV10]                         DISCLAIMER & LEGAL
+[SV09]                         DISCLAIMER & LEGAL
 ================================================================================
 ```
 
@@ -406,7 +436,7 @@ own risk. Back up your saves.
 
 ```
 ================================================================================
-[SV11]                              CREDITS
+[SV10]                              CREDITS
 ================================================================================
   * Visceral Games ..................... for Dead Space 2 and Severed
   * Rick (Gibbed) - Gibbed.Visceral ...... archive, stream and SimGroup
