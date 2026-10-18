@@ -2061,3 +2061,24 @@ offers only OK (`$ui_ok_uc`), then the main menu. Probe 51's hook found 0
 matches for its signature at run time although the retail bytes match
 once; probe 52 checks the retail address directly and logs the bytes
 there.
+
+## 64. Hardcore and Severed (probe 53)
+
+Severed's `weller1.lvl` ends with a save chapter name, `$weller1_no_difficulty`
+("Difficulty setting not available for this episode.", in
+`dlc_support\level_select.str`) and a save icon suffix. The PC's `.lvl`
+handler (0x00A99C00) passes only the first fields to AddEpisode, and nothing
+in the PC exe disables a difficulty per episode. A Hardcore run of Severed
+loads and plays (Hardcore's own rules: limited saves, no checkpoints), but
+the console never offered it.
+
+The difficulty screen's setup (0x00A98AF0) sets enabled bytes for the five
+difficulties at +0x230..+0x234 (Hardcore = the profile's unlock) and clears
+Hardcore when +0x228 (New Game+) is set. Disabled entries are drawn greyed
+out with a description from a table (0x01F60150, Hardcore entry
+`$UIMenu_HardcoreLocked_DESC`; New Game+ uses
+`$UIMenu_Hardcore_NewGamePlus_DESC`). The front end keeps the chosen
+episode index at +0x974 and the difficulty at +0x978 (0x00A93430 /
+0x00AA8820 set them; 0x00A40D40 starts the game with both). Probe 53 hooks
+the setup after the New Game+ check: with Severed chosen it clears
+Hardcore and points the table's Hardcore text at Severed's line.

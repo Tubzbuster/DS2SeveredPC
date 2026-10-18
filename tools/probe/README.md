@@ -206,3 +206,13 @@ screen opened (state 0xD) or was skipped (state 3).
   its scenes); press F7 again after loading a checkpoint;
 - `hotshot_pdlc_boss_door_unlock` unlocks the door to the final fight, as
   the power cell in the receptacle does, so the stalker room can be skipped.
+
+## No Hardcore for Severed (probe 53)
+
+The console DLC's `weller1.lvl` says "Difficulty setting not available for
+this episode." (`$weller1_no_difficulty`): Severed was not offered on
+Hardcore. The PC exe ignores that field, so the probe hooks the difficulty
+screen: with Severed chosen, Hardcore is greyed out the way the game greys
+it out for New Game+, with that line as its description. The base game's
+list is unchanged. The log shows `difficulty screen: episode N (Severed),
+enabled ...` each time the screen opens.

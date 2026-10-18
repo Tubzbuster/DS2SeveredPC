@@ -1054,6 +1054,7 @@ typedef void *(__attribute__((thiscall)) *ctor_fn)(void *self);
 static ctor_fn g_ctor_tramp;
 static add_episode_fn g_add;
 static volatile LONG g_added;
+static BYTE *g_frontend;
 
 
 /* ---- class layout log ---------------------------------------------------
@@ -1095,6 +1096,7 @@ static void *__attribute__((thiscall)) hook_frontend_ctor(void *self)
 {
     void *r = g_ctor_tramp(self);
     static int classes_logged;
+    g_frontend = (BYTE *)self;
     log_line("front end constructed (thread %lu)", GetCurrentThreadId());
     if (!classes_logged) { classes_logged = 1; log_class_fields(0x02098B78, 0x0575C2F4); }
     log_episodes(self);
@@ -1376,14 +1378,22 @@ static void __cdecl on_level_start(void *self)
 
 /* stub: pushad/pushfd, call cb(ecx), restore, run the original first
  * `len` bytes, jump back */
+static int hook_call_reg(BYTE *fn, int len, void (__cdecl *cb)(void *), BYTE push_op);
 static int hook_call_ecx(BYTE *fn, int len, void (__cdecl *cb)(void *))
+{
+    return hook_call_reg(fn, len, cb, 0x51);
+}
+
+/* as hook_call_ecx, with the register named by its push opcode (0x51 ecx,
+   0x56 esi, ...) passed to the callback */
+static int hook_call_reg(BYTE *fn, int len, void (__cdecl *cb)(void *), BYTE push_op)
 {
     BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
     DWORD old;
     if (!t) return 0;
     q = t;
     *q++ = 0x60; *q++ = 0x9C;                      /* pushad, pushfd */
-    *q++ = 0x51;                                   /* push ecx */
+    *q++ = push_op;                                /* push reg */
     *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
     *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
     *q++ = 0x9D; *q++ = 0x61;                      /* popfd, popad */
@@ -1395,6 +1405,73 @@ static int hook_call_ecx(BYTE *fn, int len, void (__cdecl *cb)(void *))
     VirtualProtect(fn, len, old, &old);
     FlushInstructionCache(GetCurrentProcess(), fn, len);
     return 1;
+}
+
+
+/* ---- No Hardcore for Severed (probe 53) ----------------------------------
+ * The console DLC's weller1.lvl carries "$weller1_no_difficulty" ("Difficulty
+ * setting not available for this episode."): Severed was not offered on
+ * Hardcore. The PC exe ignores that field. Its difficulty screen (retail
+ * 0xA98AF0) sets one enabled byte per difficulty at +0x230..+0x234
+ * (Hardcore last, from the profile's unlock) and clears Hardcore for New
+ * Game+ (+0x228); a cleared one is shown greyed out with the text at
+ * entry 4 of a description table. The front end keeps the chosen episode
+ * at +0x974. Hooked right after that check: with Severed chosen, Hardcore
+ * is cleared too and its greyed-out text is Severed's own line. */
+static const char SIG_DIFF_SCREEN[] =
+    "80 BE 28 02 00 00 00 74 07 C6 86 34 02 00 00 00 6A 01 8D 46 10 68 ?? ?? ?? ?? 50";
+static const char SIG_DIFF_DESC[] =
+    "80 BB 28 02 00 00 00 74 0A BF ?? ?? ?? ?? 83 FE 04 74 07 8B 3C B5";
+static const char SEV_NO_DIFFICULTY[] = "Difficulty setting not available for this episode.";
+static const char **g_locked_desc;      /* the table entry for Hardcore */
+static const char *g_locked_desc_orig;
+
+static int severed_chosen(void)
+{
+    BYTE *v = g_frontend + 0x980, *b, *e, *x;
+    int i, sel;
+    if (!g_frontend || !mem_ok(g_frontend, 0x990)) return 0;
+    sel = *(int *)(g_frontend + 0x974);
+    b = *(BYTE **)v; e = *(BYTE **)(v + 4);
+    for (x = b, i = 0; x && x < e && mem_ok(x, 0x68); x += 0x68, i++) {
+        const char *f = *(const char **)(x + 0x20);
+        if (i == sel) return f && mem_ok(f, 15) && !lstrcmpiA(f, "pdlc1_ch01_mng");
+    }
+    return 0;
+}
+
+static void __cdecl note_difficulty_screen(void *o)
+{
+    BYTE *d = (BYTE *)o;
+    int sev = severed_chosen();
+    if (!mem_ok(d, 0x238)) return;
+    log_line("difficulty screen: episode %d%s, enabled %d %d %d %d %d, new game+ %d",
+             g_frontend ? *(int *)(g_frontend + 0x974) : -1, sev ? " (Severed)" : "",
+             d[0x230], d[0x231], d[0x232], d[0x233], d[0x234], d[0x228]);
+    if (g_locked_desc) {
+        DWORD old;
+        if (VirtualProtect(g_locked_desc, 4, PAGE_READWRITE, &old)) {
+            *g_locked_desc = sev ? SEV_NO_DIFFICULTY : g_locked_desc_orig;
+            VirtualProtect(g_locked_desc, 4, old, &old);
+        }
+    }
+    if (sev) d[0x234] = 0;
+}
+
+static void hook_difficulty(void)
+{
+    int n = 0, nd = 0;
+    DWORD base = (DWORD)GetModuleHandleA(NULL);
+    BYTE *s = find_sig(SIG_DIFF_SCREEN, &n), *t = find_sig(SIG_DIFF_DESC, &nd);
+    if (t) {
+        const char **e = (const char **)(*(DWORD *)(t + 0x16) + 4 * 4);
+        if (mem_ok(e, 4) && mem_ok(*e, 28) && !memcmp(*e, "$UIMenu_HardcoreLocked_DESC", 28)) {
+            g_locked_desc = e; g_locked_desc_orig = *e;
+        }
+    }
+    log_line("difficulty screen: %d match(es) at exe+0x%lx, locked text %s%s", n, s ? (DWORD)s - base : 0,
+             g_locked_desc ? "found" : "not found",
+             s && hook_call_reg(s + 0x10, 5, note_difficulty_screen, 0x56) ? ", hooked" : "");
 }
 
 
@@ -2046,6 +2123,7 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
     VirtualProtect(ctor, 5, old, &old);
     FlushInstructionCache(GetCurrentProcess(), ctor, 5);
     log_line("menu hook: installed after %d ms", tries * 10);
+    hook_difficulty();
     {
         int ns;
         BYTE *sr = find_sig(SIG_STREAMREQ, &ns);
@@ -2873,7 +2951,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 52 - process %s", path);
+    log_line("severed probe 53 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
