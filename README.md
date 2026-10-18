@@ -92,15 +92,15 @@ screens and the credits. Fixes in this round:
   locked): the Oracle corpses were thrown about where the Infectors could
   not reach them; they now hold their pose, and are built from the PC
   game's Oracle mesh
-- the end screens showing all their texts at once (timed steps in the
-  finale's effects left unconverted; fix waiting for a test)
+- the end screens showing all their texts at once, and the room showing
+  after the ending video instead of black (timed steps in the finale's
+  effects left unconverted)
 - the installer app: installs the hook DLL itself, shows the conversion
   file by file without console windows, has its own icon, and the build is
   named DS2SeveredPC-Converter with a "keep all files together" note
 
 Still to fix (minor, none blocks the game): a pale see-through sheet under
-the Oracle corpses; after the ending video the room shows for a few seconds
-where the console fades to black; the end-of-game "save for New Game+"
+the Oracle corpses (perhaps as on the console); the end-of-game "save for New Game+"
 prompt returns to the main menu without a save; the save station can lock
 up if used again while it closes; frame drops near some lights in the drill
 tunnel; saves show the base game's chapter titles and pictures. See

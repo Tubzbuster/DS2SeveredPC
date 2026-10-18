@@ -39,11 +39,9 @@ What is left are minor issues, listed under Open bugs; none blocks the game.
 - the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
-1. Ending (fix `vfx_headers.ok`, probe 51, FINDINGS 63): copy the new
-   `dinput8.dll`, rerun the converter, play the ending from the final hack
-   checkpoint. Check: the cards show one at a time; black (not the room)
-   after the video; after the credits, the save message and whether a save
-   screen follows. Send the log (`END OF GAME:` lines).
+1. New Game+ save (probe 52): copy the new `dinput8.dll`, load the final
+   hack checkpoint, play to the credits and press OK on the save message.
+   Send the log (`end-of-game save` and `END OF GAME:` lines).
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -90,19 +88,18 @@ What is left are minor issues, listed under Open bugs; none blocks the game.
 - ~~final fight sometimes does not end~~ fixed and confirmed: the Oracle
   corpses hold their pose for the Infectors (`oracle_corpses.ok`,
   FINDINGS 62)
-- end screens show their texts at once, overlaid: fix pending
+- ~~end screens show their texts at once, overlaid~~ fixed and confirmed
   (`vfx_headers.ok`, FINDINGS 63)
 - a pale see-through sheet under the Oracle corpses (still there with the
   PC game's Oracle mesh)
 - ~~Gabe's legs come back for the last seconds after the four fuses~~
   not a bug: the console footage shows his legs in that shot too
   (FINDINGS 63)
-- after the ending video the room shows for about 3 s; the console is
-  black until the end screens. That black is the end-screen effect's own
-  background: expected to come right with `vfx_headers.ok` (retest)
+- ~~after the ending video the room shows for about 3 s~~ fixed and
+  confirmed: the camera moves into the RIG screen and fades to black
 - the end-of-game "save for New Game+" message returns to the main menu
-  without offering a save: probe 51 logs the exe's save-screen check
-  (`END OF GAME:` lines, FINDINGS 63)
+  without offering a save (the message has only OK). Probe 51's hook did
+  not attach; probe 52 logs the bytes at the check (FINDINGS 63)
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)

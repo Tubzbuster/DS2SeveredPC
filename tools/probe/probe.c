@@ -1428,8 +1428,18 @@ static void __cdecl note_eog_skip(void *o)
 
 static void hook_end_of_game(void)
 {
-    int n = 0;
-    BYTE *s = find_sig(SIG_EOG_SAVE, &n), *k = s ? s + 0x35 : NULL;
+    int n = 0, i;
+    BYTE *s = find_sig(SIG_EOG_SAVE, &n), *k;
+    if (!s) {        /* probe 52: 0 matches in probe 51; try the retail address, log what is there */
+        BYTE *a = (BYTE *)GetModuleHandleA(NULL) + 0x692D85;
+        char hx[3 * 0x40 + 1];
+        for (i = 0; i < 0x40 && mem_ok(a + i, 1); i++) sprintf(hx + 3 * i, "%02x ", a[i]);
+        hx[3 * i] = 0;
+        log_line("end-of-game save: exe+0x692d85: %s", hx);
+        if (mem_ok(a, 0x40) && a[0] == 0x8B && a[1] == 0x4E && a[2] == 0x28 && a[0x0B] == 0x8B && a[0x0C] == 0x49
+            && a[0x0D] == 0x5C && a[0x17] == 0xC7 && a[0x1A] == 0x0D) { s = a; n = 1; }
+    }
+    k = s ? s + 0x35 : NULL;
     int ok = s && n == 1 && k[0] == 0xC7 && k[1] == 0x46 && k[2] == 0x24 && k[3] == 0x03
              && hook_call_ecx(s + 0x0B, 5, note_eog_check)
              && hook_call_ecx(s + 0x17, 7, note_eog_open)
@@ -2863,7 +2873,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 51 - process %s", path);
+    log_line("severed probe 52 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

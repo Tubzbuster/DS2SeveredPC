@@ -2050,3 +2050,14 @@ Compared with the console footage, still open:
   moves on (state 3). Probe 51 logs which way it goes and that pointer;
 - a pale see-through sheet still shows under the Oracle corpses, now
   built from the PC game's Oracle mesh (section 62).
+
+Retest (probe 51 log): the end screens show one card at a time, and after
+the video the camera moves into the RIG screen and fades to black, as on
+the console (`vfx_headers.ok` confirmed). The legs: the PC shows blood
+spraying from where the legs were (`msg_vfx_weller_blood_flow`, sent
+again at the decompression) on a body that has legs; the console footage
+has the legs in that shot too, so it is left as made. The save message
+offers only OK (`$ui_ok_uc`), then the main menu. Probe 51's hook found 0
+matches for its signature at run time although the retail bytes match
+once; probe 52 checks the retail address directly and logs the bytes
+there.
