@@ -22,9 +22,9 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed 
   Platform ..... Windows (PC)
-  Version ...... 0.4.0 (pre-alpha, test builds only)
+  Version ...... 0.8.2 (beta: fully playable, test builds)
   Author ....... tubzbuster
-  Updated ...... 2026-10-17
+  Updated ...... 2026-10-18
 ================================================================================
 Use Ctrl+F with the codes below to jump to a section.
 ```
@@ -75,6 +75,37 @@ I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 fi
 [SV00]                         VERSION HISTORY
 ================================================================================
 ```
+
+**v0.8.2 (2026-10-18)**: Severed is fully playable on PC, from the
+opening in the mines to the end credits. Every area of chapter 1 and
+chapter 2 plays: the security room, the chase hall, the landing bay battle,
+the final cutscene, the Infectors and Oracle Twitchers fight, the final
+hack, the last stand with the four airlock fuses, the ending video, the end
+screens and the credits. Fixes in this round:
+- the black slabs, stretched black shapes and flat beige windows in the
+  hospital (vertex positions left half-converted in 17 level meshes)
+- the landing bay's final cutscene camera pointed at the sky (its
+  animation tracks kept the wrong types)
+- the crash when the Oracle Twitchers appeared (their PC meshes named a
+  material that was not loaded; PC meshes now take Severed's materials)
+- the final fight could not end (no dialogue, the hacking panel stayed
+  locked): the Oracle corpses were thrown about where the Infectors could
+  not reach them; they now hold their pose, and are built from the PC
+  game's Oracle mesh
+- the end screens showing all their texts at once (timed steps in rare
+  effect headers left unconverted; fix waiting for a test)
+- the installer app: installs the hook DLL itself, shows the conversion
+  file by file without console windows, has its own icon, and the build is
+  named DS2SeveredPC-Converter with a "keep all files together" note
+
+Still to fix (minor, none blocks the game): a pale see-through sheet under
+the Oracle corpses; Gabe's legs come back for the last few seconds after
+the four fuses; after the ending video the room shows for a few seconds
+where the console fades to black; the end-of-game "save for New Game+"
+prompt returns to the main menu without a save; the save station can lock
+up if used again while it closes; frame drops near some lights in the drill
+tunnel; saves show the base game's chapter titles and pictures. See
+`docs/PROGRESS.md`.
 
 **v0.4.0 (2026-10-17)**: About 75% of chapter 2 plays (11 of its 15
 checkpoints). From the crash landing through the decompression room, the
@@ -189,6 +220,8 @@ How it works:
 | Severed in the episode select | Works (via the hook DLL) |
 | Chapter 1: drill tunnel, quarry, mining camp, hanging fight, docking station, gunship | Fully playable |
 | Chapter 2: crash landing, hospital, psych ward, security room, chase hall, landing bay finale | Fully playable |
+| Ending: final fight, last stand, ending video, end screens, credits | Plays to the credits (minor issues, see v0.8.2 in [SV00]) |
+| New Game+ save after the credits | Not offered yet (returns to the main menu) |
 | Sound, dialogue, audio logs, videos, music | Works |
 | Cutscenes and animations | Works |
 | Necromorph AI and navigation, Tormentor boss | Works |

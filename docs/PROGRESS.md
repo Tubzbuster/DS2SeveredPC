@@ -12,15 +12,12 @@ Section names are the level's stream folders
 scene and audio numbering (`igc_01_xx` = chapter 1, `igc_02_xx` = chapter 2)
 and is corrected as we play.
 
-## Summary (2026-10-18)
+## Summary (2026-10-18, v0.8.2)
 
-**Where we are:** Severed plays from the start through the final boss fight
-(the Oracle Twitchers); the final hack and the ending are still to play.
-All of chapter 1 and chapter 2 up to the landing bay finale play, with only
-minor fixes left here and there (listed under Open bugs). The hospital's
-black shapes and the zero-oxygen hallway are fixed and confirmed. Not
-confirmed yet: the landing bay final cutscene (a camera fix is waiting for a
-test, see below), the final boss and the end of the DLC (credits).
+**Where we are:** Severed is fully playable on PC, start to finish: all of
+chapter 1 and chapter 2, the final fight, the last stand, the ending video,
+the end screens and the credits (first full play-through, probe 50 log).
+What is left are minor issues, listed under Open bugs; none blocks the game.
 
 **Fixed so far** (confirmed in game unless marked):
 - Severed in Episode Select; intro terminal, RIG call scene, hand-over
@@ -42,11 +39,9 @@ test, see below), the final boss and the end of the DLC (credits).
 - the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
-1. Final fight (fix `oracle_corpses.ok`): rerun the converter, load the
-   final-battle checkpoint. The two Oracle corpses should stay put for
-   the Infectors, the pale sheet should be gone, and after the last kill
-   the dialogue plays and the hacking panel unlocks. Then use the panel
-   and play on to the credits. Send the log.
+1. End screens (fix `vfx_headers.ok`, FINDINGS 63): rerun the converter and
+   play the ending again (from the final hack checkpoint). The cards should
+   show one at a time, as on the console.
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -90,14 +85,19 @@ test, see below), the final boss and the end of the DLC (credits).
   spot moved 0.35 m, the door started 2 s after the drop (FINDINGS 48)
 - ~~thump in the opening scene~~ fixed and confirmed: gone since the
   drill tunnel's two bodies hold still (`corpse_freeze`, FINDINGS 56)
-- final fight sometimes does not end (no dialogue, the hacking panel stays
-  locked): the two Oracle corpses were thrown about where the Infectors
-  could not reach them, so too few Oracle Twitchers came for the tally
-  (probe 50: 2 `oracle_dead` in the stuck run, 4+ in the good one). Fix
-  pending (`oracle_corpses.ok`, FINDINGS 62): the corpses freeze on limp;
-  the pale sheet stretching off a corpse's back is addressed too (its mesh
-  built from the PC game's Oracle). Way past it: `twitcher_combat_over`
-  in `severed_send.txt`, then F7
+- ~~final fight sometimes does not end~~ fixed and confirmed: the Oracle
+  corpses hold their pose for the Infectors (`oracle_corpses.ok`,
+  FINDINGS 62)
+- end screens show their texts at once, overlaid: fix pending
+  (`vfx_headers.ok`, FINDINGS 63)
+- a pale see-through sheet under the Oracle corpses (still there with the
+  PC game's Oracle mesh)
+- Gabe's legs come back for the last seconds after the four fuses (the
+  last stand plays him legless)
+- after the ending video the room shows for about 3 s; the console is
+  black until the end screens
+- the end-of-game "save for New Game+" message returns to the main menu
+  without offering a save
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)
@@ -165,9 +165,9 @@ release).
 | psych_ward: psych_hall_z01/z03/z04, chase_hall_saferoom_z01 | works | passed |
 | security: security_z01, security_hall_z01; psych_ward: isaacs_cell_z01 | works | passed |
 | chase_hall: chase_hall_z01/z02; psych_ward: psych_arrival_hall_z01 | works | passed |
-| psych_ward: landing_bay_psycho_z01/z02 | fix pending | the finale: the final battle, the battery swap, the final cutscene (camera fixed, FINDINGS 60) and the Oracle Twitcher fight play (crash fixed: material, FINDINGS 61; confirmed). The Oracle Twitchers look like the console's. Final hack panel not used yet |
+| psych_ward: landing_bay_psycho_z01/z02 | works | the final battle, the final cutscene (camera, FINDINGS 60), the Infectors and Oracle Twitchers fight (crash fixed, FINDINGS 61; corpses held for the Infectors, FINDINGS 62), the final hack, Bartlett's grenade, the last stand and the four fuses, the decompression and the ending video all play. Open: legs back after the fuses, the room after the video, a pale sheet under the corpses |
 | Also in the DLC: entry_hall, pre_moonquake | works | played in chapter 1 (mining camp to the docking station) |
-| End of the DLC (credits) | untested | |
+| End of the DLC (end screens, credits) | works, issues | the credits play and the game returns to the main menu. End screens overlaid (fix pending, FINDINGS 63); no New Game+ save offered | |
 
 ## Systems
 

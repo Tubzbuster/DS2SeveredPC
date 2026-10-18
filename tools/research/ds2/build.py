@@ -22,14 +22,31 @@ def _model(name):
     return _MODELS[name]
 
 
+# VFX header: 0x40 fixed bytes, then 0x24-byte timed entries (component
+# offset, start time, ...). Header sizes seen in few PC/360 pairs left words
+# the pairs did not show (zero there) as stored: pdlc_outro's step times
+# (e.g. 12.5 s at 0xD4) read as 0 on PC and its end-screen texts all showed
+# at once. Such headers take the entry layout of the well-sampled sizes.
+VFX_HEAD, VFX_ENTRY, VFX_FEW = 0x40, 0x24, 30
+
+
+def _vfx_header(tm, key):
+    t = tm.get(key)
+    n = key[1]
+    if (t is not None and t[1] >= VFX_FEW) or n < VFX_HEAD + VFX_ENTRY or (n - VFX_HEAD) % VFX_ENTRY:
+        return t[0] if t is not None else None
+    base = tm[('header', VFX_HEAD + VFX_ENTRY)][0]
+    return base[:VFX_HEAD // 4] + base[VFX_HEAD // 4:] * ((n - VFX_HEAD) // VFX_ENTRY)
+
+
 def _vfx(x):
     tm = _model('vfx_templates.pkl')
     out = bytearray()
     for key, s, e in vfx.segments(x):
-        t = tm.get(key)
+        t = _vfx_header(tm, key) if key[0] == 'header' else (tm[key][0] if key in tm else None)
         if t is None:
             return None
-        out += T.apply(t[0], x[s:e])
+        out += T.apply(t, x[s:e])
     return bytes(out)
 
 

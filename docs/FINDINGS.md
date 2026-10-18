@@ -1999,3 +1999,41 @@ face tables and the materials differ. `pcassets.DERIVED` now builds the
 corpse from the live Oracle's PC mesh and volatile (entry B9D946A6) with
 the corpse's material ids (`derive_mesh`): the corpse has the live
 Oracle's face. Step `oracle_corpses.ok` (both changes).
+
+## 63. The ending (first full play-through)
+
+Probe 50 log of the whole finale: `twitcher_combat_over` after 4
+`oracle_dead` (the frozen corpses, section 62, held for the Infectors),
+the audio log, the final hack, `igc_02_06` (Bartlett's grenade), the last
+stand (`trig_final_stand`, bleed-out timer, four fuses, slashers), 
+`all_fuses_destroyed`, the decompression, the video `trans_02_01`
+(342.8-350.5 s), `pdlc1_credits_location`, `iMsgUIEndOfGame`, the
+credits (371-378 s, `ach_end_of_pdlc`) and back to the main menu at 381 s.
+No crash.
+
+End screens: the cards ("Gabriel Weller, deceased", "Lexine Murdoch
+Weller, missing") are the effect `pdlc_outro.vfx` (landing_bay_psycho_z02).
+A VFX header is 0x40 fixed bytes, then one 0x24-byte entry per timed step:
+component offset, start time, u32 0x2400, a u16 pair, three floats and a
+word (the learned templates of the common header sizes agree on this, from
+thousands of pairs). pdlc_outro's header (1216 bytes, 32 steps) has a size
+seen in only 5 pairs, whose template left the words those pairs never
+showed (zero there) as stored, among them 25 of the step times (12.5 s at
+0xD4 read as about 0 on PC): the texts all showed at once, overlaid, and
+Gabe's picture stayed under Lexine's name. Headers of sizes seen in fewer
+than 30 pairs now take the entry layout of the well-sampled sizes
+(`build._vfx_header`). 10 of Severed's 514 own effects have such headers;
+words change in 4: pdlc_outro (25), igc02_06_grenade_splode (-100.0),
+pdlc1_bay_fusesplode (two -0.5), pdlc_intro_static (16.0 and a flag
+word). Step `vfx_headers.ok`.
+
+Compared with the console footage, still open:
+- after `all_fuses_destroyed` Gabe has his legs again for the last
+  seconds (the last stand plays him legless: `pc_nolegs.bnk`);
+- after the video, the console is black until the end screens; the PC
+  shows the room for about 3 s (350.5 s video end, 353.5 s
+  `iMsgUIEndOfGame`);
+- the end-of-game "save for New Game+" message returns to the main menu
+  without offering a save;
+- a pale see-through sheet still shows under the Oracle corpses, now
+  built from the PC game's Oracle mesh (section 62).

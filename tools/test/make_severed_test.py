@@ -727,7 +727,7 @@ CATCH_UP = (
     'hang_release.ok', 'loop_split.ok', 'calm_lights5.ok', 'hall_glass_back.ok', 'chapters_restored.ok',
     'hang_drop2.ok', 'hang_console.ok', 'corpse_freeze.ok', 'hang_gravity.ok', 'hang_place.ok',
     'hang_console2.ok', 'hang_gravity2.ok', 'hang_door.ok', 'hang_door2.ok', 'corpse_freeze2.ok',
-    'gunship_audio.ok', 'mesh_positions.ok', 'anim_tracks.ok', 'oracle_corpses.ok',
+    'gunship_audio.ok', 'mesh_positions.ok', 'anim_tracks.ok', 'oracle_corpses.ok', 'vfx_headers.ok',
 )
 
 
@@ -973,6 +973,12 @@ def main():
         refresh_simgroups(root, dst, 0x4C8A721A)       # RagdollComponent (simgroup.RAGDOLL_SETS)
         derive_pc_meshes(root, dst, idx)               # pcassets.DERIVED: the Oracle corpse
         open(os.path.join(work, 'oracle_corpses.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'vfx_headers.ok')):
+        log('Effects with rare header sizes: their step times converted (the ending\'s end screens showed all texts at once)')
+        from ds2 import pcassets
+        own = pcassets.load()
+        refresh_assets(root, dst, 'VFX', build._vfx, keep=lambda a: pcassets.key(a.type, a.name, a.ids) in own)
+        open(os.path.join(work, 'vfx_headers.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

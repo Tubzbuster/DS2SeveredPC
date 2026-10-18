@@ -35,7 +35,7 @@ sys.path.insert(0, HERE)
 import gamefind  # noqa: E402
 
 TITLE = 'Dead Space 2: Severed for PC'
-VERSION = '0.4.0'
+VERSION = '0.8.2'
 WORK_GB, GAME_GB = 10, 3.5
 WIN = sys.platform == 'win32'
 FONT = 'Segoe UI' if WIN else 'DejaVu Sans'
