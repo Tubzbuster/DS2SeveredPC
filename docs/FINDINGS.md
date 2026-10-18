@@ -1591,3 +1591,19 @@ and is carried in the save, so a save made after loading an older chapter 2
 save keeps chapter 2 (base picture and title). The change shows only for a
 Severed run started (or a chapter begun) with the new archive.
 
+## 56. The drill tunnel bodies
+
+`drill_tunnel_01` has two corpses: DismemberableProp 21B88F09 and 10ED3773,
+anim state `Corpse_deadpose1`, each with a RagdollComponent (2E30A6F6,
+AF37A013). The first also has a DSNPCImpaledComponent, but that only sets
+how a corpse reacts to being impaled by a projectile (knockback 25, zone
+0x400); nothing in the level pins a body to the spike. Their pose and
+RCB (`base_malecorpse.rcb`) are the PC game's own.
+
+RagdollComponent's CMD_RagdollFlags (record offset 16) is 0 on all 12 of
+Severed's ragdolls. exe 0xB74B80 names the bits: 1 Freeze on limp, 2 Do not
+jitter detect, 4 Large object bodies on limp, 8 Key object bodies on limp.
+On PC the two bodies settle somewhere different on every new game. Test:
+both get Freeze on limp (`simgroup.RAGDOLL_FLAGS`, step `corpse_freeze.ok`)
+so they should hold the placed pose.
+

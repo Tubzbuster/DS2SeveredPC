@@ -46,6 +46,9 @@ hall, the psych arrival hall and the landing bay finale.
    seconds before F4: F5 now also logs every draw of that piece.
 3. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
+4. Drill tunnel bodies (`corpse_freeze.ok`): new game, are the bodies where
+   the console has them (one on the spike), and the same on a second new
+   game? Does the opening thump change? Shoot one afterwards: does it react?
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition~~ fixed:
@@ -59,8 +62,10 @@ hall, the psych arrival hall and the landing bay finale.
 - black stretched shapes in several hospital rooms: the hallway's box is
   the scratched-metal wall panels shaded black (lightmap-shader material);
   probe 46 trace pending.
-- bodies in the drill tunnel lie in different places on each new game
-  (likely settling during the intro).
+- bodies in the drill tunnel lie in different places on each new game (on
+  the console one lies draped on a spike). Nothing in the level pins them:
+  both are ragdoll corpses in a dead pose, ragdoll flags 0. Test build: both
+  get "Freeze on limp" (`corpse_freeze.ok`, FINDINGS 56)
 - the clinic overlook room's reflections are sideways.
 
 **Open bugs** (strike out any that are no longer bugs):

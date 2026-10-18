@@ -113,6 +113,18 @@ def _delay(out, x, base, oh, stats):
         struct.pack_into('<f', out, base + off, new)
         stats['delays'] = stats.get('delays', 0) + 1
 
+# Ragdoll flags set by the converter: {object hash: flags}. RagdollComponent
+# CMD_RagdollFlags (record offset 16; exe 0xB74B80 names the bits: 1 Freeze
+# on limp, 2 Do not jitter detect, 4 Large object bodies on limp, 8 Key
+# object bodies on limp). All of Severed's ragdolls have 0. The two bodies in
+# drill_tunnel_01 (Corpse_deadpose1) land somewhere different on every new
+# game on PC, where the console has them in place (one draped on a spike):
+# Freeze on limp should hold them where the level puts them.
+RAGDOLL_FLAGS = {
+    0x2E30A6F6: 1,      # corpse 21B88F09 (with the impale-reaction component)
+    0xAF37A013: 1,      # corpse 10ED3773
+}
+
 # Chapter numbers (PlayerSetChapter) are never changed: Severed keeps
 # chapters 1 and 2, as on the console. Renumbering them (to 16, for the
 # save pictures) stopped Gabe's landing sequence after the gunship scene,
@@ -330,6 +342,9 @@ def convert(x, stats=None):
             _retarget(out, x, B + ro, ln, oh, stats)
         if oh in DELAYS:
             _delay(out, x, B + ro, oh, stats)
+        if oh in RAGDOLL_FLAGS and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:
+            struct.pack_into('<I', out, B + ro + 16, RAGDOLL_FLAGS[oh])
+            stats['ragdoll_flags'] = stats.get('ragdoll_flags', 0) + 1
         if cls is not None and cls['name'] == 'AnimateLight':
             _calm_light(out, x, B + ro, cls, stats)
     # group hashes: sdbm over the members' class-name hashes, PC byte order

@@ -800,6 +800,10 @@ def main():
         refresh_simgroups(root, dst, 0x25D23AA0)       # PlayerChangeState (simgroup.RETARGET now empty)
         refresh_simgroups(root, dst, 0x6DF50074)       # MultiManager (simgroup.DELAYS now empty)
         open(os.path.join(work, 'hang_console.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'corpse_freeze.ok')):
+        log('Drill tunnel: the two bodies freeze where the level puts them (ragdoll "Freeze on limp")')
+        refresh_simgroups(root, dst, 0x4C8A721A)       # RagdollComponent (simgroup.RAGDOLL_FLAGS)
+        open(os.path.join(work, 'corpse_freeze.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
