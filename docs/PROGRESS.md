@@ -40,14 +40,10 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-0. Black slabs (fix `mesh_positions.ok`): rerun the converter, then check
-   the zero-oxygen hallway, the operating room, psycho development, surgery
-   observation and triage.
-1. (Only if slabs remain) Zero-oxygen hallway with probe 46: as before (F6 until the level
-   vanishes, F3 through the pieces, F5 when the box goes), then wait 5
-   seconds before F4: F5 now also logs every draw of that piece.
-2. Bed room after the elevator: check again with F4 pressed (the black
-   bar may have been probe 43's hidden shader).
+1. Chapter 2 texture check (probe 48): play through the rest of chapter 2
+   and note any remaining black shapes or wrong surfaces, with the room
+   and a screenshot. The zero-oxygen hallway and most of the hospital are
+   confirmed good since `mesh_positions.ok`.
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -69,10 +65,11 @@ hall, the psych arrival hall and the landing bay finale.
   slab in front of a pickup. Material links, vertex colour and table data
   checked and ruled out (FINDINGS 58); the probe trace can be taken there
   as well as in the hallway.
-  **Fix pending a test:** found by comparing with the base game's own
-  hallway: vertex positions left half-converted (some words read as text),
-  173 words in 17 meshes, most in the hospital (FINDINGS 59). Step
-  `mesh_positions.ok`.
+  **Fixed and confirmed** in the zero-oxygen hallway and most of the
+  hospital (the rest of chapter 2 is being checked): found by comparing
+  with the base game's own hallway: vertex positions left half-converted
+  (some words read as text), 173 words in 17 meshes, most in the hospital
+  (FINDINGS 59). Step `mesh_positions.ok`.
 - ~~bodies in the drill tunnel move during the opening scene~~ fixed and
   confirmed: both get "Freeze on limp" (`corpse_freeze.ok`, FINDINGS 56).
   They stay put through the scene and react to shots and stomps. (No body
@@ -83,12 +80,9 @@ hall, the psych arrival hall and the landing bay finale.
 
 **Open bugs** (strike out any that are no longer bugs):
 - ~~crash entering the decompression room~~ fixed (looping sound split)
-- black shape in the zero-oxygen hallway (ruled out: the depth-of-field
-  effect's file, which is the PC game's own; the floating debris meshes,
-  the PC game's own; the hallway's glass, which converts exactly like the
-  base game's). `msg_vfx_airless_dof_stop` changed nothing; the broken
-  windows there also show flat beige. Next F7 tests:
-  `lt_airless_hall_post_fx_off`, `msg_vfx_airless_stop`
+- ~~black shape and flat beige windows in the zero-oxygen hallway~~ fixed
+  and confirmed: vertices thrown far off by half-converted positions
+  (`mesh_positions.ok`, FINDINGS 59); the windows look right since too
 - ~~Gabe does not drop to the floor after the hanging fight~~ fixed and
   confirmed (consistent over several runs): gravity on during the drop, hanging
   spot moved 0.35 m, the door started 2 s after the drop (FINDINGS 48)

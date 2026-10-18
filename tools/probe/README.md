@@ -156,3 +156,18 @@ sequence's player-side object ([+88]) and two pointer levels below. It
 logs where it found them (`POS [n] address (level, under base +offset)`)
 and then their values in millimetres every 200 ms for 14 seconds
 (`POS +ms: [n] x y z ...`, Y is up). Nothing to press.
+
+## Lighter for play-throughs (probe 48)
+
+The chapter 2 slabs are fixed (FINDINGS 59), so probe 48 turns off what ran
+all the time for those hunts:
+- the D3D guard: its hooks on about 15 Direct3D methods, every draw call
+  among them, and with it the F3-F6 shader and piece hiding;
+- the per-frame position watch of the hanging-fight drop (probe 47);
+- the texture list check (an old crash hunt).
+
+Still there: Severed in the episode list, the Pulse Rifle upgrades, F7/F8
+level messages, F9 (episode list), F10/F11 (scans on request), the file
+and message log, and the crash report. The code of the removed parts stays
+in `probe.c` for later probes.
+

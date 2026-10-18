@@ -1321,9 +1321,7 @@ static void run_pending_sections(void)
         log_line("game thread: %lu (the main thread)", g_game_thread);
     }
     run_pending_messages();
-    pos_watch();
     heap_watch();
-    d3d_guard();
     if (!g_sections_pending || GetCurrentThreadId() != g_game_thread || !g_streamreq || !g_streammgr || !*g_streammgr)
         return;
     if (InterlockedExchange(&g_sections_pending, 0) == 0) return;
@@ -2062,17 +2060,7 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                     for (kk4 = 0; kk4 < 50 && !(g_upgmgr = find_upgmgr()); kk4++) Sleep(200);
                     log_line("upgrade manager: global %p%s", g_upgmgr, g_upgmgr ? "" : " (not found: no Pulse Rifle upgrades)");
                 }
-                {
-                    int nt = 0, kk;
-                    BYTE *tp = find_sig(SIG_TEXPASS, &nt);
-                    for (kk = 0; kk < 50 && !tp; kk++) { Sleep(200); tp = find_sig(SIG_TEXPASS, &nt); }
-                    if (tp && tp[0x83] == 0x8B && tp[0xF7] == 0x8B) {
-                        g_slots_a = *(DWORD **)(tp + 0x86);
-                        g_slots_b = *(DWORD **)(tp + 0xFA);
-                    }
-                    log_line("texture list pass: %d match(es) at exe+0x%lx, slot tables %p %p%s", nt, tp ? (DWORD)tp - base : 0,
-                             g_slots_a, g_slots_b, tp && g_slots_a && hook_log_sp(tp, 9, note_texpass) ? ", hooked" : "");
-                }
+                /* probe 48: no texture list pass check (an old crash hunt) */
                 log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s (after %d retries)", nb,
                          bb ? (DWORD)bb - base : 0, bb && hook_log_sp(bb, 9, note_batch) ? ", hooked" : "", k);
             }
@@ -2803,7 +2791,7 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         /* with Alt, Ctrl or Shift held the keys belong to other programs
            (Alt+F9 records in the Nvidia overlay) */
         if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
-            while ((GetAsyncKeyState(VK_F3) | GetAsyncKeyState(VK_F4) | GetAsyncKeyState(VK_F5) | GetAsyncKeyState(VK_F6) | GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
+            while ((GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
                     GetAsyncKeyState(VK_F10) | GetAsyncKeyState(VK_F11)) & 0x8000) Sleep(100);
             continue;
         }
@@ -2820,37 +2808,6 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
             if (!g_game_thread) log_line("F7: game thread not known yet (start a level first)");
             else queue_message_file();
             while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
-        }
-        if (GetAsyncKeyState(VK_F6) & 0x8001) {
-            hide_next();
-            while (GetAsyncKeyState(VK_F6) & 0x8000) Sleep(100);
-        }
-        if (GetAsyncKeyState(VK_F3) & 0x8001) {
-            piece_next();
-            while (GetAsyncKeyState(VK_F3) & 0x8000) Sleep(100);
-        }
-        if (GetAsyncKeyState(VK_F4) & 0x8001) {
-            if (g_hide_ps || g_hide_k || g_piece_ps) log_line("F4: hiding off, everything drawn again");
-            g_collect = 0;
-            g_hide_ps = NULL;
-            g_hide_k = 0;
-            g_pcollect = 0;
-            g_piece_ps = NULL;
-            g_piece_k = 0;
-            while (GetAsyncKeyState(VK_F4) & 0x8000) Sleep(100);
-        }
-        if (GetAsyncKeyState(VK_F5) & 0x8001) {
-            if (g_piece_k) {
-                log_line("F5: MARK - piece %ld of %ld hidden (ps %p, start %u count %u); tracing it and the one before",
-                         g_piece_k, g_npieces, g_piece_ps, g_hide_piece.si, g_hide_piece.pc);
-                g_trace_piece[0] = g_hide_piece;
-                g_ntrace = 1;
-                if (g_piece_k >= 2) g_trace_piece[g_ntrace++] = g_pieces[g_piece_k - 2];   /* quick presses */
-                g_trace = 4000;
-            }
-            else if (g_hide_ps) log_line("F5: MARK - shader %ld of %ld hidden (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
-            else log_line("F5: MARK - nothing hidden");
-            while (GetAsyncKeyState(VK_F5) & 0x8000) Sleep(100);
         }
         if (GetAsyncKeyState(VK_F10) & 0x8000) {
             reflect_scan();
@@ -2880,7 +2837,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 47 - process %s", path);
+    log_line("severed probe 48 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -2905,7 +2862,11 @@ static void start(HMODULE self)
     CloseHandle(CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL));
     CloseHandle(CreateThread(NULL, 0, menu_hook_thread, NULL, 0, NULL));
     AddVectoredExceptionHandler(1, crash_handler);
-    log_line("Severed is added to the episode list when the front end starts; F9 logs the list, F10 for the reflection scan, F11 for the descriptor dump");
+    /* probe 48: the per-frame position watch, the D3D guard (draw hooks behind
+       F3-F6) and the texture list check are off for play-throughs; kept for
+       later probes */
+    (void)pos_watch; (void)d3d_guard; (void)hide_next; (void)piece_next; (void)note_texpass; (void)SIG_TEXPASS;
+    log_line("Severed is added to the episode list when the front end starts; F9 logs the list, F8 hands the RIG scene over, F7 sends severed_send.txt, F10 reflection scan, F11 descriptor dump");
 }
 
 /* ---- dinput8 forwarding ----------------------------------------------- */
