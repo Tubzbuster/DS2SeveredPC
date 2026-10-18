@@ -1563,8 +1563,12 @@ static void __cdecl note_msgsend(const char *arg)
     h = msg[0];
     upgrade_on_msg(h);
     c = &g_msg_count[h & 0xFFFF];
-    if (*c >= 3) return;
-    (*c)++;
+    /* probe 50: the final fight's tally (oracle_dead) and its end
+     * (twitcher_combat_over) are logged every time, not 3 times */
+    if (h != 0x2E9954A5 && h != 0xB545E260) {
+        if (*c >= 3) return;
+        (*c)++;
+    }
     if (InterlockedIncrement(&g_msg_logs) > 20000) return;
     node = (DWORD *)(*g_msg_table)[h & 0xFFF];
     while (node && mem_ok(node, 0x14)) {
@@ -2819,7 +2823,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 49 - process %s", path);
+    log_line("severed probe 50 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

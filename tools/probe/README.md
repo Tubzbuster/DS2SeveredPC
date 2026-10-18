@@ -180,3 +180,12 @@ in `severed_send.txt`. For wrong surfaces, compare the area with the base
 game's own files (`tools/research/extract_base_sections.py`) rather than
 bring back the draw hooks.
 
+
+## The final fight's tally (probe 50)
+
+The landing bay's Twitcher fight ends on `twitcher_combat_over`, sent by a
+variable watcher once `oracle_dead` has been counted past 3 (threshold 3,
+condition 4). The Infector and the Oracle Twitcher template send
+`oracle_dead` both when they die and when they go to sleep. Probe 50 logs
+every `oracle_dead` and `twitcher_combat_over` (other messages: the first
+3 sends as before), to see the count when the fight does not end.
