@@ -265,10 +265,6 @@ The app adds three files to the game folder:
   another mod's `dinput8.dll` is already there, the app renames it to
   `dinput8.dll.other` and puts it back when you remove Severed.
 
-> If Gabe's RIG call scene doesn't hand control back, press **F8**. This
-> sends the scene's own "finished" message, and you get the normal camera,
-> control and Gabe's starting gear (you'll hear the Windows asterisk sound).
-
 ```text
 ================================================================================
 [SV04]                          UNINSTALLATION

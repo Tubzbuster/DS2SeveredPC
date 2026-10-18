@@ -188,10 +188,13 @@ release).
 
 ## Test tools
 
-- F8 (probe 20+): sends the intro hand-over. F7: sends the messages listed
-  in `severed_send.txt`. F9: requests the start sections (and logs the
-  episode list). Probe 29+: the F-keys are ignored with Alt, Ctrl or Shift
-  held (Alt+F9 records in the Nvidia overlay).
+- F7: sends the messages listed in `severed_send.txt` (ignored with Alt,
+  Ctrl or Shift held). Probe 49 keeps only F7: F8 (intro hand-over), F9
+  (start sections, episode list) and F10/F11 (scans) are retired, their
+  jobs confirmed working; F3-F6 went in probe 48. Wrong surfaces are now
+  looked into by comparing with the base game's own files for the area
+  (`tools/research/extract_base_sections.py`, FINDINGS 59), not with draw
+  hooks.
 - Crash reports name the meshes near the crash (probe 21+).
 - Probe 26+: heap checks every 2 s (`HEAP ... CORRUPT` lines). Probe 35: off unless `severed_heapcheck.on` is in the game folder (suspected of the alt-tab hang).
 - Probe 36: `SES` lines: each scripted sequence's name hash, settings flags and origin once; sequences with SSEQFL_NEGATE_CHAR_PROXY_OFFSET every 250 ms with the hanging proxy offset they subtract (FINDINGS 48).

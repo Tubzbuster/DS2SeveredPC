@@ -2791,31 +2791,13 @@ static DWORD WINAPI hotkey_thread(LPVOID p)
         /* with Alt, Ctrl or Shift held the keys belong to other programs
            (Alt+F9 records in the Nvidia overlay) */
         if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
-            while ((GetAsyncKeyState(VK_F7) | GetAsyncKeyState(VK_F8) | GetAsyncKeyState(VK_F9) |
-                    GetAsyncKeyState(VK_F10) | GetAsyncKeyState(VK_F11)) & 0x8000) Sleep(100);
+            while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
             continue;
-        }
-        if (GetAsyncKeyState(VK_F9) & 0x8000) {
-            add_severed();
-            while (GetAsyncKeyState(VK_F9) & 0x8000) Sleep(100);
-        }
-        if (GetAsyncKeyState(VK_F8) & 0x8000) {
-            if (!g_game_thread) log_line("F8: game thread not known yet (start a level first)");
-            else queue_messages(g_handover, (int)(sizeof g_handover / sizeof g_handover[0]));
-            while (GetAsyncKeyState(VK_F8) & 0x8000) Sleep(100);
         }
         if (GetAsyncKeyState(VK_F7) & 0x8000) {
             if (!g_game_thread) log_line("F7: game thread not known yet (start a level first)");
             else queue_message_file();
             while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
-        }
-        if (GetAsyncKeyState(VK_F10) & 0x8000) {
-            reflect_scan();
-            while (GetAsyncKeyState(VK_F10) & 0x8000) Sleep(100);
-        }
-        if (GetAsyncKeyState(VK_F11) & 0x8000) {
-            desc_dump();
-            while (GetAsyncKeyState(VK_F11) & 0x8000) Sleep(100);
         }
     }
     return 0;
@@ -2837,7 +2819,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 48 - process %s", path);
+    log_line("severed probe 49 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
@@ -2865,8 +2847,11 @@ static void start(HMODULE self)
     /* probe 48: the per-frame position watch, the D3D guard (draw hooks behind
        F3-F6) and the texture list check are off for play-throughs; kept for
        later probes */
+    /* probe 49: F8 (RIG scene handover), F9 (episode list), F10/F11 (scans)
+       removed from the keys, all confirmed working or done with */
+    (void)add_severed; (void)reflect_scan; (void)desc_dump; (void)g_handover;
     (void)pos_watch; (void)d3d_guard; (void)hide_next; (void)piece_next; (void)note_texpass; (void)SIG_TEXPASS;
-    log_line("Severed is added to the episode list when the front end starts; F9 logs the list, F8 hands the RIG scene over, F7 sends severed_send.txt, F10 reflection scan, F11 descriptor dump");
+    log_line("Severed is added to the episode list when the front end starts; F7 sends the messages in severed_send.txt");
 }
 
 /* ---- dinput8 forwarding ----------------------------------------------- */

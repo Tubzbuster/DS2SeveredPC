@@ -171,3 +171,12 @@ level messages, F9 (episode list), F10/F11 (scans on request), the file
 and message log, and the crash report. The code of the removed parts stays
 in `probe.c` for later probes.
 
+## Only F7 left (probe 49)
+
+F8 (the RIG scene hand-over), F9 (start sections, episode list) and F10/F11
+(the reflection scan and descriptor dump) are off the keys: everything
+they covered is confirmed working. F7 stays: it sends the messages listed
+in `severed_send.txt`. For wrong surfaces, compare the area with the base
+game's own files (`tools/research/extract_base_sections.py`) rather than
+bring back the draw hooks.
+
