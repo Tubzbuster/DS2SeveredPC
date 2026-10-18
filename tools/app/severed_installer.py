@@ -264,7 +264,8 @@ class Wizard:
             '\nThis wizard converts your own copy of the Xbox 360 add-on "Dead Space 2: '
             'Severed" for the PC version of Dead Space 2. Severed is then started from '
             'Single Player > New Game > Episode Select.\n\n'
-            'Converting can be stopped and started again: it picks up where it left off.\n\n'
+            'Converting takes 15 minutes or more. It can be stopped and started again: it '
+            'picks up where it left off.\n\n'
             'DS2SeveredPC contains no game files. It adds one archive (DS2DAT2.DAT) and the '
             'hook that puts Severed in the menu (dinput8.dll) to the game folder. A free fan project, not made or endorsed by Electronic Arts.\n\n'
             'What would you like to do?')).pack(anchor='w')
@@ -319,7 +320,7 @@ class Wizard:
     def page_installing(self):
         install = self.mode.get() == 'install'
         f = self.head_page('Installing' if install else 'Removing',
-                           'Please wait while Severed is converted.' if install
+                           'Please wait while Severed is converted. This takes 15 minutes or more.' if install
                            else 'Please wait.')
         self.status = ttk.Label(f, text='Starting...')
         self.status.pack(anchor='w')

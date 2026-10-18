@@ -232,7 +232,8 @@ release).
   also runs the app's `--selftest` (data files, native library, ffmpeg's
   xma2 decoder) and uploads the app as the run's artifact. Checked on Linux:
   the build, the self-test, every
-  wizard page. Still to do: a real conversion through it on Windows.
+  wizard page. A full conversion through the app on Windows completed
+  start to end in about 15 minutes (run 10's build, from the add-on file).
   On hold until the DLC plays start to finish: the workflow now runs only
   when started by hand (no build on every push); testing goes through
   `Make-SeveredTest.bat`.

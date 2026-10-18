@@ -247,8 +247,8 @@ How it works:
 
    <p align="center"><img src="docs/img/install/install_3_ready.png" alt="Ready to install page" width="540"></p>
 
-   The window shows the current step and every file the converter works
-   on. If it stops or you cancel it, run the app again: it
+   Converting takes 15 minutes or more. The window shows the current step
+   and every file the converter works on. If it stops or you cancel it, run the app again: it
    picks up where it left off.
 
    <p align="center"><img src="docs/img/install/install_4_installing.png" alt="Installing page" width="540"></p>
