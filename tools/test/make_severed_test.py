@@ -828,6 +828,10 @@ def main():
         log('Hanging fight: the door opens 2 s after Gabe\'s drop starts (it was closing again before he got there)')
         refresh_simgroups(root, dst, 0x6DF50074)       # MultiManager (simgroup.DELAYS)
         open(os.path.join(work, 'hang_door2.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'corpse_freeze2.ok')):
+        log('Bodies: "Freeze on limp" only for the drill tunnel\'s two (the same IDs froze bodies elsewhere)')
+        refresh_simgroups(root, dst, 0x4C8A721A)       # RagdollComponent (simgroup.RAGDOLL_FLAGS)
+        open(os.path.join(work, 'corpse_freeze2.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

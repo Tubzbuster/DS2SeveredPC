@@ -1467,6 +1467,13 @@ already closing while Gabe was getting up: the animation opens the door
 and shuts it again, and it runs ahead of him rather than behind. Next
 (`hang_door2.ok`): the door 2 s after him.
 
+Result (hang_door2): Gabe drops, gets up on the grate, runs through the
+open door and carries on past it. The drop now works on PC with three
+changes in the elevator scene: gravity on during `ses_player_01_03`
+(0x4025 -> 0x4021), the hanging spot moved 0.35 m in Z, and the door's
+sequence started 2 s after the drop instead of 0.45 s. To be checked on
+a few more runs.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe
@@ -1721,6 +1728,14 @@ so they should hold the placed pose.
 Result: the bodies hold still through the opening scene, then react to
 shots and stomps (the ragdoll wakes on impact). The console has no body on
 a spike either.
+
+Side effect, found later: the object hashes are not unique to the drill
+tunnel. RagdollComponent 2E30A6F6 is also in the bomb_run NPC set, and
+AF37A013 in `drill_cavern_01` and `mining_camp` (the quarantine area with
+the three override panels), whose bodies then lay frozen and could not be
+picked up or kicked until shot. The flags now apply only in a SimGroup
+that holds both objects, which only `drill_tunnel_01` does
+(`corpse_freeze2.ok`).
 
 ## 57. Level mesh normals and tangents checked against the geometry
 

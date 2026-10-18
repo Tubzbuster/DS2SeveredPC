@@ -136,6 +136,11 @@ def _delay(out, x, base, oh, stats):
 # drill_tunnel_01 (Corpse_deadpose1) land somewhere different on every new
 # game on PC, where the console has them in place (one draped on a spike):
 # Freeze on limp should hold them where the level puts them.
+# Result: they hold still through the scene and wake when shot or stomped.
+# The same object hashes are reused by corpses elsewhere (drill_cavern_01,
+# mining_camp's quarantine area, the bomb_run NPC set), which then also lay
+# frozen until shot; so the flags apply only in a SimGroup that holds all of
+# these objects, which only drill_tunnel_01 does.
 RAGDOLL_FLAGS = {
     0x2E30A6F6: 1,      # corpse 21B88F09 (with the impale-reaction component)
     0xAF37A013: 1,      # corpse 10ED3773
@@ -370,6 +375,8 @@ def convert(x, stats=None):
         out[B + hs + 8 * i:B + hs + 8 * i + 8] = struct.pack('<II', h, ver)
     by_obj = {}
     by_rec = {}
+    present = {struct.unpack_from('>I', x, B + toff + 16 * i + 4)[0] for i in range(cnt)}
+    ragdoll_here = all(h in present for h in RAGDOLL_FLAGS)
     for i in range(cnt):
         e = B + toff + 16 * i
         ro, oh, ln, a, b = struct.unpack_from('>IIIHH', x, e)
@@ -392,7 +399,7 @@ def convert(x, stats=None):
             _retarget(out, x, B + ro, ln, oh, stats)
         if oh in DELAYS:
             _delay(out, x, B + ro, oh, stats)
-        if oh in RAGDOLL_FLAGS and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:
+        if ragdoll_here and oh in RAGDOLL_FLAGS and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:
             struct.pack_into('<I', out, B + ro + 16, RAGDOLL_FLAGS[oh])
             stats['ragdoll_flags'] = stats.get('ragdoll_flags', 0) + 1
         if oh in SES_FLAGS and cls is not None and cls['name'] == 'ScriptedEventSequence':

@@ -40,11 +40,11 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Hanging fight, door starting 2 s after the drop (`hang_door2.ok`,
-   rebuild with `Make-SeveredTest.bat`; keep probe 47 in): is the door
-   open when Gabe reaches it, and does he get through? If not, say whether
-   the door is still opening or already closing when he arrives. Send the
-   log either way.
+1. Hanging fight (`hang_door2.ok`): worked first time; play it a few
+   more times to be sure. Bodies (`corpse_freeze2.ok`): the quarantine
+   area's bodies (three override panels) should react to stomps and
+   kicks again; the drill tunnel's two should still hold still in the
+   opening scene.
 2. Zero-oxygen hallway with probe 46: as before (F6 until the level
    vanishes, F3 through the pieces, F5 when the box goes), then wait 5
    seconds before F4: F5 now also logs every draw of that piece.
