@@ -1461,6 +1461,12 @@ leaves trail him and are still across the doorway when he gets there (on
 the console he walks through them, collision off). Test (`hang_door.ok`,
 `simgroup.DELAYS`): the door starts with him (0.45 -> 0 s).
 
+Result (hang_door): worse. He reached the doorway at the same time
+(3.9 s, Z -44.14) and stopped at X -97.95, and the user saw the door
+already closing while Gabe was getting up: the animation opens the door
+and shuts it again, and it runs ahead of him rather than behind. Next
+(`hang_door2.ok`): the door 2 s after him.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe

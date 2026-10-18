@@ -109,10 +109,13 @@ RETARGET = {}
 # (B3634A9C, pdlc1_igc_01_03_door_pubh01_ind.bnk) is 188 frames like
 # Gabe's drop, so the two are made to run together; started 0.45 s after
 # him, the leaves are still in his way when he reaches the doorway (on the
-# console he passes through them, collision being off). The door now starts
-# with him.
+# console he passes through them, collision being off). Tried: the door
+# starting with him (0 s): he stopped even earlier, and the user saw the
+# door already closing as he got up (its animation opens and then shuts
+# it). So the door is ahead of him, not behind: it now starts 2 s after
+# him (1.55 s later than the console).
 DELAYS = {
-    0x5EAA9249: {48: (0x06C1A7AE, 0.45, 0.0)},
+    0x5EAA9249: {48: (0x06C1A7AE, 0.45, 2.0)},
 }
 
 
