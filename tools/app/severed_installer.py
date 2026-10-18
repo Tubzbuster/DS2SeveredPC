@@ -1,10 +1,11 @@
 """DS2SeveredPC installer: a classic setup wizard around the converter
 (tools/test/make_severed_test.py), so nobody needs the command line.
 
-Pages: Welcome (install or remove), Before you start, Locations (the
-Severed add-on, the Dead Space 2 folder, a working folder; ffmpeg when it is
-not bundled), Ready, Installing (progress and the converter's log in a
-terminal box), Finish.
+Pages: Welcome (install or remove), Locations (the Severed add-on, the
+Dead Space 2 folder; ffmpeg only when it is not bundled), Ready, Installing
+(progress and the converter's log in a terminal box), Finish. Temporary
+files go to severed_work next to the program and are deleted at the end
+(kept when setup stops, so a new run picks up where it left off).
 
     py -3 severed_installer.py              the wizard
     py -3 severed_installer.py --selftest   checks a built app carries all its parts
@@ -59,6 +60,45 @@ def free_gb(path):
         return None
 
 
+def is_package(p):
+    try:
+        with open(p, 'rb') as f:
+            return f.read(4) in (b'CON ', b'LIVE', b'PIRS')
+    except OSError:
+        return False
+
+
+def addon_root(p):
+    """the add-on the user picked: the package file itself, or for a file
+    inside an unpacked add-on, the folder holding weller1.lvl (or the
+    pdlc1_ch01_mng folder) above it"""
+    if os.path.isdir(p) or is_package(p):
+        return p
+    for test in (lambda d: os.path.isfile(os.path.join(d, 'weller1.lvl')),
+                 lambda d: os.path.isdir(os.path.join(d, 'pdlc1_ch01_mng', 'pdlc1_ch01_mng'))):
+        d = os.path.dirname(p)
+        while True:
+            if test(d):
+                return d
+            up = os.path.dirname(d)
+            if up == d:
+                break
+            d = up
+    return os.path.dirname(p)
+
+
+def addon_kind(p):
+    if p and os.path.isfile(p):
+        return 'package' if is_package(p) else None
+    if p and os.path.isdir(p):
+        for d, _, fs in os.walk(p):
+            if 'weller1.lvl' in fs:
+                return 'folder'
+            if d.count(os.sep) - p.count(os.sep) >= 2:
+                break
+    return None
+
+
 class Pipe(io.TextIOBase):
     """stdout replacement: the converter's lines go to the window"""
     def __init__(self, q):
@@ -70,7 +110,7 @@ class Pipe(io.TextIOBase):
 
 
 class Wizard:
-    PAGES = ('welcome', 'notice', 'locations', 'ready', 'installing', 'finish')
+    PAGES = ('welcome', 'locations', 'ready', 'installing', 'finish')
 
     def __init__(self, root):
         self.root = root
@@ -91,16 +131,15 @@ class Wizard:
         style.configure('Warn.TLabel', foreground='#a4262c')
         self.q = queue.Queue()
         self.mode = tk.StringVar(value='install')
-        self.agree = tk.BooleanVar(value=False)
         self.addon = tk.StringVar()
         found = gamefind.find()
         self.games = found
         self.game = tk.StringVar(value=found[0] if found else '')
-        self.work = tk.StringVar()
+        self.work = os.path.join(APP_DIR, 'severed_work')
+        self.cleanup = tk.BooleanVar(value=True)
         self.ffmpeg = tk.StringVar(value=bundled_ffmpeg() or '')
         self.ffmpeg_bundled = bool(self.ffmpeg.get())
         self.ok = None
-        self.addon.trace_add('write', self._default_work)
 
         self.body = ttk.Frame(root)
         self.body.pack(fill='both', expand=True)
@@ -153,7 +192,7 @@ class Wizard:
             w.destroy()
         name = self.PAGES[self.page]
         getattr(self, 'page_' + name)()
-        self.back.config(state='normal' if name in ('notice', 'locations', 'ready') else 'disabled')
+        self.back.config(state='normal' if name in ('locations', 'ready') else 'disabled')
         self.next.config(text={'ready': 'Install' if self.mode.get() == 'install' else 'Remove',
                                'finish': 'Finish'}.get(name, 'Next >'))
         self.next.config(state='disabled' if name == 'installing' else 'normal')
@@ -169,29 +208,13 @@ class Wizard:
             'Severed" for the PC version of Dead Space 2. Severed is then started from '
             'Single Player > New Game > Episode Select.\n\n'
             'Converting takes about an hour. It can be stopped and started again: it '
-            'picks up where it left off.\n\nWhat would you like to do?')).pack(anchor='w')
+            'picks up where it left off.\n\n'
+            'DS2SeveredPC contains no game files and adds one archive (DS2DAT2.DAT) to the '
+            'game folder. A free fan project, not made or endorsed by Electronic Arts.\n\n'
+            'What would you like to do?')).pack(anchor='w')
         for v, t in (('install', 'Install Severed'), ('remove', 'Remove Severed from the game')):
             ttk.Radiobutton(f, text=t, value=v, variable=self.mode, style='White.TRadiobutton').pack(
                 anchor='w', padx=8, pady=2)
-
-    def page_notice(self):
-        f = self.head_page('Before you start', 'Please read the following.')
-        box = tk.Text(f, height=11, wrap='word', font=(FONT, 9), relief='solid', borderwidth=1, padx=8, pady=6)
-        box.insert('end', (
-            'DS2SeveredPC contains no game files. It converts files you supply from your own '
-            'legitimate copy of the Severed add-on, for use with your own legitimate copy of '
-            'Dead Space 2 for PC (Steam or retail).\n\n'
-            'It adds one archive, DS2DAT2.DAT, to the game folder and changes nothing else in '
-            'it. Remove Severed (in this wizard) takes that archive out again.\n\n'
-            'This is a fan project, free and non-commercial, not made or endorsed by Electronic '
-            'Arts. It is provided as is, without warranty of any kind. Back up your saves.\n\n'
-            'Dead Space, Dead Space 2 and Dead Space 2: Severed are trademarks of Electronic Arts '
-            'Inc. ffmpeg (included, LGPL) decodes the Xbox audio; its licence is in the ffmpeg '
-            'folder next to this program.'))
-        box.config(state='disabled')
-        box.pack(fill='both', expand=True)
-        ttk.Checkbutton(f, text='I own both the Severed add-on and Dead Space 2 for PC',
-                        variable=self.agree, command=self.refresh).pack(anchor='w', pady=(10, 0))
 
     def path_row(self, f, label, var, buttons, combo=None):
         ttk.Label(f, text=label).pack(anchor='w', pady=(10, 2))
@@ -211,14 +234,12 @@ class Wizard:
         f = self.head_page('Choose locations', 'Point the wizard at your files.' if install
                            else 'Choose the game folder to remove Severed from.')
         if install:
-            self.path_row(f, 'Severed add-on (the package file 29E2FCC0..., or a folder it was unpacked to):',
-                          self.addon, (('File...', self.pick_addon_file), ('Folder...', self.pick_addon_dir)))
+            self.path_row(f, 'Severed add-on: the package file 29E2FCC0..., or any file in a folder it was unpacked to:',
+                          self.addon, (('Browse...', self.pick_addon),))
         self.path_row(f, 'Dead Space 2 folder (holds deadspace2.exe)%s:' % (
             ', found automatically' if self.games else ''), self.game,
             (('Browse...', self.pick_game),), combo=self.games or None)
         if install:
-            self.path_row(f, 'Working folder (temporary files, about %d GB):' % WORK_GB, self.work,
-                          (('Browse...', self.pick_work),))
             if not self.ffmpeg_bundled:
                 self.path_row(f, 'ffmpeg.exe (decodes the Xbox audio):', self.ffmpeg,
                               (('Browse...', self.pick_ffmpeg),))
@@ -232,7 +253,7 @@ class Wizard:
         lines = ['Dead Space 2 folder:\n    %s' % self.game.get()]
         if install:
             lines = ['Severed add-on:\n    %s' % self.addon.get()] + lines + [
-                'Working folder:\n    %s' % self.work.get(),
+                'Temporary files (about %d GB, deleted at the end):\n    %s' % (WORK_GB, self.work),
                 'ffmpeg:\n    %s' % ('included' if self.ffmpeg_bundled else self.ffmpeg.get())]
         box = tk.Text(f, height=12, wrap='word', font=(FONT, 9), relief='solid', borderwidth=1, padx=8, pady=6)
         box.insert('end', '\n\n'.join(lines))
@@ -260,7 +281,7 @@ class Wizard:
         args = ['--game', self.game.get().strip()]
         if install:
             args = ['--severed', self.addon.get().strip()] + args + [
-                '--work', self.work.get().strip(), '--ffmpeg', self.ffmpeg.get().strip()]
+                '--work', self.work, '--ffmpeg', self.ffmpeg.get().strip()]
         else:
             args.append('--remove')
         threading.Thread(target=self.work_thread, args=(args,), daemon=True).start()
@@ -278,42 +299,34 @@ class Wizard:
                     'Running the wizard again picks up where it stopped.' % (self.fail_msg or ''))
         ttk.Label(f, text=title, style='Big.TLabel').pack(anchor='w')
         ttk.Label(f, text='\n' + text, style='Body.TLabel', wraplength=440, justify='left').pack(anchor='w')
+        if self.ok and install and os.path.isdir(self.work):
+            ttk.Checkbutton(f, text='Delete the temporary files (severed_work)', variable=self.cleanup).pack(
+                anchor='w', pady=(16, 0))
 
     # ---- input checks ----------------------------------------------------------
 
-    def _default_work(self, *a):
-        """the converter's own default: severed_work next to the add-on"""
-        p = self.addon.get().strip()
-        if p and (not self.work.get().strip() or self.work.get() == getattr(self, '_auto_work', None)):
-            self._auto_work = os.path.join(os.path.dirname(os.path.normpath(p)), 'severed_work')
-            self.work.set(self._auto_work)
-
     def problem(self):
         name = self.PAGES[self.page]
-        if name == 'notice' and not self.agree.get():
-            return ''
         if name != 'locations':
             return None
         if not os.path.isfile(os.path.join(self.game.get().strip(), gamefind.EXE)):
             return 'The Dead Space 2 folder must hold deadspace2.exe.'
         if self.mode.get() != 'install':
             return None
-        if not os.path.exists(self.addon.get().strip()):
-            return 'Choose the Severed add-on file or its folder.'
-        if not self.work.get().strip():
-            return 'Choose a working folder.'
+        if not addon_kind(self.addon.get().strip()):
+            return 'Choose the Severed add-on: the package file, or a file in the folder it was unpacked to.'
         if not os.path.isfile(self.ffmpeg.get().strip()):
             return 'Choose ffmpeg.exe.'
         return None
 
     def refresh(self):
         bad = self.problem()
-        if self.PAGES[self.page] in ('notice', 'locations'):
+        if self.PAGES[self.page] == 'locations':
             self.next.config(state='disabled' if bad is not None else 'normal')
         if self.PAGES[self.page] == 'locations' and getattr(self, 'space', None):
             lines = [bad] if bad else []
             if self.mode.get() == 'install':
-                for label, path, need in (('working folder', self.work.get(), WORK_GB),
+                for label, path, need in (('temporary files (next to this program)', self.work, WORK_GB),
                                           ('game folder', self.game.get(), GAME_GB)):
                     g = free_gb(path.strip()) if path.strip() else None
                     if g is not None:
@@ -329,6 +342,10 @@ class Wizard:
     def on_next(self):
         name = self.PAGES[self.page]
         if name == 'finish':
+            if self.ok and self.mode.get() == 'install' and self.cleanup.get() and os.path.isdir(self.work):
+                self.root.config(cursor='watch')
+                self.root.update()
+                shutil.rmtree(self.work, ignore_errors=True)
             self.root.destroy()
             return
         if self.problem():
@@ -350,25 +367,15 @@ class Wizard:
         if self.PAGES[self.page] == 'finish' or messagebox.askyesno('Cancel', 'Exit the setup wizard?'):
             self.root.destroy()
 
-    def pick_addon_file(self):
-        p = filedialog.askopenfilename(title='The Severed add-on file (29E2FCC0...)')
+    def pick_addon(self):
+        p = filedialog.askopenfilename(title='The Severed add-on file (29E2FCC0...), or any file in its unpacked folder')
         if p:
-            self.addon.set(os.path.normpath(p))
-
-    def pick_addon_dir(self):
-        p = filedialog.askdirectory(title='The folder the Severed add-on was unpacked to')
-        if p:
-            self.addon.set(os.path.normpath(p))
+            self.addon.set(addon_root(os.path.normpath(p)))
 
     def pick_game(self):
         p = filedialog.askdirectory(title='The Dead Space 2 folder (holds deadspace2.exe)')
         if p:
             self.game.set(os.path.normpath(p))
-
-    def pick_work(self):
-        p = filedialog.askdirectory(title='Working folder (about %d GB of temporary files)' % WORK_GB)
-        if p:
-            self.work.set(os.path.normpath(p))
 
     def pick_ffmpeg(self):
         p = filedialog.askopenfilename(title='ffmpeg.exe', filetypes=[('ffmpeg', 'ffmpeg.exe'), ('All files', '*.*')])

@@ -27,8 +27,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: PyInstaller
-        run: python -m pip install pyinstaller==6.11.1
+      # PyInstaller with its launcher (bootloader) compiled here from source:
+      # the prebuilt one is shared by many programs, some of them malware, and
+      # antivirus tools often flag it.
+      - name: PyInstaller (bootloader built from source)
+        env:
+          PYINSTALLER_COMPILE_BOOTLOADER: '1'
+        run: python -m pip install --no-binary pyinstaller pyinstaller==6.11.1
 
       - name: ffmpeg (LGPL build from BtbN/FFmpeg-Builds)
         shell: pwsh

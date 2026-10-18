@@ -206,16 +206,19 @@ intro terminal, the alt-tab hang, the gunship hull textures.
   GitHub Actions Windows runner from the repo code alone (no game files).
 
   Now a classic setup wizard (`tools/app/severed_installer.py`): Welcome
-  (install or remove), Before you start (ownership checkbox), Locations
-  (add-on file or folder, game folder, working folder, ffmpeg only when not
-  bundled; free space shown), Ready, Installing (progress, current step and
-  the converter's log in a terminal box), Finish. The game folder is found
+  (install or remove), Locations (one Browse for the add-on: the package
+  file, or any file in an unpacked folder; the game folder; ffmpeg only when
+  not bundled; free space shown), Ready, Installing (progress, current step
+  and the converter's log in a terminal box), Finish (deletes the temporary
+  `severed_work` folder next to the program). The game folder is found
   from Steam's library list (app 47780), the EA/Origin registry keys or the
   usual folders (`gamefind.py`). ffmpeg: an LGPL build is downloaded and
   bundled by the GitHub Actions workflow (`.github/workflows/build-app.yml`,
-  Windows runner, PyInstaller), which also runs the app's `--selftest`
-  (data files, native library, ffmpeg's xma2 decoder) and uploads the app
-  as the run's artifact. Checked on Linux: the build, the self-test, every
+  Windows runner, PyInstaller with its launcher compiled from source, a
+  version resource, no UPX, to keep antivirus false alarms down), which
+  also runs the app's `--selftest` (data files, native library, ffmpeg's
+  xma2 decoder) and uploads the app as the run's artifact. Checked on Linux:
+  the build, the self-test, every
   wizard page. Still to do: a real conversion through it on Windows.
 
 - **Check the user's add-on before converting.** People's copies can have
