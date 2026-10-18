@@ -22,6 +22,7 @@ import queue
 import shutil
 import sys
 import threading
+import webbrowser
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -40,6 +41,7 @@ WIN = sys.platform == 'win32'
 FONT = 'Segoe UI' if WIN else 'DejaVu Sans'
 MONO = 'Consolas' if WIN else 'DejaVu Sans Mono'
 BANNER_BG, BANNER_FG, ACCENT = '#14171a', '#d8dde2', '#b3261e'
+ICON_BY, ICON_URL = 'youngpotart', 'https://www.steamgriddb.com/profile/76561198110359023'
 HOOK = 'dinput8.dll'
 HOOK_BACKUP = 'dinput8.dll.other'               # another mod's dinput8.dll, put back on removal
 HOOK_TAGS = (b'severed_probe.log',)             # text only our hook carries
@@ -272,6 +274,13 @@ class Wizard:
         for v, t in (('install', 'Install Severed'), ('remove', 'Remove Severed from the game')):
             ttk.Radiobutton(f, text=t, value=v, variable=self.mode, style='White.TRadiobutton').pack(
                 anchor='w', padx=8, pady=2)
+        credit = tk.Frame(f, bg='white')
+        credit.pack(side='bottom', anchor='w')
+        tk.Label(credit, text='App icon by', bg='white', fg='#8a8a8a', font=(FONT, 8)).pack(side='left')
+        link = tk.Label(credit, text=ICON_BY, bg='white', fg='#8a8a8a', font=(FONT, 8, 'underline'), cursor='hand2')
+        link.pack(side='left')
+        link.bind('<Button-1>', lambda e: webbrowser.open(ICON_URL))
+        tk.Label(credit, text='(SteamGridDB)', bg='white', fg='#8a8a8a', font=(FONT, 8)).pack(side='left')
 
     def path_row(self, f, label, var, buttons, combo=None):
         ttk.Label(f, text=label).pack(anchor='w', pady=(10, 2))
