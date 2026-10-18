@@ -804,6 +804,10 @@ def main():
         log('Drill tunnel: the two bodies freeze where the level puts them (ragdoll "Freeze on limp")')
         refresh_simgroups(root, dst, 0x4C8A721A)       # RagdollComponent (simgroup.RAGDOLL_FLAGS)
         open(os.path.join(work, 'corpse_freeze.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'hang_gravity.ok')):
+        log('Hanging fight: gravity stays on through the drop sequence (Gabe was held 2.6 m up until it ended)')
+        refresh_simgroups(root, dst, 0x4FE92B71)       # ScriptedEventSequence (simgroup.SES_FLAGS)
+        open(os.path.join(work, 'hang_gravity.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

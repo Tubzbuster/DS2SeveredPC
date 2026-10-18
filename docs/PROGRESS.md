@@ -40,10 +40,10 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Hanging fight with probe 47 (no rebuild needed, just the new
-   `dinput8.dll`): play from the elevator checkpoint through the fight and
-   the drop, wait 15 seconds after Gabe gets up, then send the log. It logs
-   Gabe's position every 0.2 s from the drop sequence's start (`POS` lines).
+1. Hanging fight with gravity on during the drop (`hang_gravity.ok`,
+   rebuild with `Make-SeveredTest.bat`; keep probe 47 in): does Gabe come
+   down to the grate during the drop and get up there, or does anything
+   else go wrong (stuck in the rock, falls through)? Send the log.
 2. Zero-oxygen hallway with probe 46: as before (F6 until the level
    vanishes, F3 through the pieces, F5 when the box goes), then wait 5
    seconds before F4: F5 now also logs every draw of that piece.

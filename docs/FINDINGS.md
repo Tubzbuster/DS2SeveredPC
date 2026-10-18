@@ -1369,6 +1369,28 @@ logs them every 200 ms for 14 s from the drop sequence's start (`POS`
 lines): whether any of Gabe's positions goes down a storey during the
 animation, and which one snaps at the release.
 
+Result (probe 47): 16 places found, most of them copies of one position
+(the character, and its capsule centre 0.9 m higher). Y is up.
+- Just before the sequence: Y -15.164 m, floor level. During the hanging
+  fight the character itself is down there; the hanging state only draws
+  him higher.
+- Within 0.2 s of `ses_player_01_03` starting: Y -12.561, 2.6 m up, and it
+  stays exactly there for the whole sequence. X and Z do follow the
+  animation (about 7.4 m along X between 2.4 s and 4.7 s), so its
+  horizontal root motion is applied and its height is not.
+- At `ses_player_01_03_end` (6.25 s, the release): he falls from -12.56 to
+  -15.30 in about 0.8 s, then walks off up a slope (Y back to -12.99 on
+  the way to the corridor).
+
+The animation itself converts exactly: the 66 codec-12 animations in the
+base game's chapter 1 banks (360 and PC pair) have identical headers and
+data after `convert.bnk`, and the 01_03 animation has the same header
+layout. The 2.6 m that is missing at the end is the storey the console
+footage shows him falling. Test (`hang_gravity.ok`): ses_player_01_03
+without NO_GRAVITY_COLLISION (flags 0x4025 -> 0x4021,
+`simgroup.SES_FLAGS`), with the hanging state still on, so gravity should
+keep him at floor level through the animation.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe

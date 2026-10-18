@@ -125,6 +125,16 @@ RAGDOLL_FLAGS = {
     0xAF37A013: 1,      # corpse 10ED3773
 }
 
+# ScriptedEventSequence settings flags (record offset 116) changed:
+# {object hash: (old flags, new flags)}. ses_player_01_03, the drop after
+# the hanging fight: probe 47 showed Gabe lifted 2.6 m as it starts and held
+# there (NO_GRAVITY_COLLISION, 0x4) until the hanging state ends with it,
+# then falling 2.7 m. Test: the flag off, so gravity keeps him at floor
+# level through the animation, with the hanging state still on.
+SES_FLAGS = {
+    0xC767274B: (0x4025, 0x4021),
+}
+
 # Chapter numbers (PlayerSetChapter) are never changed: Severed keeps
 # chapters 1 and 2, as on the console. Renumbering them (to 16, for the
 # save pictures) stopped Gabe's landing sequence after the gunship scene,
@@ -345,6 +355,11 @@ def convert(x, stats=None):
         if oh in RAGDOLL_FLAGS and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:
             struct.pack_into('<I', out, B + ro + 16, RAGDOLL_FLAGS[oh])
             stats['ragdoll_flags'] = stats.get('ragdoll_flags', 0) + 1
+        if oh in SES_FLAGS and cls is not None and cls['name'] == 'ScriptedEventSequence':
+            was, now = SES_FLAGS[oh]
+            if struct.unpack_from('>I', x, B + ro + 116)[0] == was:
+                struct.pack_into('<I', out, B + ro + 116, now)
+                stats['ses_flags'] = stats.get('ses_flags', 0) + 1
         if cls is not None and cls['name'] == 'AnimateLight':
             _calm_light(out, x, B + ro, cls, stats)
     # group hashes: sdbm over the members' class-name hashes, PC byte order
