@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'research'))
 
 try:
-    from ds2 import bigarchive, build, eaaudio, pcassets, saveicons, simgroup, snu, stfs, streamfile, streamwrite, toc   # noqa: E402
+    from ds2 import addoncheck, bigarchive, build, eaaudio, pcassets, saveicons, simgroup, snu, stfs, streamfile, streamwrite, toc   # noqa: E402
 except ImportError:
     raise SystemExit('Run this from the repository\'s tools\\test folder: it needs tools\\research next to it '
                      '(copy the whole repository, not just this file).')
@@ -621,6 +621,8 @@ def main():
     ap.add_argument('--ffmpeg', default='ffmpeg')
     ap.add_argument('--work', default=None)
     ap.add_argument('--remove', action='store_true')
+    ap.add_argument('--skip-check', action='store_true',
+                    help='convert even if the add-on\'s files differ from the expected list')
     ap.add_argument('--hijack-ch01', action='store_true',
                     help='older test: New Game loads Severed in place of chapter 1')
     a = ap.parse_args()
@@ -657,6 +659,23 @@ def main():
     root = src.rstrip('\\/')
     while len(os.listdir(root)) == 1 and os.path.isdir(os.path.join(root, os.listdir(root)[0])):
         root = os.path.join(root, os.listdir(root)[0])          # the package's own top folder
+
+    if not os.path.exists(os.path.join(work, 'addon_checked.ok')):
+        log('Checking the add-on\'s 421 files against the expected list')
+        problems = addoncheck.check(root, progress=lambda i, n: log('  %d of %d' % (i, n)))
+        if problems:
+            for p in problems[:30]:
+                log('  ' + p)
+            if len(problems) > 30:
+                log('  ... and %d more' % (len(problems) - 30))
+            if not a.skip_check:
+                raise SystemExit('This copy of the Severed add-on is not the expected one (%d problem(s) above): '
+                                 'nothing was converted. Re-copy it from the console, or run with --skip-check '
+                                 'to convert it anyway.' % len(problems))
+            log('  --skip-check: converting anyway')
+        else:
+            log('  all files as expected')
+            open(os.path.join(work, 'addon_checked.ok'), 'w').write('ok')
 
     left_out = {}
     if not os.path.exists(os.path.join(work, 'converted.ok')):

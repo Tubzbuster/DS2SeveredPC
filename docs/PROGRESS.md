@@ -212,7 +212,8 @@ intro terminal, the alt-tab hang, the gunship hull textures.
   - the European and World copies have the same 421 file hashes (FINDINGS
     1), so one list covers both;
   - on a mismatch, the app names the files that differ and stops, rather
-    than building a broken archive.
+    than building a broken archive. Done in the converter (`ds2/addoncheck.py`,
+    `ds2/addon_hashes.txt`; `--skip-check` converts anyway); the app reuses it.
 - **Severed save pictures and titles (release hook):** the load menu
   (exe 0xBAE170) builds the picture key `chNN` and title `CHNN_TitleString`
   from the save's chapter number alone, so Severed's chapters 1 and 2 share
