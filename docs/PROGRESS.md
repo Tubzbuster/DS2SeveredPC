@@ -199,6 +199,14 @@ intro terminal, the alt-tab hang, the gunship hull textures.
   it as a folder (`--onedir`) zipped for download rather than a single
   self-unpacking exe, which antivirus tools flag more often. Built on a
   GitHub Actions Windows runner from the repo code alone (no game files).
+
+  First version: `tools/app/severed_installer.py` (the window: add-on,
+  game folder, ffmpeg.exe, Install and Remove, the converter's log), built
+  by `tools/app/build_app.bat` into `dist\DS2SeveredPC\` (37 MB on Linux).
+  Checked on Linux: the built app's `--selftest` loads every model and the
+  native library, Remove runs through the window, the window draws. Still
+  to do: a Windows build and a real conversion through it, ffmpeg bundled,
+  game folder found from the Steam library list, the GitHub Actions build.
 - **Check the user's add-on before converting.** People's copies can have
   any file name, so the app identifies the add-on by its contents, not its
   name:

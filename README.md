@@ -341,6 +341,7 @@ These were used to map the formats. You don't need them to try Severed.
   |   |-- research/native/ ...... EA-XAS encoder + RefPack decompressor (C),
   |   |                           reusable in other projects: see its README
   |   |-- test/ ................. Make-SeveredTest / Remove-SeveredTest
+  |   |-- app/ .................. the installer window (first version) and its build script
   |   |-- probe/ ................ dinput8.dll log + hook (C, built with zig)
   |   |-- scan/ export/ samples/ index/ archive/ ... research scripts
   `-- src/ ...................... C# port of the core readers (early)

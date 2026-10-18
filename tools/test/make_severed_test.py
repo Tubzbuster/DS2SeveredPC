@@ -33,7 +33,8 @@ LEVEL_LIST = 0xE4529CFE        # level list (text), identical on PC and 360
 SLOT = 'DS2DAT2.DAT'
 
 
-LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'make_severed_test.log')
+LOG_FILE = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False)   # built app: next to it
+                        else os.path.dirname(os.path.abspath(__file__)), 'make_severed_test.log')
 
 
 def log(*a):
