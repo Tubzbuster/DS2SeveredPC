@@ -2082,3 +2082,6 @@ episode index at +0x974 and the difficulty at +0x978 (0x00A93430 /
 0x00AA8820 set them; 0x00A40D40 starts the game with both). Probe 53 hooks
 the setup after the New Game+ check: with Severed chosen it clears
 Hardcore and points the table's Hardcore text at Severed's line.
+
+Probe 54 undoes the change: Hardcore stays available for Severed as the
+players' choice (its rules apply), and the hook only logs.

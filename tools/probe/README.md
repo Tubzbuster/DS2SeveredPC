@@ -216,3 +216,9 @@ screen: with Severed chosen, Hardcore is greyed out the way the game greys
 it out for New Game+, with that line as its description. The base game's
 list is unchanged. The log shows `difficulty screen: episode N (Severed),
 enabled ...` each time the screen opens.
+
+## Hardcore available again (probe 54)
+
+A Hardcore run of Severed applies Hardcore's rules, so Hardcore is left
+available as a choice for Severed. The probe no longer greys it out; it
+only logs the difficulty screen (`difficulty screen: episode N ...`).

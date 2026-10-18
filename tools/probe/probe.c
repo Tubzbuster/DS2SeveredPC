@@ -1416,8 +1416,8 @@ static int hook_call_reg(BYTE *fn, int len, void (__cdecl *cb)(void *), BYTE pus
  * (Hardcore last, from the profile's unlock) and clears Hardcore for New
  * Game+ (+0x228); a cleared one is shown greyed out with the text at
  * entry 4 of a description table. The front end keeps the chosen episode
- * at +0x974. Hooked right after that check: with Severed chosen, Hardcore
- * is cleared too and its greyed-out text is Severed's own line. */
+ * at +0x974. Probe 53 cleared Hardcore there for Severed; probe 54 keeps
+ * Hardcore available (its rules apply in Severed) and only logs. */
 static const char SIG_DIFF_SCREEN[] =
     "80 BE 28 02 00 00 00 74 07 C6 86 34 02 00 00 00 6A 01 8D 46 10 68 ?? ?? ?? ?? 50";
 static const char SIG_DIFF_DESC[] =
@@ -1448,14 +1448,9 @@ static void __cdecl note_difficulty_screen(void *o)
     log_line("difficulty screen: episode %d%s, enabled %d %d %d %d %d, new game+ %d",
              g_frontend ? *(int *)(g_frontend + 0x974) : -1, sev ? " (Severed)" : "",
              d[0x230], d[0x231], d[0x232], d[0x233], d[0x234], d[0x228]);
-    if (g_locked_desc) {
-        DWORD old;
-        if (VirtualProtect(g_locked_desc, 4, PAGE_READWRITE, &old)) {
-            *g_locked_desc = sev ? SEV_NO_DIFFICULTY : g_locked_desc_orig;
-            VirtualProtect(g_locked_desc, 4, old, &old);
-        }
-    }
-    if (sev) d[0x234] = 0;
+    /* probe 54: Hardcore left available for Severed (its rules apply: the
+       players' choice); the probe only logs the screen */
+    (void)g_locked_desc_orig; (void)SEV_NO_DIFFICULTY;
 }
 
 static void hook_difficulty(void)
@@ -2951,7 +2946,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 53 - process %s", path);
+    log_line("severed probe 54 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
