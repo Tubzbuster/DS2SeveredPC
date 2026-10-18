@@ -2,7 +2,7 @@ name: Build installer app
 
 # Builds the DS2SeveredPC wizard for Windows from the repository's code alone
 # (no game files): its own Python (PyInstaller) and an LGPL ffmpeg build.
-# The result is the "DS2SeveredPC-app" artifact of the run.
+# The result is the "DS2SeveredPC-ConverterTool" artifact of the run.
 # Manual only (Actions > Build installer app > Run workflow) while the DLC is
 # still being made playable; builds on push come back for the release.
 on:
@@ -66,5 +66,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DS2SeveredPC-app
+          name: DS2SeveredPC-ConverterTool
           path: tools/app/dist/DS2SeveredPC
