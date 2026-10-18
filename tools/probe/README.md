@@ -17,6 +17,24 @@ It works as a `dinput8.dll` proxy: the game loads it from its own folder,
 it installs the logger, then passes every DirectInput call on to the real
 Windows `dinput8.dll`. It never modifies `deadspace2.exe` or any game file.
 
+
+## The release hook (56)
+
+Since v0.8.5 `probe.c` is the slimmed-down hook that ships with the
+converter. It keeps only what the game needs:
+- Severed in the episode select (front end constructor + AddEpisode);
+- Gabe's Pulse Rifle upgrades (UpgradeManager, on the level message
+  `equip_player_upgrade_nodes` and at each Severed level start);
+- the ending: in the Severed level the end-of-game sequence goes from the
+  New Game+ popup state straight to its return to the main menu;
+- F7: sends the lines of `severed_send.txt` as level messages (testing);
+- `severed_probe.log`: hook status, level starts and crash reports.
+
+Everything else below (file and archive logging, message, sequence and
+SimGroup traces, the Direct3D guard, position watches, heap checks,
+reflection scans) was research and is gone from the source; it is in the
+git history up to probe 55 (commit a118774) for later research.
+
 ## How to use
 
 1. If the Dead Space 2 folder already has a `dinput8.dll` (from another mod),

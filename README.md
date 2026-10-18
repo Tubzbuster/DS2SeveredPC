@@ -22,7 +22,7 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed 
   Platform ..... Windows (PC)
-  Version ...... 0.8.2 (beta: fully playable, test builds)
+  Version ...... 0.8.5 (fully playable, start to finish)
   Author ....... tubzbuster
   Updated ...... 2026-10-18
 ================================================================================
@@ -77,6 +77,40 @@ Unfortunately at this stage it isn't compatible with anything else that requires
 [SV00]                         VERSION HISTORY
 ================================================================================
 ```
+
+**v0.8.5 (2026-10-18)**: first full release. Severed is fully playable
+on PC from start to finish: the opening in the mines, all of chapter 1 and
+chapter 2, the final fight, the last stand, the ending video, the end
+screens and the credits, then back to the main menu. Changes since v0.8.2:
+- the ending returns straight to the main menu, as on the console: no
+  "save for New Game+" popup and no New Unlocks screen (Severed has no
+  New Game+)
+- the ending's end screens and its fade to black confirmed fixed
+- Hardcore stays available as a choice for Severed (the console did not
+  offer it; Hardcore's rules apply)
+- the hook DLL is slimmed down to what the game needs: Severed in the
+  episode select, Gabe's Pulse Rifle upgrades, the ending, and F7 for
+  test messages. The research logging is gone (no more file-by-file log,
+  less work while playing); `severed_probe.log` now holds a short status
+  log and crash reports
+- a ready-made F7 test file (`tools/probe/severed_send.txt`): invincibility
+  and the door to the final fight
+
+Note: **saves use the base game's save icons and chapter titles**, so
+Severed saves look like Dead Space 2 saves in the load menu. They load
+Severed as normal.
+
+Still to fix (minor, none blocks the game): a pale see-through sheet under
+the Oracle corpses (perhaps as on the console); the save station can lock
+up if used again while it closes; frame drops near some lights in the drill
+tunnel. See `docs/PROGRESS.md`.
+
+<details><summary>Not a bug (spoiler)</summary>
+
+Gabe's legs come back for the last few seconds after the four airlock
+fuses: the console version shows the same.
+
+</details>
 
 **v0.8.2 (2026-10-18)**: Severed is fully playable on PC, from the
 opening in the mines to the end credits. Every area of chapter 1 and
@@ -227,14 +261,14 @@ How it works:
 | Severed in the episode select | Works (via the hook DLL) |
 | Chapter 1: drill tunnel, quarry, mining camp, hanging fight, docking station, gunship | Fully playable |
 | Chapter 2: crash landing, hospital, psych ward, security room, chase hall, landing bay finale | Fully playable |
-| Ending: final fight, last stand, ending video, end screens, credits | Plays to the credits (minor issues, see v0.8.2 in [SV00]) |
-| After the credits | Back to the main menu, as on the console (Severed has no New Game+; probe 55) |
+| Ending: final fight, last stand, ending video, end screens, credits | Works |
+| After the credits | Back to the main menu, as on the console (Severed has no New Game+) |
 | Sound, dialogue, audio logs, videos, music | Works |
 | Cutscenes and animations | Works |
 | Necromorph AI and navigation, Tormentor boss | Works |
 | Physics and collision | Works |
 | Playing as Gabe (security suit), HUD, inventory, starting weapons with the Pulse Rifle upgrades | Works |
-| Stores, benches, save stations | Work (suit packs removed from the stores; saves show the base game's chapter titles and pictures for now) |
+| Stores, benches, save stations | Work (suit packs removed from the stores; saves show the base game's save icons and chapter titles) |
 | Levels and geometry | Works (the black slabs in the hospital are fixed) |
 | Textures | Works |
 | Save stations | Can lock up if used again while the terminal is closing |

@@ -1,60 +1,49 @@
 /*
- * Severed probe: a dinput8.dll proxy for Dead Space 2 (PC, 32-bit) that
- * logs every file the game tries to open or look up, then forwards to the
- * real dinput8.dll. It changes nothing about how the game behaves.
+ * Severed hook: a dinput8.dll proxy for Dead Space 2 (PC, 32-bit) that
+ * makes the converted Severed DLC playable, then forwards to the real
+ * dinput8.dll. Nothing on disk is changed: the game's code is patched in
+ * memory only, at places found by byte pattern once the Steam wrapper has
+ * decrypted it.
  *
- * Output: severed_probe.log next to deadspace2.exe.
+ * What it does:
+ *   - adds "Dead Space 2: Severed" to the episode select (the PC has no
+ *     DLC loader for the console's weller1.lvl);
+ *   - gives Gabe his pre-upgraded Pulse Rifle, as the console DLC does;
+ *   - ends Severed the console way: back to the main menu after the
+ *     credits, without the base game's New Game+ popup and unlocks;
+ *   - F7 sends the level messages listed in severed_send.txt (testing);
+ *   - writes a short log, with a crash report, to severed_probe.log next
+ *     to deadspace2.exe.
  *
- * Version 2 also tracks reads from the game's archives (DS2DAT*.DAT,
- * *.viv): when one is opened, the probe reads its directory itself and logs
- * the first read of each entry ("READ DS2DAT6.DAT #C2B10B96 ..."), so we
- * can see which archive each file is actually loaded from.
- *
- * Hooks are "hot-patch" hooks on Windows' own file functions in
- * kernelbase.dll (or kernel32.dll): the 5 padding bytes before the
- * function become a jump to our logger and the 2-byte `mov edi,edi` at the
- * start becomes a short jump back to it. The game's own code is never
- * touched. A function without that standard prologue is left alone and
- * reported in the log.
+ * The research probe this grew from (file and archive logging, message
+ * and sequence traces, Direct3D checks) is in the history up to probe 55
+ * (tools/probe/README.md).
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include <stdlib.h>
 #include <string.h>
+
+#define HOOK_VERSION "56"
 
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_cs;
 static HMODULE g_real;
 static DWORD g_tick0;
-static DWORD g_tls = TLS_OUT_OF_INDEXES;
 static LONG g_lines;
-#define MAX_LINES 300000
-#define CRASH_RESERVE 20000
-static volatile DWORD g_crash_thread;  /* thread inside crash_handler */
+#define MAX_LINES 20000
 
 /* ---- logging ---------------------------------------------------------- */
 
 static void log_line(const char *fmt, ...)
 {
-    char buf[4096];
+    char buf[1024];
     va_list ap;
     int n, m;
     DWORD w;
 
-    if (g_log == INVALID_HANDLE_VALUE) return;
-    n = InterlockedIncrement(&g_lines);
-    /* past the cap only the crash handler still writes (up to a reserve) */
-    if (n > MAX_LINES && (GetCurrentThreadId() != g_crash_thread || n > MAX_LINES + CRASH_RESERVE)) {
-        if (n == MAX_LINES + 1) {
-            static const char cap[] = "log limit reached: only crash reports are logged from here\r\n";
-            EnterCriticalSection(&g_cs);
-            WriteFile(g_log, cap, sizeof cap - 1, &w, NULL);
-            LeaveCriticalSection(&g_cs);
-        }
-        return;
-    }
+    if (g_log == INVALID_HANDLE_VALUE || InterlockedIncrement(&g_lines) > MAX_LINES) return;
     n = _snprintf(buf, sizeof buf, "%8lu [%5lu] ", GetTickCount() - g_tick0, GetCurrentThreadId());
     if (n < 0) n = 0;
     va_start(ap, fmt);
@@ -69,926 +58,16 @@ static void log_line(const char *fmt, ...)
     LeaveCriticalSection(&g_cs);
 }
 
-static void caller_name(void *addr, char *out, int len)
+/* a file next to deadspace2.exe */
+static void game_file(char *path, const char *name)
 {
-    HMODULE mod = NULL;
-    char path[MAX_PATH];
-    const char *base;
-
-    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            (LPCSTR)addr, &mod) || !GetModuleFileNameA(mod, path, sizeof path)) {
-        _snprintf(out, len, "%p", addr);
-        return;
-    }
-    base = strrchr(path, '\\');
-    base = base ? base + 1 : path;
-    _snprintf(out, len, "%s+0x%lx", base, (unsigned long)((char *)addr - (char *)mod));
-}
-
-static void wide_to_utf8(LPCWSTR w, char *out, int len)
-{
-    if (!w) { lstrcpynA(out, "(null)", len); return; }
-    if (!WideCharToMultiByte(CP_UTF8, 0, w, -1, out, len, NULL, NULL)) lstrcpynA(out, "(unconvertible)", len);
-}
-
-/* Re-entrancy guard: CreateFileA calls CreateFileW internally, and only the
-   outermost call should be logged. */
-static int enter(void)
-{
-    LONG_PTR d;
-    if (g_tls == TLS_OUT_OF_INDEXES) return 0;
-    d = (LONG_PTR)TlsGetValue(g_tls);
-    TlsSetValue(g_tls, (LPVOID)(d + 1));
-    return d == 0;
-}
-
-static void leave(void)
-{
-    if (g_tls == TLS_OUT_OF_INDEXES) return;
-    TlsSetValue(g_tls, (LPVOID)((LONG_PTR)TlsGetValue(g_tls) - 1));
-}
-
-static const char *access_str(DWORD a)
-{
-    if ((a & GENERIC_WRITE) && (a & GENERIC_READ)) return "rw";
-    if (a & GENERIC_WRITE) return "w";
-    if (a & GENERIC_READ) return "r";
-    return "-";
-}
-
-/* ---- hooks ------------------------------------------------------------ */
-
-typedef HANDLE (WINAPI *CreateFileA_t)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
-typedef HANDLE (WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
-typedef HANDLE (WINAPI *FindFirstFileA_t)(LPCSTR, LPWIN32_FIND_DATAA);
-typedef HANDLE (WINAPI *FindFirstFileW_t)(LPCWSTR, LPWIN32_FIND_DATAW);
-typedef HANDLE (WINAPI *FindFirstFileExA_t)(LPCSTR, FINDEX_INFO_LEVELS, LPVOID, FINDEX_SEARCH_OPS, LPVOID, DWORD);
-typedef HANDLE (WINAPI *FindFirstFileExW_t)(LPCWSTR, FINDEX_INFO_LEVELS, LPVOID, FINDEX_SEARCH_OPS, LPVOID, DWORD);
-typedef DWORD (WINAPI *GetFileAttributesA_t)(LPCSTR);
-typedef DWORD (WINAPI *GetFileAttributesW_t)(LPCWSTR);
-typedef BOOL (WINAPI *GetFileAttributesExA_t)(LPCSTR, GET_FILEEX_INFO_LEVELS, LPVOID);
-typedef BOOL (WINAPI *GetFileAttributesExW_t)(LPCWSTR, GET_FILEEX_INFO_LEVELS, LPVOID);
-
-static CreateFileA_t o_CreateFileA;
-static CreateFileW_t o_CreateFileW;
-static FindFirstFileA_t o_FindFirstFileA;
-static FindFirstFileW_t o_FindFirstFileW;
-static FindFirstFileExA_t o_FindFirstFileExA;
-static FindFirstFileExW_t o_FindFirstFileExW;
-static GetFileAttributesA_t o_GetFileAttributesA;
-static GetFileAttributesW_t o_GetFileAttributesW;
-static GetFileAttributesExA_t o_GetFileAttributesExA;
-static GetFileAttributesExW_t o_GetFileAttributesExW;
-
-static void track_open_w(LPCWSTR wpath, const char *u8path, HANDLE h);
-static void track_open_a(LPCSTR path, HANDLE h);
-
-#define CALLER(v) char v[96]; caller_name(__builtin_return_address(0), v, sizeof v)
-
-static HANDLE WINAPI h_CreateFileA(LPCSTR n, DWORD a, DWORD s, LPSECURITY_ATTRIBUTES sa, DWORD c, DWORD f, HANDLE t)
-{
-    int top = enter();
-    HANDLE r = o_CreateFileA(n, a, s, sa, c, f, t);
-    DWORD e = GetLastError();
-    if (top) { CALLER(cl); log_line("CreateFileA  %-2s %s -> %s (err %lu) from %s", access_str(a), n ? n : "(null)", r == INVALID_HANDLE_VALUE ? "FAIL" : "ok", r == INVALID_HANDLE_VALUE ? e : 0, cl); track_open_a(n, r); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static HANDLE WINAPI h_CreateFileW(LPCWSTR n, DWORD a, DWORD s, LPSECURITY_ATTRIBUTES sa, DWORD c, DWORD f, HANDLE t)
-{
-    int top = enter();
-    HANDLE r = o_CreateFileW(n, a, s, sa, c, f, t);
-    DWORD e = GetLastError();
-    if (top) { char p[1024]; CALLER(cl); wide_to_utf8(n, p, sizeof p); log_line("CreateFileW  %-2s %s -> %s (err %lu) from %s", access_str(a), p, r == INVALID_HANDLE_VALUE ? "FAIL" : "ok", r == INVALID_HANDLE_VALUE ? e : 0, cl); track_open_w(n, p, r); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static HANDLE WINAPI h_FindFirstFileA(LPCSTR n, LPWIN32_FIND_DATAA d)
-{
-    int top = enter();
-    HANDLE r = o_FindFirstFileA(n, d);
-    DWORD e = GetLastError();
-    if (top) { CALLER(cl); log_line("FindFirstA      %s -> %s from %s", n ? n : "(null)", r == INVALID_HANDLE_VALUE ? "none" : d->cFileName, cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static HANDLE WINAPI h_FindFirstFileW(LPCWSTR n, LPWIN32_FIND_DATAW d)
-{
-    int top = enter();
-    HANDLE r = o_FindFirstFileW(n, d);
-    DWORD e = GetLastError();
-    if (top) { char p[1024], q[MAX_PATH * 3]; CALLER(cl); wide_to_utf8(n, p, sizeof p); if (r != INVALID_HANDLE_VALUE) wide_to_utf8(d->cFileName, q, sizeof q); else lstrcpyA(q, "none"); log_line("FindFirstW      %s -> %s from %s", p, q, cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static HANDLE WINAPI h_FindFirstFileExA(LPCSTR n, FINDEX_INFO_LEVELS l, LPVOID d, FINDEX_SEARCH_OPS o, LPVOID sf, DWORD fl)
-{
-    int top = enter();
-    HANDLE r = o_FindFirstFileExA(n, l, d, o, sf, fl);
-    DWORD e = GetLastError();
-    if (top) { CALLER(cl); log_line("FindFirstExA    %s -> %s from %s", n ? n : "(null)", r == INVALID_HANDLE_VALUE ? "none" : ((LPWIN32_FIND_DATAA)d)->cFileName, cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static HANDLE WINAPI h_FindFirstFileExW(LPCWSTR n, FINDEX_INFO_LEVELS l, LPVOID d, FINDEX_SEARCH_OPS o, LPVOID sf, DWORD fl)
-{
-    int top = enter();
-    HANDLE r = o_FindFirstFileExW(n, l, d, o, sf, fl);
-    DWORD e = GetLastError();
-    if (top) { char p[1024], q[MAX_PATH * 3]; CALLER(cl); wide_to_utf8(n, p, sizeof p); if (r != INVALID_HANDLE_VALUE) wide_to_utf8(((LPWIN32_FIND_DATAW)d)->cFileName, q, sizeof q); else lstrcpyA(q, "none"); log_line("FindFirstExW    %s -> %s from %s", p, q, cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static DWORD WINAPI h_GetFileAttributesA(LPCSTR n)
-{
-    int top = enter();
-    DWORD r = o_GetFileAttributesA(n);
-    DWORD e = GetLastError();
-    if (top) { CALLER(cl); log_line("GetAttrA        %s -> %s from %s", n ? n : "(null)", r == INVALID_FILE_ATTRIBUTES ? "missing" : (r & FILE_ATTRIBUTE_DIRECTORY ? "dir" : "file"), cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static DWORD WINAPI h_GetFileAttributesW(LPCWSTR n)
-{
-    int top = enter();
-    DWORD r = o_GetFileAttributesW(n);
-    DWORD e = GetLastError();
-    if (top) { char p[1024]; CALLER(cl); wide_to_utf8(n, p, sizeof p); log_line("GetAttrW        %s -> %s from %s", p, r == INVALID_FILE_ATTRIBUTES ? "missing" : (r & FILE_ATTRIBUTE_DIRECTORY ? "dir" : "file"), cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static BOOL WINAPI h_GetFileAttributesExA(LPCSTR n, GET_FILEEX_INFO_LEVELS l, LPVOID d)
-{
-    int top = enter();
-    BOOL r = o_GetFileAttributesExA(n, l, d);
-    DWORD e = GetLastError();
-    if (top) { CALLER(cl); log_line("GetAttrExA      %s -> %s from %s", n ? n : "(null)", r ? "found" : "missing", cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-static BOOL WINAPI h_GetFileAttributesExW(LPCWSTR n, GET_FILEEX_INFO_LEVELS l, LPVOID d)
-{
-    int top = enter();
-    BOOL r = o_GetFileAttributesExW(n, l, d);
-    DWORD e = GetLastError();
-    if (top) { char p[1024]; CALLER(cl); wide_to_utf8(n, p, sizeof p); log_line("GetAttrExW      %s -> %s from %s", p, r ? "found" : "missing", cl); }
-    leave();
-    SetLastError(e);
-    return r;
-}
-
-
-/* ---- archive read tracking -------------------------------------------- */
-
-typedef BOOL (WINAPI *ReadFile_t)(HANDLE, LPVOID, DWORD, LPDWORD, LPOVERLAPPED);
-typedef BOOL (WINAPI *CloseHandle_t)(HANDLE);
-static ReadFile_t o_ReadFile;
-static CloseHandle_t o_CloseHandle;
-
-typedef struct { DWORD off, size, hash; } Entry;
-typedef struct {
-    char name[64];
-    Entry *ent;
-    DWORD n, dir_end;
-    BYTE *seen;
-    int dir_logged, stray_logged;
-} Archive;
-
-#define MAX_ARCH 32
-#define MAX_HANDLES 256
-static Archive g_arch[MAX_ARCH];
-static volatile LONG g_narch;
-static struct { HANDLE h; int a; } g_hmap[MAX_HANDLES];
-static volatile LONG g_nh;
-static CRITICAL_SECTION g_acs;
-
-static DWORD be32(const BYTE *p) { return (DWORD)p[0] << 24 | (DWORD)p[1] << 16 | (DWORD)p[2] << 8 | p[3]; }
-
-static int cmp_ent(const void *a, const void *b)
-{
-    DWORD x = ((const Entry *)a)->off, y = ((const Entry *)b)->off;
-    return x < y ? -1 : x > y;
-}
-
-static const char *base_name(const char *path)
-{
-    const char *a = strrchr(path, '\\'), *b = strrchr(path, '/');
-    if (b > a) a = b;
-    return a ? a + 1 : path;
-}
-
-static int is_archive(const char *path)
-{
-    const char *b = base_name(path);
-    size_t n = strlen(b);
-    if (n < 5) return 0;
-    if (_stricmp(b + n - 4, ".viv") == 0) return 1;
-    return _stricmp(b + n - 4, ".DAT") == 0 && _strnicmp(b, "DS2DAT", 6) == 0;
-}
-
-static BOOL raw_read(HANDLE h, void *buf, DWORD n)
-{
-    DWORD got = 0;
-    ReadFile_t rf = o_ReadFile ? o_ReadFile : ReadFile;
-    return rf(h, buf, n, &got, NULL) && got == n;
-}
-
-/* Find or load the directory of an archive; returns its index or -1. */
-static int load_archive(const char *u8path, HANDLE own)
-{
-    const char *b = base_name(u8path);
-    BYTE hdr[16], *dir = NULL;
-    DWORD count, i;
-    Archive *ar;
-    int idx;
-
-    for (idx = 0; idx < g_narch; idx++)
-        if (_stricmp(g_arch[idx].name, b) == 0) return idx;
-    if (g_narch >= MAX_ARCH || own == INVALID_HANDLE_VALUE) return -1;
-    if (!raw_read(own, hdr, 16) || memcmp(hdr, "BIGH", 4) != 0) { log_line("archive %s: not a BIGH archive", b); return -1; }
-    count = be32(hdr + 8);
-    if (count == 0 || count > 200000) { log_line("archive %s: bad entry count %lu", b, count); return -1; }
-    dir = (BYTE *)HeapAlloc(GetProcessHeap(), 0, count * 12);
-    ar = &g_arch[g_narch];
-    ar->ent = (Entry *)HeapAlloc(GetProcessHeap(), 0, count * sizeof(Entry));
-    ar->seen = (BYTE *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, count);
-    if (!dir || !ar->ent || !ar->seen || !raw_read(own, dir, count * 12)) {
-        log_line("archive %s: could not read directory", b);
-        if (dir) HeapFree(GetProcessHeap(), 0, dir);
-        if (ar->ent) HeapFree(GetProcessHeap(), 0, ar->ent);
-        if (ar->seen) HeapFree(GetProcessHeap(), 0, ar->seen);
-        ar->ent = NULL; ar->seen = NULL;
-        return -1;
-    }
-    for (i = 0; i < count; i++) {
-        ar->ent[i].off = be32(dir + i * 12);
-        ar->ent[i].size = be32(dir + i * 12 + 4);
-        ar->ent[i].hash = be32(dir + i * 12 + 8);
-    }
-    HeapFree(GetProcessHeap(), 0, dir);
-    qsort(ar->ent, count, sizeof(Entry), cmp_ent);
-    lstrcpynA(ar->name, b, sizeof ar->name);
-    ar->n = count;
-    ar->dir_end = be32(hdr + 12);
-    ar->dir_logged = ar->stray_logged = 0;
-    log_line("archive %s: %lu entries, directory read", ar->name, count);
-    {
-        /* which name form Severed's first dialogue streams are stored under */
-        static const DWORD probe_h[4] = { 0xC35FDD3DUL, 0x4E3C38B9UL, 0xB3303B75UL, 0x6BF04984UL };
-        static const char *probe_n[4] = { "360 path vo_01_01", "360 path igc_01_01", "PC path vo_01_01", "PC path igc_01_01" };
-        int k;
-        for (k = 0; k < 4; k++)
-            for (i = 0; i < count; i++)
-                if (ar->ent[i].hash == probe_h[k]) { log_line("archive %s: has %s (#%08lX)", ar->name, probe_n[k], probe_h[k]); break; }
-    }
-    return (int)InterlockedIncrement(&g_narch) - 1;
-}
-
-static void track_open(const char *u8path, HANDLE h, HANDLE own)
-{
-    int a, i, slot = -1;
-    if (h == INVALID_HANDLE_VALUE || !is_archive(u8path)) return;
-    EnterCriticalSection(&g_acs);
-    a = load_archive(u8path, own);
-    if (a >= 0) {
-        for (i = 0; i < g_nh; i++) if (g_hmap[i].h == NULL || g_hmap[i].h == h) { slot = i; break; }
-        if (slot < 0 && g_nh < MAX_HANDLES) slot = (int)g_nh++;
-        if (slot >= 0) { g_hmap[slot].h = h; g_hmap[slot].a = a; }
-    }
-    LeaveCriticalSection(&g_acs);
-}
-
-static int archive_of(HANDLE h)
-{
-    int i, a = -1;
-    if (g_nh == 0 || h == NULL || h == INVALID_HANDLE_VALUE) return -1;
-    EnterCriticalSection(&g_acs);
-    for (i = 0; i < g_nh; i++) if (g_hmap[i].h == h) { a = g_hmap[i].a; break; }
-    LeaveCriticalSection(&g_acs);
-    return a;
-}
-
-static void note_read(int a, ULONGLONG pos, DWORD n, void *ret)
-{
-    Archive *ar = &g_arch[a];
-    long lo = 0, hi = (long)ar->n - 1, best = -1;
-    char cl[96];
-
-    EnterCriticalSection(&g_acs);
-    if (pos < ar->dir_end) {
-        if (!ar->dir_logged) { ar->dir_logged = 1; caller_name(ret, cl, sizeof cl); log_line("READ %s directory (%lu bytes at 0x%llx) from %s", ar->name, n, pos, cl); }
-        LeaveCriticalSection(&g_acs);
-        return;
-    }
-    while (lo <= hi) {
-        long mid = (lo + hi) / 2;
-        if (ar->ent[mid].off <= pos) { best = mid; lo = mid + 1; } else hi = mid - 1;
-    }
-    if (best >= 0 && pos < (ULONGLONG)ar->ent[best].off + ar->ent[best].size) {
-        static LONG ours;
-        if (!lstrcmpiA(ar->name, "DS2DAT2.DAT") && ar->seen[best] && ours < 50000) {
-            ours++;     /* every read of the Severed test archive: shows which asset is being loaded */
-            log_line("READ %s #%08lX +0x%llx len %lu", ar->name, ar->ent[best].hash, pos - ar->ent[best].off, n);
-        }
-        if (!ar->seen[best]) {
-            ar->seen[best] = 1;
-            caller_name(ret, cl, sizeof cl);
-            log_line("READ %s #%08lX +0x%llx len %lu (entry %lu bytes) from %s", ar->name, ar->ent[best].hash,
-                     pos - ar->ent[best].off, n, ar->ent[best].size, cl);
-        }
-    } else if (ar->stray_logged < 20) {
-        ar->stray_logged++;
-        log_line("READ %s at 0x%llx len %lu: not inside any entry", ar->name, pos, n);
-    }
-    LeaveCriticalSection(&g_acs);
-}
-
-static BOOL WINAPI h_ReadFile(HANDLE h, LPVOID buf, DWORD n, LPDWORD rd, LPOVERLAPPED ov)
-{
-    int a = archive_of(h);
-    LARGE_INTEGER pos;
-    BOOL r;
-    DWORD e;
-
-    pos.QuadPart = -1;
-    if (a >= 0) {
-        if (ov) pos.QuadPart = (LONGLONG)(((ULONGLONG)ov->OffsetHigh << 32) | ov->Offset);
-        else {
-            LARGE_INTEGER z;
-            z.QuadPart = 0;
-            if (!SetFilePointerEx(h, z, &pos, FILE_CURRENT)) pos.QuadPart = -1;
-        }
-    }
-    r = o_ReadFile(h, buf, n, rd, ov);
-    e = GetLastError();
-    if (a >= 0 && pos.QuadPart >= 0) note_read(a, (ULONGLONG)pos.QuadPart, n, __builtin_return_address(0));
-    SetLastError(e);
-    return r;
-}
-
-static BOOL WINAPI h_CloseHandle(HANDLE h)
-{
-    if (g_nh) {
-        int i;
-        EnterCriticalSection(&g_acs);
-        for (i = 0; i < g_nh; i++) if (g_hmap[i].h == h) g_hmap[i].h = NULL;
-        LeaveCriticalSection(&g_acs);
-    }
-    return o_CloseHandle(h);
-}
-
-/* Open a second handle of our own to read an archive's directory. */
-static void track_open_w(LPCWSTR wpath, const char *u8path, HANDLE h)
-{
-    HANDLE own;
-    if (h == INVALID_HANDLE_VALUE || !is_archive(u8path)) return;
-    own = o_CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-    track_open(u8path, h, own);
-    if (own != INVALID_HANDLE_VALUE) o_CloseHandle ? o_CloseHandle(own) : CloseHandle(own);
-}
-
-static void track_open_a(LPCSTR path, HANDLE h)
-{
-    HANDLE own;
-    if (!path || h == INVALID_HANDLE_VALUE || !is_archive(path)) return;
-    own = o_CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-    track_open(path, h, own);
-    if (own != INVALID_HANDLE_VALUE) o_CloseHandle ? o_CloseHandle(own) : CloseHandle(own);
-}
-
-/* ---- hot-patch installer ---------------------------------------------- */
-
-static int hotpatch(BYTE *fn, void *hook, void **orig)
-{
-    BYTE *pad = fn - 5;
-    DWORD old;
-    int i;
-
-    if (fn[0] != 0x8B || fn[1] != 0xFF) return 0;                   /* mov edi,edi */
-    for (i = 0; i < 5; i++) if (pad[i] != 0x90 && pad[i] != 0xCC) return 0;
-    if (!VirtualProtect(pad, 7, PAGE_EXECUTE_READWRITE, &old)) return 0;
-    *orig = fn + 2;
-    pad[0] = 0xE9;                                                   /* jmp hook */
-    *(DWORD *)(pad + 1) = (DWORD)((BYTE *)hook - (pad + 5));
-    *(volatile WORD *)fn = 0xF9EB;                                   /* jmp short -7 */
-    VirtualProtect(pad, 7, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), pad, 7);
-    return 1;
-}
-
-/* Length of one instruction from the small set found at the start of
-   Windows API functions, or 0 if it is not one we can relocate safely
-   (anything IP-relative such as call/jmp rel32 is refused). */
-static int insn_len(const BYTE *p)
-{
-    if (p[0] >= 0x50 && p[0] <= 0x57) return 1;                 /* push reg */
-    if (p[0] == 0x6A) return 2;                                 /* push imm8 */
-    if (p[0] == 0x68) return 5;                                 /* push imm32 */
-    if (p[0] == 0x8B && (p[1] == 0xFF || p[1] == 0xEC)) return 2; /* mov edi,edi / mov ebp,esp */
-    if (p[0] == 0x83 && p[1] == 0xEC) return 3;                 /* sub esp, imm8 */
-    if (p[0] == 0x81 && p[1] == 0xEC) return 6;                 /* sub esp, imm32 */
-    if (p[0] == 0x33 && (p[1] & 0xC0) == 0xC0) return 2;        /* xor reg, reg */
-    if (p[0] == 0x64 && p[1] == 0xA1) return 6;                 /* mov eax, fs:[imm32] */
-    return 0;
-}
-
-/* Classic detour: copy the first >=5 bytes of whole instructions to a
-   trampoline that jumps back, then put a jmp to the hook at the start. */
-static int trampoline(BYTE *fn, void *hook, void **orig)
-{
-    int len = 0, l;
-    BYTE *t;
-    DWORD old;
-
-    while (len < 5) {
-        if ((l = insn_len(fn + len)) == 0) return 0;
-        len += l;
-    }
-    t = (BYTE *)VirtualAlloc(NULL, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!t) return 0;
-    memcpy(t, fn, len);
-    t[len] = 0xE9;
-    *(DWORD *)(t + len + 1) = (DWORD)((fn + len) - (t + len + 5));
-    FlushInstructionCache(GetCurrentProcess(), t, 32);
-    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
-    *orig = t;
-    fn[0] = 0xE9;
-    *(DWORD *)(fn + 1) = (DWORD)((BYTE *)hook - (fn + 5));
-    for (l = 5; l < len; l++) fn[l] = 0x90;
-    VirtualProtect(fn, len, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), fn, len);
-    return 1;
-}
-
-/* kernel32 export that is only "jmp dword ptr [slot]": point the slot at us. */
-static int stub_pointer(BYTE *fn, void *hook, void **orig)
-{
-    void **slot;
-    DWORD old;
-    if (fn[0] != 0xFF || fn[1] != 0x25) return 0;
-    slot = *(void ***)(fn + 2);
-    if (!VirtualProtect(slot, sizeof *slot, PAGE_READWRITE, &old)) return 0;
-    *orig = *slot;
-    *slot = hook;
-    VirtualProtect(slot, sizeof *slot, old, &old);
-    return 1;
-}
-
-static void install(const char *name, void *hook, void **orig)
-{
-    static const char *mods[] = { "kernelbase.dll", "kernel32.dll", "user32.dll" };
-    int i;
-    for (i = 0; i < 3; i++) {
-        HMODULE m = GetModuleHandleA(mods[i]);
-        if (!m && i == 2) m = LoadLibraryA("user32.dll");
-        BYTE *fn = m ? (BYTE *)GetProcAddress(m, name) : NULL;
-        if (!fn) continue;
-        if (hotpatch(fn, hook, orig)) { log_line("hooked %s in %s (hot-patch)", name, mods[i]); return; }
-        if (trampoline(fn, hook, orig)) { log_line("hooked %s in %s (trampoline)", name, mods[i]); return; }
-        if (stub_pointer(fn, hook, orig)) { log_line("hooked %s in %s (stub pointer)", name, mods[i]); return; }
-        log_line("could not hook %s in %s (first bytes %02X %02X %02X %02X %02X %02X %02X)", name, mods[i], fn[0], fn[1], fn[2], fn[3], fn[4], fn[5], fn[6]);
-    }
-}
-
-/* ---- reflection scan (version 4) --------------------------------------
- *
- * Severed's level objects are stored as packed per-class records, so
- * converting them needs the field layout of each class (which fields are
- * 32-bit values, which are bytes or strings). The game builds that
- * information in memory at startup. Pressing F10 makes the probe look,
- * read-only, for it:
- *
- *   - places in memory that point at one of the class names in
- *     reflect_names.h (plain strings in the exe), up to 8 per name, with
- *     the 128 bytes around each and 32 bytes from each nearby pointer;
- *   - a copy of the exe's .data section as it is in memory
- *     (severed_data.bin);
- *   - how often two SimGroup format markers occur in the loaded exe.
- *
- * Memory is read with ReadProcessMemory on the game's own process, so
- * memory that goes away during the scan is skipped instead of crashing.
- */
-#include "reflect_names.h"
-#define NNAMES ((int)(sizeof g_reflect_names / sizeof g_reflect_names[0]))
-
-typedef struct { DWORD addr; int name; } target_t;
-static target_t g_targets[4096];
-static int g_ntargets;
-static int g_hits_per_name[NNAMES];
-static HANDLE g_out = INVALID_HANDLE_VALUE;
-
-static void out_text(const char *fmt, ...)
-{
-    char buf[2048];
-    va_list ap;
-    int n;
-    DWORD w;
-    va_start(ap, fmt);
-    n = _vsnprintf(buf, sizeof buf - 2, fmt, ap);
-    va_end(ap);
-    if (n < 0) n = (int)sizeof buf - 3;
-    buf[n++] = '\r';
-    buf[n++] = '\n';
-    WriteFile(g_out, buf, n, &w, NULL);
-}
-
-static int readable(DWORD addr, DWORD *region_end, DWORD *type)
-{
-    MEMORY_BASIC_INFORMATION mi;
-    DWORD p;
-    if (region_end) *region_end = 0;
-    if (!VirtualQuery((void *)addr, &mi, sizeof mi)) return 0;
-    if (region_end) *region_end = (DWORD)mi.BaseAddress + mi.RegionSize;
-    if (type) *type = mi.Type;
-    if (mi.State != MEM_COMMIT) return 0;
-    p = mi.Protect;
-    if (p & (PAGE_GUARD | PAGE_NOACCESS)) return 0;
-    return (p & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
-                 PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) != 0;
-}
-
-static int copy_mem(DWORD addr, void *buf, DWORD len)
-{
-    SIZE_T got = 0;
-    return ReadProcessMemory(GetCurrentProcess(), (void *)addr, buf, len, &got) && got == len;
-}
-
-static int cmp_target(const void *a, const void *b)
-{
-    DWORD x = ((const target_t *)a)->addr, y = ((const target_t *)b)->addr;
-    return x < y ? -1 : x > y;
-}
-
-static int find_target(DWORD v)
-{
-    int lo = 0, hi = g_ntargets - 1;
-    if (g_ntargets == 0 || v < g_targets[0].addr || v > g_targets[g_ntargets - 1].addr) return -1;
-    while (lo <= hi) {
-        int mid = (lo + hi) / 2;
-        if (g_targets[mid].addr == v) return mid;
-        if (g_targets[mid].addr < v) lo = mid + 1; else hi = mid - 1;
-    }
-    return -1;
-}
-
-static void hexline(const char *tag, DWORD addr, const BYTE *b, int n)
-{
-    char s[3 * 64 + 1];
-    int i;
-    for (i = 0; i < n && i < 64; i++) wsprintfA(s + 3 * i, "%02X ", b[i]);
-    s[3 * i] = 0;
-    out_text("%s %08lX %s", tag, addr, s);
-}
-
-/* a short printable NUL-terminated string at addr, or 0 */
-static int string_at(DWORD addr, char *out, int len)
-{
-    BYTE b[64];
-    int i;
-    if (!readable(addr, NULL, NULL) || !copy_mem(addr, b, sizeof b)) return 0;
-    for (i = 0; i < len - 1 && i < (int)sizeof b; i++) {
-        if (b[i] == 0) break;
-        if (b[i] < 32 || b[i] > 126) return 0;
-        out[i] = (char)b[i];
-    }
-    out[i] = 0;
-    return i >= 3 && i < (int)sizeof b && b[i] == 0;
-}
-
-static void dump_hit(DWORD at, int name)
-{
-    BYTE win[128];
-    DWORD start = at - 32, i;
-    char s[64];
-    if (!copy_mem(start, win, sizeof win)) {
-        start = at;
-        if (!copy_mem(start, win, 96)) return;
-        memset(win + 96, 0, 32);
-    }
-    out_text("HIT %s at %08lX", g_reflect_names[name], at);
-    for (i = 0; i < sizeof win; i += 32) hexline("  W", start + i, win + i, 32);
-    for (i = 0; i + 4 <= sizeof win; i += 4) {
-        DWORD v = *(DWORD *)(win + i), t;
-        BYTE pb[128];
-        int n, j;
-        if (v < 0x10000 || v == at) continue;
-        if (string_at(v, s, sizeof s)) { out_text("  S %08lX -> %08lX \"%s\"", start + i, v, s); continue; }
-        if (!readable(v, NULL, &t)) continue;
-        n = t == MEM_PRIVATE ? 128 : 32;   /* heap blocks may hold field lists */
-        if (!copy_mem(v, pb, n)) continue;
-        out_text("  P %08lX -> %08lX (%s)", start + i, v, t == MEM_IMAGE ? "image" : t == MEM_PRIVATE ? "private" : "mapped");
-        for (j = 0; j < n; j += 32) hexline("   ", v + j, pb + j, 32);
-    }
-}
-
-static void find_names(BYTE *img, DWORD size)
-{
-    BYTE *buf = (BYTE *)VirtualAlloc(NULL, 1 << 20, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    DWORD off;
-    int k;
-    if (!buf) return;
-    for (off = 0; off < size; off += (1 << 20) - 128) {
-        DWORD n = size - off < (1 << 20) ? size - off : (1 << 20);
-        DWORD i;
-        if (!readable((DWORD)img + off, NULL, NULL) || !copy_mem((DWORD)img + off, buf, n)) continue;
-        for (i = 1; i + 2 < n; i++) {
-            if (buf[i - 1] != 0) continue;   /* names start after a NUL */
-            for (k = 0; k < NNAMES; k++) {
-                const char *nm = g_reflect_names[k];
-                int L = lstrlenA(nm);
-                if (buf[i] != (BYTE)nm[0] || i + L >= n) continue;
-                if (memcmp(buf + i, nm, L) == 0 && buf[i + L] == 0 && g_ntargets < (int)(sizeof g_targets / sizeof g_targets[0])) {
-                    DWORD a = (DWORD)img + off + i;
-                    int j, dup = 0;
-                    for (j = 0; j < g_ntargets; j++) if (g_targets[j].addr == a) dup = 1;
-                    if (!dup) { g_targets[g_ntargets].addr = a; g_targets[g_ntargets].name = k; g_ntargets++; }
-                }
-            }
-        }
-    }
-    VirtualFree(buf, 0, MEM_RELEASE);
-    qsort(g_targets, g_ntargets, sizeof g_targets[0], cmp_target);
-}
-
-static void count_constants(BYTE *img, DWORD size)
-{
-    static const DWORD consts[] = { 0x011795D9, 0x91C8773C, 0xCCB51828, 0x07B6C269, 0xACBDFE47 };
-    BYTE *buf = (BYTE *)VirtualAlloc(NULL, 1 << 20, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    int c, counts[5] = { 0 };
-    DWORD off;
-    if (!buf) return;
-    for (off = 0; off < size; off += (1 << 20) - 4) {
-        DWORD n = size - off < (1 << 20) ? size - off : (1 << 20), i;
-        if (!readable((DWORD)img + off, NULL, NULL) || !copy_mem((DWORD)img + off, buf, n)) continue;
-        for (i = 0; i + 4 <= n; i++)
-            for (c = 0; c < 5; c++)
-                if (*(DWORD *)(buf + i) == consts[c]) {
-                    if (counts[c] < 40) out_text("CONST %08lX at %08lX", consts[c], (DWORD)img + off + i);
-                    counts[c]++;
-                }
-    }
-    for (c = 0; c < 5; c++) out_text("CONST %08lX total %d", consts[c], counts[c]);
-    VirtualFree(buf, 0, MEM_RELEASE);
-}
-
-static void dump_data_section(BYTE *img, const char *dir)
-{
-    IMAGE_DOS_HEADER dos;
-    IMAGE_NT_HEADERS32 nt;
-    IMAGE_SECTION_HEADER sh;
-    char path[MAX_PATH];
-    int i;
-    if (!copy_mem((DWORD)img, &dos, sizeof dos) || !copy_mem((DWORD)img + dos.e_lfanew, &nt, sizeof nt)) return;
-    for (i = 0; i < nt.FileHeader.NumberOfSections; i++) {
-        DWORD shoff = (DWORD)img + dos.e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt.FileHeader.SizeOfOptionalHeader + i * sizeof sh;
-        if (!copy_mem(shoff, &sh, sizeof sh)) return;
-        out_text("SECTION %.8s va %08lX size %08lX", sh.Name, (DWORD)img + sh.VirtualAddress, sh.Misc.VirtualSize);
-        if (memcmp(sh.Name, ".data\0", 6) == 0) {
-            HANDLE f;
-            DWORD a = (DWORD)img + sh.VirtualAddress, end = a + sh.Misc.VirtualSize, w;
-            BYTE page[4096];
-            lstrcpyA(path, dir);
-            lstrcatA(path, "severed_data.bin");
-            f = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (f == INVALID_HANDLE_VALUE) continue;
-            for (; a < end; a += sizeof page) {
-                if (!copy_mem(a, page, sizeof page)) memset(page, 0xCC, sizeof page);
-                WriteFile(f, page, sizeof page, &w, NULL);
-            }
-            CloseHandle(f);
-        }
-    }
-}
-
-static void reflect_scan(void)
-{
-    char dir[MAX_PATH], path[MAX_PATH], *slash;
-    BYTE *img = (BYTE *)GetModuleHandleA(NULL);
-    IMAGE_DOS_HEADER dos;
-    IMAGE_NT_HEADERS32 nt;
-    DWORD addr, end, type, size, hits = 0;
-    BYTE *buf;
-
-    GetModuleFileNameA(NULL, dir, sizeof dir);
-    slash = strrchr(dir, '\\');
-    if (slash) slash[1] = 0;
-    lstrcpyA(path, dir);
-    lstrcatA(path, "severed_reflect.log");
-    g_out = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (g_out == INVALID_HANDLE_VALUE) return;
-    log_line("reflection scan started");
-    out_text("severed reflect scan 4, module %08lX", (DWORD)img);
-    if (!copy_mem((DWORD)img, &dos, sizeof dos) || !copy_mem((DWORD)img + dos.e_lfanew, &nt, sizeof nt)) {
-        out_text("cannot read module header");
-        CloseHandle(g_out);
-        return;
-    }
-    size = nt.OptionalHeader.SizeOfImage;
-    dump_data_section(img, dir);
-    count_constants(img, size);
-    g_ntargets = 0;
-    memset(g_hits_per_name, 0, sizeof g_hits_per_name);
-    {
-        /* the names are plain strings in .rdata */
-        IMAGE_SECTION_HEADER sh;
-        int i;
-        for (i = 0; i < nt.FileHeader.NumberOfSections; i++) {
-            DWORD shoff = (DWORD)img + dos.e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt.FileHeader.SizeOfOptionalHeader + i * sizeof sh;
-            if (copy_mem(shoff, &sh, sizeof sh) && memcmp(sh.Name, ".rdata\0", 7) == 0)
-                find_names(img + sh.VirtualAddress, sh.Misc.VirtualSize);
-        }
-    }
-    out_text("TARGETS %d strings for %d names", g_ntargets, NNAMES);
-    for (addr = 0; addr < (DWORD)g_ntargets; addr++)
-        out_text("NAME %s at %08lX", g_reflect_names[g_targets[addr].name], g_targets[addr].addr);
-
-    buf = (BYTE *)VirtualAlloc(NULL, 1 << 20, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    for (addr = 0x10000; buf && addr < 0x7FFF0000; addr = end) {
-        int ok = readable(addr, &end, &type);
-        DWORD a;
-        if (end <= addr) break;
-        if (!ok || (DWORD)buf == addr) continue;
-        for (a = addr; a < end; a += 1 << 20) {
-            DWORD n = end - a < (1 << 20) ? end - a : (1 << 20), i;
-            if (!copy_mem(a, buf, n)) continue;
-            for (i = 0; i + 4 <= n; i += 4) {
-                int t = find_target(*(DWORD *)(buf + i));
-                if (t < 0) continue;
-                if (g_hits_per_name[g_targets[t].name]++ >= 8) continue;
-                if (hits++ > 30000) break;
-                dump_hit(a + i, g_targets[t].name);
-            }
-        }
-    }
-    if (buf) VirtualFree(buf, 0, MEM_RELEASE);
-    out_text("DONE %lu hits", hits);
-    CloseHandle(g_out);
-    g_out = INVALID_HANDLE_VALUE;
-    log_line("reflection scan finished: %lu hits", hits);
-    MessageBeep(MB_ICONASTERISK);
-}
-
-/* ---- descriptor dump (version 5) --------------------------------------
- *
- * The scan above showed that the engine describes each class with a
- * static descriptor in .data (vtable 01B1E648; flag sets 01AA6C80, enums
- * 01AA6C68), whose field list lives on the heap. Pressing F11 writes
- * severed_desc.bin: the .data section, every descriptor's heap blocks,
- * and one more level of heap blocks they point to, as chunks of
- * (u32 address, u32 length, bytes). Read-only, like the scan.
- */
-static const DWORD g_desc_vt[] = { 0x01B1E648, 0x01AA6C80, 0x01AA6C68 };
-static HANDLE g_dout = INVALID_HANDLE_VALUE;
-static DWORD g_seen[1 << 16];
-static DWORD g_dumped_bytes;
-#define DUMP_LIMIT (48u << 20)
-
-static int seen_add(DWORD va)
-{
-    DWORD h = (va * 2654435761u) >> 16, i;
-    for (i = 0; i < (1 << 16); i++) {
-        DWORD *s = &g_seen[(h + i) & 0xFFFF];
-        if (*s == va) return 0;
-        if (*s == 0) { *s = va; return 1; }
-    }
-    return 0;
-}
-
-static void chunk(DWORD va, DWORD len)
-{
-    static BYTE buf[65536];
-    DWORD w, hdr[2], end, t, n;
-    if (len > sizeof buf) len = sizeof buf;
-    while (len > 0 && g_dumped_bytes <= DUMP_LIMIT) {
-        /* a range can span memory regions: copy each readable part */
-        if (!readable(va, &end, &t)) {
-            if (end <= va) return;
-            n = end - va;
-        } else {
-            n = end - va < len ? end - va : len;
-            if (copy_mem(va, buf, n)) {
-                hdr[0] = va;
-                hdr[1] = n;
-                WriteFile(g_dout, hdr, 8, &w, NULL);
-                WriteFile(g_dout, buf, n, &w, NULL);
-                g_dumped_bytes += n + 8;
-            }
-        }
-        if (n >= len) return;
-        va += n;
-        len -= n;
-    }
-}
-
-/* dumps a heap block and, one level down, the heap blocks it points to */
-static void heap_block(DWORD va, DWORD len, int depth)
-{
-    BYTE b[4096];
-    DWORD t, i, n;
-    if (va < 0x10000 || !readable(va, NULL, &t) || t != MEM_PRIVATE || !seen_add(va)) return;
-    chunk(va, len);
-    if (depth == 0) return;
-    n = len < sizeof b ? len : sizeof b;
-    if (!copy_mem(va, b, n)) return;
-    for (i = 0; i + 4 <= n; i += 4) heap_block(*(DWORD *)(b + i), 256, depth - 1);
-}
-
-static void desc_dump(void)
-{
-    char path[MAX_PATH], *slash;
-    BYTE *img = (BYTE *)GetModuleHandleA(NULL);
-    IMAGE_DOS_HEADER dos;
-    IMAGE_NT_HEADERS32 nt;
-    IMAGE_SECTION_HEADER sh;
-    DWORD data = 0, data_size = 0, rdata = 0, rdata_size = 0, a, w, count = 0;
-    int i;
-
-    GetModuleFileNameA(NULL, path, sizeof path);
+    char *slash;
+    GetModuleFileNameA(NULL, path, MAX_PATH);
     slash = strrchr(path, '\\');
-    if (slash) lstrcpyA(slash + 1, "severed_desc.bin");
-    if (!copy_mem((DWORD)img, &dos, sizeof dos) || !copy_mem((DWORD)img + dos.e_lfanew, &nt, sizeof nt)) return;
-    for (i = 0; i < nt.FileHeader.NumberOfSections; i++) {
-        DWORD shoff = (DWORD)img + dos.e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt.FileHeader.SizeOfOptionalHeader + i * sizeof sh;
-        if (!copy_mem(shoff, &sh, sizeof sh)) return;
-        if (memcmp(sh.Name, ".data\0", 6) == 0) { data = (DWORD)img + sh.VirtualAddress; data_size = sh.Misc.VirtualSize; }
-        if (memcmp(sh.Name, ".rdata\0", 7) == 0) { rdata = (DWORD)img + sh.VirtualAddress; rdata_size = sh.Misc.VirtualSize; }
-    }
-    if (!data || !rdata) return;
-    g_dout = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (g_dout == INVALID_HANDLE_VALUE) return;
-    log_line("descriptor dump started");
-    WriteFile(g_dout, "SVDESC6\0", 8, &w, NULL);
-    memset(g_seen, 0, sizeof g_seen);
-    g_dumped_bytes = 0;
-    for (a = data; a < data + data_size; a += 65536) chunk(a, data + data_size - a < 65536 ? data + data_size - a : 65536);
-    for (a = data; a < data + data_size; a += 65536) {
-        static DWORD blk[16384];
-        DWORD n = data + data_size - a < 65536 ? data + data_size - a : 65536, j;
-        if (!copy_mem(a, blk, n)) continue;
-        for (j = 0; j + 2 <= n / 4; j++) {
-            DWORD d[24];
-            int k, kind = -1;
-            for (k = 0; k < 3; k++) if (blk[j] == g_desc_vt[k]) kind = k;
-            if (kind < 0 || blk[j + 1] < rdata || blk[j + 1] >= rdata + rdata_size) continue;
-            if (!copy_mem(a + 4 * j, d, sizeof d)) continue;
-            count++;
-            if (kind == 0 && d[8] > d[7] && d[8] - d[7] <= 65536) heap_block(d[7], d[8] - d[7] + 64, 1);
-            /* field list: (d[17] & 0xFFFF) entries of 16 bytes at d[10] */
-            if (kind == 0) heap_block(d[10], 16 * (d[17] & 0xFFFF) + 16, 1);
-            for (k = 2; k < 24; k++) heap_block(d[k], kind == 0 ? 1024 : 2048, 1);
-        }
-    }
-    CloseHandle(g_dout);
-    g_dout = INVALID_HANDLE_VALUE;
-    log_line("descriptor dump finished: %lu descriptors, %lu bytes", count, g_dumped_bytes);
-    MessageBeep(MB_ICONASTERISK);
+    if (slash) lstrcpyA(slash + 1, name);
 }
 
-
-/* ---- F9: add Severed to the episode list --------------------------------
- * Found in a retail build of the exe without the Steam wrapper (same data
- * layout; the Steam build's code may sit at other addresses, so the two
- * functions are located by byte pattern in the running game's code, ??
- * = relative call targets / absolute addresses):
- *   front end constructor: stores `this` in the front end global
- *     (`mov [imm32], esi` at +5, address at +7) and builds the episode
- *     list at this + 0x980: vector {begin, end, cap} of 0x68-byte entries
- *     (16-byte strings, text pointer first): +0x00 name, +0x10
- *     description, +0x20 folder, +0x30 stream list, +0x40 extra, +0x50 start
- *     checkpoint GUID, +0x60 flags, +0x64 unlock key
- *   AddEpisode: thiscall, 8 arguments (ret 0x20); the console DLC path
- *     (.lvl) calls it with weller1.lvl's fields.
- * Only addresses are logged; no code is copied out.
- */
-static const char SIG_ADD[] =
-    "56 81 C1 80 09 00 00 E8 ?? ?? ?? ?? 8B F0 8B 44 24 08 50 8B CE E8 ?? ?? ?? ?? 8B 4C 24 0C 51 8D 4E 10 "
-    "E8 ?? ?? ?? ?? 8B 54 24 10 52 8D 4E 20 E8 ?? ?? ?? ?? 8B 44 24 14 50 8D 4E 30 E8 ?? ?? ?? ?? 8B 4C 24 24 "
-    "51 8D 4E 40 E8 ?? ?? ?? ?? 8B 54 24 18 52 8D 4E 50 E8 ?? ?? ?? ?? 8B 44 24 1C 8B 4C 24 20 89 46 60 89 4E "
-    "64 5E C2 20 00";
-static const char SIG_CTOR[] =
-    "53 55 56 8B F1 89 35 ?? ?? ?? ?? C7 46 04 ?? ?? ?? ?? 33 DB 89 5E 0C 57 8D 7E 04 BD 01 00 00 00 89 6F 04 "
-    "C7 06 ?? ?? ?? ?? C7 07 ?? ?? ?? ?? 89 5E 30 89 5E 38 8D 4E 48 89 5E 3C 89 5E 40 89 5E 44";
-
-typedef void (__attribute__((thiscall)) *add_episode_fn)(void *self, const char *name, const char *desc,
-        const char *folder, const char *streams, const char *checkpoint, int flags, int unlock, const char *extra);
+/* ---- memory and code patterns ----------------------------------------- */
 
 static int mem_ok(const void *p, SIZE_T n)
 {
@@ -1012,8 +91,9 @@ static int parse_sig(const char *s, BYTE *b, BYTE *m)
     return n;
 }
 
-/* the one match of a pattern in the exe's .text, or NULL (none / several) */
-static BYTE *find_sig(const char *sig, int *count)
+/* each match of a pattern in the exe's code section: calls `each` (if
+   given) and returns the only match, or NULL (none / several) */
+static BYTE *scan_sig(const char *sig, int *count, int (*each)(BYTE *))
 {
     BYTE b[256], m[256], *base = (BYTE *)GetModuleHandleA(NULL), *t, *e, *p, *hit = NULL;
     IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
@@ -1026,366 +106,26 @@ static BYTE *find_sig(const char *sig, int *count)
     for (p = t; p < e; p++) {
         if (*p != b[0]) continue;
         for (i = 1; i < n && (!m[i] || p[i] == b[i]); i++) ;
-        if (i == n) { (*count)++; hit = p; }
+        if (i < n) continue;
+        (*count)++; hit = p;
+        if (each && each(p)) return p;
     }
     return *count == 1 ? hit : NULL;
 }
 
-static void log_episodes(void *fe)
+static BYTE *find_sig(const char *sig, int *count)
 {
-    BYTE *v = (BYTE *)fe + 0x980, *b, *e, *x;
-    if (!mem_ok(v, 12)) return;
-    b = *(BYTE **)v; e = *(BYTE **)(v + 4);
-    log_line("episode list: %d entries", b && e > b ? (int)((e - b) / 0x68) : 0);
-    for (x = b; x && x < e && mem_ok(x, 0x68); x += 0x68) {
-        const char *n = *(const char **)x, *f = *(const char **)(x + 0x20), *c = *(const char **)(x + 0x50);
-        log_line("  %s | %s | %s", n && mem_ok(n, 1) ? n : "-", f && mem_ok(f, 1) ? f : "-", c && mem_ok(c, 1) ? c : "-");
-    }
+    return scan_sig(sig, count, NULL);
 }
 
-/* Calling AddEpisode from the probe's own thread hangs the game (its
- * allocator is not for foreign threads), and by the title screen the list
- * has already been consumed. So the front end constructor is hooked in
- * memory (nothing on disk): right after it adds the built-in episode, on
- * the game's own thread, Severed is added the same way. The constructor
- * starts with push ebx / push ebp / push esi / mov esi, ecx (5 bytes, no
- * relative operands), which the trampoline re-runs before jumping back. */
-typedef void *(__attribute__((thiscall)) *ctor_fn)(void *self);
-static ctor_fn g_ctor_tramp;
-static add_episode_fn g_add;
-static volatile LONG g_added;
-static BYTE *g_frontend;
-
-
-/* ---- class layout log ---------------------------------------------------
- * Logs one class's field list from its descriptor in .data (read-only):
- * descriptor words w[2] = name hash, w[3] = version, w[10] = field array,
- * w[16] >> 16 = size, w[17] & 0xFFFF = field count; field entries are 16
- * bytes {typeinfo*, fielddesc*, u16 offset, ...}; fielddesc {name*, hash,
- * type, ...}; typeinfo for arrays (0x13) {count, element type, class*}, for
- * structs (0x16) {.., .., class*}. Used for classes whose field list the
- * earlier descriptor dump missed (Uniform). */
-static int g_uniform_logged;
-
-static void log_class_fields(DWORD va, DWORD hash)
+static DWORD exe_off(const void *p)
 {
-    DWORD *w = (DWORD *)va, i, n;
-    BYTE *fa;
-    if (!mem_ok(w, 18 * 4) || w[2] != hash) { log_line("CLASS 0x%08lx: no descriptor at 0x%08lx", hash, va); return; }
-    n = w[17] & 0xFFFF;
-    fa = (BYTE *)w[10];
-    log_line("CLASS %s hash 0x%08lx version %lu size %lu fields %lu",
-             mem_ok((void *)w[1], 1) ? (const char *)w[1] : "?", w[2], w[3], w[16] >> 16, n);
-    if (n && fa) g_uniform_logged = 1;
-    for (i = 0; i < n && mem_ok(fa + 16 * i, 16); i++) {
-        DWORD *e = (DWORD *)(fa + 16 * i), *fd = (DWORD *)e[1], *ti = (DWORD *)e[0];
-        WORD off = *(WORD *)(fa + 16 * i + 8);
-        const char *name = fd && mem_ok(fd, 20) && mem_ok((void *)fd[0], 1) ? (const char *)fd[0] : "?";
-        DWORD type = fd && mem_ok(fd, 20) ? fd[2] : 0xFFFFFFFF;
-        DWORD a = 0, b = 0, c = 0, x = fd && mem_ok(fd, 20) ? fd[3] : 0;
-        if (x && mem_ok((void *)x, 12)) x = ((DWORD *)x)[2];        /* struct class hash */
-        if (ti && mem_ok(ti, 12)) {
-            a = ti[0]; b = ti[1]; c = ti[2];
-            if (c && mem_ok((void *)c, 12)) c = ((DWORD *)c)[2];   /* element / struct class hash */
-        }
-        log_line("  FIELD %u 0x%lx %s ti %lx %lx %lx x %lx", off, type, name, a, b, c, x);
-    }
+    return p ? (DWORD)p - (DWORD)GetModuleHandleA(NULL) : 0;
 }
 
-static void *__attribute__((thiscall)) hook_frontend_ctor(void *self)
-{
-    void *r = g_ctor_tramp(self);
-    static int classes_logged;
-    g_frontend = (BYTE *)self;
-    log_line("front end constructed (thread %lu)", GetCurrentThreadId());
-    if (!classes_logged) { classes_logged = 1; log_class_fields(0x02098B78, 0x0575C2F4); }
-    log_episodes(self);
-    g_add(self, "Dead Space 2: Severed", "Gabe Weller's story",
-          "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
-    InterlockedIncrement(&g_added);
-    log_line("added Severed to the episode list");
-    log_episodes(self);
-    return r;
-}
-
-
-/* ---- stream request log -------------------------------------------------
- * The level loader asks for each stream through one function (retail exe
- * 0x0074BDD0: sub esp, 0x124 ...; first stack argument = stream path).
- * A small stub logs that argument and continues in the original code. */
-static const char SIG_STREAMREQ[] =
-    "81 EC 24 01 00 00 53 55 8B E9 8B ?? ?? ?? ?? 00 00 56 33 C0 57 85 C9 0F 84 ?? ?? ?? ?? 38 01 0F 84 ?? ?? ?? ?? "
-    "51 8D 4C 24 14 E8 ?? ?? ?? ?? 8B ?? ?? ?? ?? 00 00 8B C7 8D 74 24 10 E8 ?? ?? ?? ?? 6A 01 8B CE E8";
-
-static void __cdecl log_stream_request(const char *path)
-{
-    static LONG n;
-    if (InterlockedIncrement(&n) > 5000) return;
-    log_line("STREAM request %s", path && mem_ok(path, 1) ? path : "(null)");
-}
-
-/* fn starts with `len` bytes of position-independent code; cb gets the
-   stack word at `off` from the entry stack pointer (0 = return address,
-   4 = first argument) */
-static int hook_log_word(BYTE *fn, int len, void (__cdecl *cb)(const char *), int off);
-static int hook_log_arg1(BYTE *fn, int len, void (__cdecl *cb)(const char *))
-{
-    return hook_log_word(fn, len, cb, 4);
-}
-
-/* like hook_log_word, but cb gets the entry stack pointer (sp[0] = return
-   address, sp[1..] = arguments) */
-static int hook_log_sp(BYTE *fn, int len, void (__cdecl *cb)(const DWORD *))
-{
-    BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
-    DWORD old;
-    if (!t) return 0;
-    q = t;
-    *q++ = 0x60;                                   /* pushad */
-    *q++ = 0x9C;                                   /* pushfd */
-    *q++ = 0x8D; *q++ = 0x44; *q++ = 0x24; *q++ = 0x24;   /* lea eax, [entry esp] */
-    *q++ = 0x50;                                   /* push eax */
-    *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
-    *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
-    *q++ = 0x9D;                                   /* popfd */
-    *q++ = 0x61;                                   /* popad */
-    memcpy(q, fn, len); q += len;
-    *q++ = 0xE9; *(DWORD *)q = (DWORD)(fn + len) - (DWORD)(q + 4); q += 4;
-    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) { VirtualFree(t, 0, MEM_RELEASE); return 0; }
-    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)t - (DWORD)(fn + 5);
-    if (len > 5) memset(fn + 5, 0x90, len - 5);
-    VirtualProtect(fn, len, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), fn, len);
-    return 1;
-}
-
-static int hook_log_word(BYTE *fn, int len, void (__cdecl *cb)(const char *), int off)
-{
-    BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
-    DWORD old;
-    if (!t) return 0;
-    q = t;
-    *q++ = 0x60;                                   /* pushad */
-    *q++ = 0x9C;                                   /* pushfd */
-    *q++ = 0xFF; *q++ = 0x74; *q++ = 0x24; *q++ = (BYTE)(0x24 + off);   /* push [entry esp + off] */
-    *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
-    *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
-    *q++ = 0x9D;                                   /* popfd */
-    *q++ = 0x61;                                   /* popad */
-    memcpy(q, fn, len); q += len;                  /* the original first instructions */
-    *q++ = 0xE9; *(DWORD *)q = (DWORD)(fn + len) - (DWORD)(q + 4); q += 4;
-    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
-    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)t - (DWORD)(fn + 5);
-    if (len > 5) memset(fn + 5, 0x90, len - 5);
-    VirtualProtect(fn, len, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), fn, len);
-    return 1;
-}
-
-
-/* ---- Severed's stream sets ---------------------------------------------
- * Level start (retail exe 0x0042C600, this = level start request, +0x28 =
- * folder string) requests the base chapters' "%s\%s_streamsets.str" in
- * stream-sets mode (request(path, 0.0f, 0, 0, 0)) - but skips that for
- * folders containing "pdlc". Severed's StreamSet and checkpoint objects only
- * come inside its level SimGroup; as an experiment the probe also requests
- * <folder>\<folder>_streamsets.str (the test archive holds that SimGroup
- * under this name) in stream-sets mode for "pdlc" levels. */
-static const char SIG_LEVELSTART[] =
-    "81 EC 40 01 00 00 53 55 8B E9 C7 45 18 07 00 00 00 A1 ?? ?? ?? ?? 8B 40 38 D1 E8 24 01 88 44 24 0A 8A 45 1C "
-    "D0 E8 24 01 83 7D 4C 00 56 8D 75 28 88 44 24 0F 8B 06 0F 95 44 24 10 57 85 C0 75 05 B8 ?? ?? ?? ?? 68 ?? ?? ?? ?? "
-    "50 E8 ?? ?? ?? ?? 8B 0D ?? ?? ?? ??";
-typedef void *(__attribute__((thiscall)) *stream_req_fn)(void *mgr, const char *path, float f, int a, int b, int c);
-static stream_req_fn g_streamreq;
-static void **g_streammgr;
-
-
-/* ---- F9: request the start sections on the game's thread ---------------
- * Probe 17 requested them at level start, before the main level stream was
- * set up, and ZoneRender crashed on its missing zone. Now F9 (in the black
- * level) queues the request and the game's own thread runs it from its
- * message loop (PeekMessage hook). */
-static volatile LONG g_sections_pending;
-static int g_severed_level;
-static void upgrade_schedule(const char *why);
-static void upgrade_on_msg(DWORD h);
-static void pos_watch(void);
-static DWORD g_game_thread;
-static DWORD g_main_thread;            /* the thread that loaded the probe: the game's main thread */
-static const char *g_sections[] = {
-    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_01\\drill_tunnel_01.str",
-    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_tunnel_02\\drill_tunnel_02.str",
-    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_cavern_01\\drill_cavern_01.str",
-    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\drill_tunnel\\drill_saferoom\\drill_saferoom.str",
-    "pdlc1_ch01_mng\\pdlc1_ch01_mng\\shared\\design\\mini-global\\doors_mng\\doors_mng_folderstream.str",
-};
-
-/* ---- F8 / F7: send level messages on the game's thread -----------------
- * The engine's message broadcast (retail exe 0x0084F5A0, behind Lua's
- * SendMessage): cdecl (message name, unused, payload); it hashes the name
- * and hands the message to every object listening for it - the same way
- * Severed's own level objects (MultiManagers, scripted sequences) talk.
- * F8 sends Severed's intro hand-over: the end of the RIG call scene
- * (ses_player_01_01_end: pops the scene camera, adds the objective, sets
- * the post-intro checkpoint) and Gabe's starting equipment. F7 sends each
- * line of severed_send.txt in the game folder. */
-static const char SIG_SENDMSG[] =
-    "83 EC 14 8B 54 24 18 33 C0 66 89 44 24 04 52 8D 44 24 04 33 C9 50 C7 44 24 08 00 00 00 00 66 89 4C 24 0E "
-    "E8 ?? ?? ?? ?? 8B 4C 24 08 8B 54 24 28 8D 44 24 10 6A 00 50 89 4C 24 18 C6 44 24 1C 00 89 54 24 20 "
-    "E8 ?? ?? ?? ?? 8D 4C 24 10 51 E8 ?? ?? ?? ?? 83 C4 28 C3";
-typedef void (__cdecl *send_msg_fn)(const char *name, const char *unused, void *payload);
-static send_msg_fn g_sendmsg;
-static const char *g_handover[] = {
-    "pop_cam_pole_initial",
-    "ses_player_01_01_end",
-    "equip_command_player_initial",
-};
-#define MAX_MSGS 32
-static char g_msgs[MAX_MSGS][96];
-static volatile LONG g_msgs_pending;
-static int g_nmsgs;
-
-/* the message function, looked up again on first use (the code may not be
-   ready when the hooks are installed); on failure, where the pattern stops
-   matching at the retail address (a position only, no code bytes) */
-static int find_sendmsg(void)
-{
-    BYTE b[256], m[256], *p;
-    int n, i, nm;
-    if (g_sendmsg) return 1;
-    g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm);
-    if (g_sendmsg) {
-        log_line("message send: found at exe+0x%lx", (DWORD)g_sendmsg - (DWORD)GetModuleHandleA(NULL));
-        return 1;
-    }
-    n = parse_sig(SIG_SENDMSG, b, m);
-    p = (BYTE *)GetModuleHandleA(NULL) + 0x44F5A0;
-    if (!mem_ok(p, n)) { log_line("message send: %d match(es); retail address not readable", nm); return 0; }
-    for (i = 0; i < n && (!m[i] || p[i] == b[i]); i++) ;
-    log_line("message send: %d match(es); at the retail address the pattern %s at byte %d of %d",
-             nm, i == n ? "matches" : "differs", i, n);
-    return 0;
-}
-
-static void queue_messages(const char **names, int n)
-{
-    int i;
-    if (g_msgs_pending) { log_line("messages: the last ones are still being sent - try again"); return; }
-    if (!find_sendmsg()) { log_line("messages: the game's message function was not found - nothing sent"); return; }
-    for (i = 0; i < n && i < MAX_MSGS; i++) lstrcpynA(g_msgs[i], names[i], sizeof g_msgs[i]);
-    g_nmsgs = i;
-    InterlockedExchange(&g_msgs_pending, 1);   /* the list stays untouched until the game thread sets 0 */
-    log_line("messages: %d queued for the game thread", g_nmsgs);
-}
-
-static void queue_message_file(void)
-{
-    char path[MAX_PATH], *slash, buf[4096], *line, *names[MAX_MSGS];
-    HANDLE f;
-    DWORD got = 0;
-    int n = 0;
-    GetModuleFileNameA(NULL, path, sizeof path);
-    slash = strrchr(path, '\\');
-    if (slash) lstrcpyA(slash + 1, "severed_send.txt");
-    f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-    if (f == INVALID_HANDLE_VALUE) { log_line("F7: no severed_send.txt in the game folder"); return; }
-    ReadFile(f, buf, sizeof buf - 1, &got, NULL);
-    CloseHandle(f);
-    buf[got] = 0;
-    for (line = strtok(buf, "\r\n"); line && n < MAX_MSGS; line = strtok(NULL, "\r\n")) {
-        while (*line == ' ' || *line == '\t') line++;
-        if (*line && *line != '#') names[n++] = line;
-    }
-    queue_messages((const char **)names, n);
-}
-
-static void run_pending_messages(void)
-{
-    int i;
-    if (!g_msgs_pending || GetCurrentThreadId() != g_game_thread || !g_sendmsg) return;
-    if (InterlockedCompareExchange(&g_msgs_pending, 2, 1) != 1) return;
-    for (i = 0; i < g_nmsgs; i++) {
-        log_line("send message %s", g_msgs[i]);
-        g_sendmsg(g_msgs[i], NULL, NULL);
-    }
-    InterlockedExchange(&g_msgs_pending, 0);
-    MessageBeep(MB_ICONASTERISK);
-}
-
-static void heap_watch(void);
-static void d3d_guard(void);
-
-static void run_pending_sections(void)
-{
-    int i;
-    if (!g_game_thread && g_main_thread && GetCurrentThreadId() == g_main_thread) {
-        g_game_thread = g_main_thread;            /* without the level start hook */
-        log_line("game thread: %lu (the main thread)", g_game_thread);
-    }
-    run_pending_messages();
-    heap_watch();
-    if (!g_sections_pending || GetCurrentThreadId() != g_game_thread || !g_streamreq || !g_streammgr || !*g_streammgr)
-        return;
-    if (InterlockedExchange(&g_sections_pending, 0) == 0) return;
-    for (i = 0; i < (int)(sizeof g_sections / sizeof g_sections[0]); i++) {
-        log_line("F9: requesting section %s", g_sections[i]);
-        g_streamreq(*g_streammgr, g_sections[i], 0.0f, 2, 0, 0);
-    }
-    MessageBeep(MB_ICONASTERISK);
-}
-
-typedef BOOL (WINAPI *PeekMessageA_t)(LPMSG, HWND, UINT, UINT, UINT);
-typedef BOOL (WINAPI *PeekMessageW_t)(LPMSG, HWND, UINT, UINT, UINT);
-static PeekMessageA_t o_PeekMessageA;
-static PeekMessageW_t o_PeekMessageW;
-static BOOL WINAPI h_PeekMessageA(LPMSG m, HWND w, UINT a, UINT b, UINT r) { run_pending_sections(); return o_PeekMessageA(m, w, a, b, r); }
-static BOOL WINAPI h_PeekMessageW(LPMSG m, HWND w, UINT a, UINT b, UINT r) { run_pending_sections(); return o_PeekMessageW(m, w, a, b, r); }
-
-static void __cdecl on_level_start(void *self)
-{
-    const char *folder = self && mem_ok((BYTE *)self + 0x28, 4) ? *(const char **)((BYTE *)self + 0x28) : NULL;
-    char name[128], path[300];
-    int n;
-    if (!folder || !mem_ok(folder, 1)) return;
-    log_line("level start: folder %s", folder);
-    g_game_thread = GetCurrentThreadId();
-    g_severed_level = 0;
-    if (!strstr(folder, "pdlc") || !g_streamreq || !g_streammgr || !*g_streammgr) return;
-    lstrcpynA(name, folder, sizeof name);
-    n = lstrlenA(name);
-    while (n && (name[n - 1] == '\\' || name[n - 1] == '/')) name[--n] = 0;
-    if (!lstrcmpiA(name, "pdlc1_ch01_mng")) { g_severed_level = 1; upgrade_schedule("Severed level start"); }
-    /* Probe 12's experiment loaded a copy of the level's SimGroup as a stream
-       sets file. Since probe 23 it is off: every level object then existed
-       twice under the same GUID, and messages aimed at the Player (starting
-       equipment, health, Gabe's opening scene) reached the copy instead of
-       the player. A file named severed_streamsets.on in the game folder
-       turns it back on. */
-    {
-        char flag[MAX_PATH], *slash;
-        GetModuleFileNameA(NULL, flag, sizeof flag);
-        slash = strrchr(flag, '\\');
-        if (slash) lstrcpyA(slash + 1, "severed_streamsets.on");
-        if (GetFileAttributesA(flag) == INVALID_FILE_ATTRIBUTES) {
-            log_line("level start: level SimGroup copy not requested (severed_streamsets.on absent)");
-            return;
-        }
-    }
-    wsprintfA(path, "%s\\%s_streamsets.str", name, name);
-    log_line("level start: requesting %s in stream-sets mode", path);
-    g_streamreq(*g_streammgr, path, 0.0f, 0, 0, 0);
-}
-
-/* stub: pushad/pushfd, call cb(ecx), restore, run the original first
- * `len` bytes, jump back */
-static int hook_call_reg(BYTE *fn, int len, void (__cdecl *cb)(void *), BYTE push_op);
-static int hook_call_ecx(BYTE *fn, int len, void (__cdecl *cb)(void *))
-{
-    return hook_call_reg(fn, len, cb, 0x51);
-}
-
-/* as hook_call_ecx, with the register named by its push opcode (0x51 ecx,
-   0x56 esi, ...) passed to the callback */
+/* code stub: pushad/pushfd, call cb(reg) (reg given by its push opcode:
+   0x51 ecx, 0x56 esi), restore, run the original first `len` bytes (no
+   relative operands), jump back. The stub stays for the process's life. */
 static int hook_call_reg(BYTE *fn, int len, void (__cdecl *cb)(void *), BYTE push_op)
 {
     BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
@@ -1399,7 +139,7 @@ static int hook_call_reg(BYTE *fn, int len, void (__cdecl *cb)(void *), BYTE pus
     *q++ = 0x9D; *q++ = 0x61;                      /* popfd, popad */
     memcpy(q, fn, len); q += len;
     *q++ = 0xE9; *(DWORD *)q = (DWORD)(fn + len) - (DWORD)(q + 4); q += 4;
-    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) { VirtualFree(t, 0, MEM_RELEASE); return 0; }
     fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)t - (DWORD)(fn + 5);
     if (len > 5) memset(fn + 5, 0x90, len - 5);
     VirtualProtect(fn, len, old, &old);
@@ -1407,333 +147,188 @@ static int hook_call_reg(BYTE *fn, int len, void (__cdecl *cb)(void *), BYTE pus
     return 1;
 }
 
-
-/* ---- No Hardcore for Severed (probe 53) ----------------------------------
- * The console DLC's weller1.lvl carries "$weller1_no_difficulty" ("Difficulty
- * setting not available for this episode."): Severed was not offered on
- * Hardcore. The PC exe ignores that field. Its difficulty screen (retail
- * 0xA98AF0) sets one enabled byte per difficulty at +0x230..+0x234
- * (Hardcore last, from the profile's unlock) and clears Hardcore for New
- * Game+ (+0x228); a cleared one is shown greyed out with the text at
- * entry 4 of a description table. The front end keeps the chosen episode
- * at +0x974. Probe 53 cleared Hardcore there for Severed; probe 54 keeps
- * Hardcore available (its rules apply in Severed) and only logs. */
-static const char SIG_DIFF_SCREEN[] =
-    "80 BE 28 02 00 00 00 74 07 C6 86 34 02 00 00 00 6A 01 8D 46 10 68 ?? ?? ?? ?? 50";
-static const char SIG_DIFF_DESC[] =
-    "80 BB 28 02 00 00 00 74 0A BF ?? ?? ?? ?? 83 FE 04 74 07 8B 3C B5";
-static const char SEV_NO_DIFFICULTY[] = "Difficulty setting not available for this episode.";
-static const char **g_locked_desc;      /* the table entry for Hardcore */
-static const char *g_locked_desc_orig;
-
-static int severed_chosen(void)
+/* as hook_call_reg, but cb gets the stack word at `off` from the entry
+   stack pointer (4 = first argument) */
+static int hook_call_arg(BYTE *fn, int len, void (__cdecl *cb)(const void *), int off)
 {
-    BYTE *v = g_frontend + 0x980, *b, *e, *x;
-    int i, sel;
-    if (!g_frontend || !mem_ok(g_frontend, 0x990)) return 0;
-    sel = *(int *)(g_frontend + 0x974);
-    b = *(BYTE **)v; e = *(BYTE **)(v + 4);
-    for (x = b, i = 0; x && x < e && mem_ok(x, 0x68); x += 0x68, i++) {
-        const char *f = *(const char **)(x + 0x20);
-        if (i == sel) return f && mem_ok(f, 15) && !lstrcmpiA(f, "pdlc1_ch01_mng");
-    }
-    return 0;
-}
-
-static void __cdecl note_difficulty_screen(void *o)
-{
-    BYTE *d = (BYTE *)o;
-    int sev = severed_chosen();
-    if (!mem_ok(d, 0x238)) return;
-    log_line("difficulty screen: episode %d%s, enabled %d %d %d %d %d, new game+ %d",
-             g_frontend ? *(int *)(g_frontend + 0x974) : -1, sev ? " (Severed)" : "",
-             d[0x230], d[0x231], d[0x232], d[0x233], d[0x234], d[0x228]);
-    /* probe 54: Hardcore left available for Severed (its rules apply: the
-       players' choice); the probe only logs the screen */
-    (void)g_locked_desc_orig; (void)SEV_NO_DIFFICULTY;
-}
-
-static void hook_difficulty(void)
-{
-    int n = 0, nd = 0;
-    DWORD base = (DWORD)GetModuleHandleA(NULL);
-    BYTE *s = find_sig(SIG_DIFF_SCREEN, &n), *t = find_sig(SIG_DIFF_DESC, &nd);
-    if (t) {
-        const char **e = (const char **)(*(DWORD *)(t + 0x16) + 4 * 4);
-        if (mem_ok(e, 4) && mem_ok(*e, 28) && !memcmp(*e, "$UIMenu_HardcoreLocked_DESC", 28)) {
-            g_locked_desc = e; g_locked_desc_orig = *e;
-        }
-    }
-    log_line("difficulty screen: %d match(es) at exe+0x%lx, locked text %s%s", n, s ? (DWORD)s - base : 0,
-             g_locked_desc ? "found" : "not found",
-             s && hook_call_reg(s + 0x10, 5, note_difficulty_screen, 0x56) ? ", hooked" : "");
-}
-
-
-/* ---- End of game: the New Game+ save (probe 51) --------------------------
- * After the credits the end-of-game sequence (retail exe 0xA92xxx, a state
- * machine at +0x24) shows "save for New Game+" (OK only), then opens the
- * save screen (0xBAE040, state 0xD) only if [[esi+0x28]+0x5C] is set, else
- * moves on (state 3). Severed's ending returned to the main menu without a
- * save screen: log which way it goes. */
-static const char SIG_EOG_SAVE[] =
-    "8B 4E 28 E8 ?? ?? ?? ?? 8B 4E 28 8B 49 5C 85 C9 74 23 E8 ?? ?? ?? ?? C7 46 24 0D 00 00 00";
-
-static void __cdecl note_eog_check(void *o)
-{
-    DWORD *p = (DWORD *)o;
-    log_line("END OF GAME: save check, object %p, save target [+0x5c] = %08lx", o,
-             p && mem_ok(p, 0x60) ? p[0x5C / 4] : 0xFFFFFFFF);
-}
-
-static void __cdecl note_eog_open(void *o)
-{
-    (void)o;
-    log_line("END OF GAME: save screen opened (state 0xD)");
-}
-
-static void __cdecl note_eog_skip(void *o)
-{
-    (void)o;
-    log_line("END OF GAME: no save screen (state 3)");
-}
-
-/* probe 55: Severed has no New Game+. On the console its ending goes
- * straight back to the main menu: no "save for New Game+" popup (state
- * 0xA), no completion record (0xC), no unlocks (3) or New Unlocks screen
- * (4). Hooked at the state dispatch (mov eax, [esi+0x24]; dec eax;
- * cmp eax, 0xD): in the Severed level, state 0xA becomes 0xE, the
- * sequence's own return to the main menu. */
-static const char SIG_EOG_STATE[] = "8B 46 24 48 83 F8 0D 0F 87 ?? ?? ?? ?? FF 24 85";
-
-static void __cdecl note_eog_state(void *o)
-{
-    DWORD *st = (DWORD *)((BYTE *)o + 0x24);
-    if (g_severed_level && mem_ok(st, 4) && *st == 0xA) {
-        log_line("END OF GAME: Severed - no New Game+ popup or unlocks, back to the main menu");
-        *st = 0xE;
-    }
-}
-
-static void hook_end_of_game(void)
-{
-    int n = 0, i;
-    BYTE *s = find_sig(SIG_EOG_SAVE, &n), *k;
-    if (!s) {        /* probe 52: 0 matches in probe 51; try the retail address, log what is there */
-        BYTE *a = (BYTE *)GetModuleHandleA(NULL) + 0x692D85;
-        char hx[3 * 0x40 + 1];
-        for (i = 0; i < 0x40 && mem_ok(a + i, 1); i++) sprintf(hx + 3 * i, "%02x ", a[i]);
-        hx[3 * i] = 0;
-        log_line("end-of-game save: exe+0x692d85: %s", hx);
-        if (mem_ok(a, 0x40) && a[0] == 0x8B && a[1] == 0x4E && a[2] == 0x28 && a[0x0B] == 0x8B && a[0x0C] == 0x49
-            && a[0x0D] == 0x5C && a[0x17] == 0xC7 && a[0x1A] == 0x0D) { s = a; n = 1; }
-    }
-    k = s ? s + 0x35 : NULL;
-    int ok = s && n == 1 && k[0] == 0xC7 && k[1] == 0x46 && k[2] == 0x24 && k[3] == 0x03
-             && hook_call_ecx(s + 0x0B, 5, note_eog_check)
-             && hook_call_ecx(s + 0x17, 7, note_eog_open)
-             && hook_call_ecx(k, 7, note_eog_skip);
-    log_line("end-of-game save: %d match(es)%s", n, ok ? ", hooked" : "");
-    {
-        int ns = 0;
-        BYTE *d = find_sig(SIG_EOG_STATE, &ns);
-        log_line("end-of-game states: %d match(es)%s", ns, d && hook_call_reg(d, 7, note_eog_state, 0x56) ? ", hooked" : "");
-    }
-}
-
-/* ---- SimGroup block loads -----------------------------------------------
- * The SimGroup data block dispatcher (retail exe 0x0085D090, cdecl,
- * argument = block, returns al) sends block 0x011795D9 (packed records,
- * Severed's format) and 0x91C8773C (property tree, base game) to their
- * loaders. Wrapped to log every block and the result. */
-static const char SIG_SGBLOCK[] =
-    "8B 54 24 04 8B 0A 32 C0 81 F9 D9 95 17 01 75 09 89 54 24 04 E9 ?? ?? ?? ?? 81 F9 3C 77 C8 91 75 09 89 54 24 04 E9";
-typedef unsigned char (__cdecl *sgblock_fn)(DWORD *blk);
-static sgblock_fn g_sgblock_tramp;
-
-static unsigned char __cdecl hook_sgblock(DWORD *blk)
-{
-    static LONG n;
-    unsigned char r = g_sgblock_tramp(blk);
-    if (!g_uniform_logged && mem_ok((void *)0x02098B78, 18 * 4) && (((DWORD *)0x02098B78)[17] & 0xFFFF))
-        log_class_fields(0x02098B78, 0x0575C2F4);    /* field list is filled in lazily */
-    if (InterlockedIncrement(&n) <= 3000 && mem_ok(blk, 0x18))
-        log_line("SIMGROUP block %08lx size 0x%lx records %lu -> %s", blk[0], blk[1], blk[4], r ? "ok" : "FAILED");
-    return r;
-}
-
-static int hook_wrap(BYTE *fn, int len, void *hook, void **tramp)
-{
-    BYTE *t = (BYTE *)VirtualAlloc(NULL, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    BYTE *t = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE), *q;
     DWORD old;
     if (!t) return 0;
-    memcpy(t, fn, len);
-    t[len] = 0xE9; *(DWORD *)(t + len + 1) = (DWORD)(fn + len) - (DWORD)(t + len + 5);
-    *tramp = t;
-    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) return 0;
-    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)hook - (DWORD)(fn + 5);
+    q = t;
+    *q++ = 0x60; *q++ = 0x9C;                      /* pushad, pushfd */
+    *q++ = 0xFF; *q++ = 0x74; *q++ = 0x24; *q++ = (BYTE)(0x24 + off);   /* push [entry esp + off] */
+    *q++ = 0xE8; *(DWORD *)q = (DWORD)cb - (DWORD)(q + 4); q += 4;
+    *q++ = 0x83; *q++ = 0xC4; *q++ = 0x04;         /* add esp, 4 */
+    *q++ = 0x9D; *q++ = 0x61;                      /* popfd, popad */
+    memcpy(q, fn, len); q += len;
+    *q++ = 0xE9; *(DWORD *)q = (DWORD)(fn + len) - (DWORD)(q + 4); q += 4;
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) { VirtualFree(t, 0, MEM_RELEASE); return 0; }
+    fn[0] = 0xE9; *(DWORD *)(fn + 1) = (DWORD)t - (DWORD)(fn + 5);
     if (len > 5) memset(fn + 5, 0x90, len - 5);
     VirtualProtect(fn, len, old, &old);
     FlushInstructionCache(GetCurrentProcess(), fn, len);
     return 1;
 }
 
-
-/* ---- dynamic geometry batches (probe 24) ---------------------------------
- * Particles, decals and other geometry built each frame go through one batch
- * (retail exe 0x013D2CE0 starts a batch; the batch is drawn at the end of
- * the frame, so a crash there has no useful stack). The return addresses
- * of the latest batch starts are kept and printed with a crash. */
-static const char SIG_BATCHBEGIN[] =
-    "8B 44 24 14 53 8B 5C 24 14 56 57 81 FB 00 00 00 80 74 04 8B 44 24 14 8B 7C 24 18 8B 15 ?? ?? ?? ?? "
-    "0F AF C7 83 C0 0F C1 E8 04 40 C1 E0 04 8B F0";
-/* per batch: caller, then begin's arguments (primitive, vertex count,
-   stride, count override (0x80000000 = use the next one), count, flag) */
-static volatile DWORD g_batch_ring[16][7];
-static volatile LONG g_batch_pos;
-
-static void __cdecl note_batch(const DWORD *sp)
+/* ---- Windows API hook (PeekMessage) ------------------------------------
+ * A hot-patch hook: the 5 padding bytes before the function become a jump
+ * to ours and its 2-byte `mov edi,edi` a short jump back to them. */
+static int hotpatch(BYTE *fn, void *hook, void **orig)
 {
-    LONG i = InterlockedIncrement(&g_batch_pos);
-    int k;
-    for (k = 0; k < 7; k++) g_batch_ring[i & 15][k] = sp[k];
+    BYTE *pad = fn - 5;
+    DWORD old;
+    int i;
+    if (fn[0] != 0x8B || fn[1] != 0xFF) return 0;                   /* mov edi,edi */
+    for (i = 0; i < 5; i++) if (pad[i] != 0x90 && pad[i] != 0xCC) return 0;
+    if (!VirtualProtect(pad, 7, PAGE_EXECUTE_READWRITE, &old)) return 0;
+    *orig = fn + 2;
+    pad[0] = 0xE9;                                                   /* jmp hook */
+    *(DWORD *)(pad + 1) = (DWORD)((BYTE *)hook - (pad + 5));
+    *(volatile WORD *)fn = 0xF9EB;                                   /* jmp short -7 */
+    VirtualProtect(pad, 7, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), pad, 7);
+    return 1;
 }
 
-/* ---- heap watch (probe 26) ------------------------------------------------
- * The quarry crash is inside a heap function called by Direct3D, with
- * garbage in the registers: heap corruption. Every 2 s (on the game
- * thread, from the PeekMessage hook) and at a crash, every process heap is
- * validated; the first failure of each heap is logged, which dates the
- * corruption (loading a section vs rendering). */
-static DWORD g_heap_tick;
-static HANDLE g_heap_bad[64];
-static int g_nheap_bad;
-
-static int heap_known_bad(HANDLE h)
+/* Length of one instruction from the small set found at the start of
+   Windows API functions, or 0 if it cannot be relocated safely. */
+static int insn_len(const BYTE *p)
 {
-    int i;
-    for (i = 0; i < g_nheap_bad; i++) if (g_heap_bad[i] == h) return 1;
+    if (p[0] >= 0x50 && p[0] <= 0x57) return 1;                 /* push reg */
+    if (p[0] == 0x6A) return 2;                                 /* push imm8 */
+    if (p[0] == 0x68) return 5;                                 /* push imm32 */
+    if (p[0] == 0x8B && (p[1] == 0xFF || p[1] == 0xEC)) return 2; /* mov edi,edi / mov ebp,esp */
+    if (p[0] == 0x83 && p[1] == 0xEC) return 3;                 /* sub esp, imm8 */
+    if (p[0] == 0x81 && p[1] == 0xEC) return 6;                 /* sub esp, imm32 */
+    if (p[0] == 0x33 && (p[1] & 0xC0) == 0xC0) return 2;        /* xor reg, reg */
+    if (p[0] == 0x64 && p[1] == 0xA1) return 6;                 /* mov eax, fs:[imm32] */
     return 0;
 }
 
-static void check_heaps(const char *when)
+/* Classic detour: copy the first >=5 bytes of whole instructions to a
+   trampoline that jumps back, then put a jmp to the hook at the start. */
+static int trampoline(BYTE *fn, void *hook, void **orig)
 {
-    HANDLE heaps[64];
-    DWORD n, i;
-    n = GetProcessHeaps(64, heaps);
-    if (n > 64) n = 64;
-    for (i = 0; i < n; i++) {
-        if (heap_known_bad(heaps[i])) continue;
-        if (!HeapValidate(heaps[i], 0, NULL)) {
-            log_line("HEAP %lu of %lu (%p%s) is CORRUPT - found %s", i, n, heaps[i],
-                     heaps[i] == GetProcessHeap() ? ", process heap" : "", when);
-            if (g_nheap_bad < 64) g_heap_bad[g_nheap_bad++] = heaps[i];
-        }
+    int len = 0, l;
+    BYTE *t;
+    DWORD old;
+    while (len < 5) {
+        if ((l = insn_len(fn + len)) == 0) return 0;
+        len += l;
     }
+    t = (BYTE *)VirtualAlloc(NULL, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!t) return 0;
+    memcpy(t, fn, len);
+    t[len] = 0xE9;
+    *(DWORD *)(t + len + 1) = (DWORD)((fn + len) - (t + len + 5));
+    FlushInstructionCache(GetCurrentProcess(), t, 32);
+    if (!VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old)) { VirtualFree(t, 0, MEM_RELEASE); return 0; }
+    *orig = t;
+    fn[0] = 0xE9;
+    *(DWORD *)(fn + 1) = (DWORD)((BYTE *)hook - (fn + 5));
+    for (l = 5; l < len; l++) fn[l] = 0x90;
+    VirtualProtect(fn, len, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, len);
+    return 1;
 }
 
-/* Probe 35: off unless severed_heapcheck.on is in the game folder. Locking
-   every heap (the driver's too) from the game thread every 2 s can block it
-   while the driver resets the device: the game hung on alt-tab. */
-static int heap_watch_on(void)
+static void install(const char *name, void *hook, void **orig)
 {
-    static int on = -1;
-    if (on < 0) {
-        char flag[MAX_PATH], *slash;
-        GetModuleFileNameA(NULL, flag, sizeof flag);
-        slash = strrchr(flag, '\\');
-        if (slash) lstrcpyA(slash + 1, "severed_heapcheck.on");
-        on = GetFileAttributesA(flag) != INVALID_FILE_ATTRIBUTES;
-        log_line("heap watch: %s", on ? "on (severed_heapcheck.on)" : "off (severed_heapcheck.on absent)");
-    }
-    return on;
+    HMODULE m = GetModuleHandleA("user32.dll");
+    BYTE *fn;
+    if (!m) m = LoadLibraryA("user32.dll");
+    fn = m ? (BYTE *)GetProcAddress(m, name) : NULL;
+    if (!fn) { log_line("could not find %s", name); return; }
+    if (hotpatch(fn, hook, orig)) log_line("hooked %s (hot-patch)", name);
+    else if (trampoline(fn, hook, orig)) log_line("hooked %s (trampoline)", name);
+    else log_line("could not hook %s (first bytes %02X %02X %02X %02X %02X)", name, fn[0], fn[1], fn[2], fn[3], fn[4]);
 }
 
-static void heap_watch(void)
+/* ---- Severed in the episode select ------------------------------------
+ * front end constructor: stores `this` in the front end global and builds
+ * the episode list at this + 0x980 (0x68-byte entries: +0x20 folder).
+ * AddEpisode: thiscall, 8 arguments (ret 0x20): name, description,
+ * folder, stream list, checkpoint, flags, unlock key, extra; the console's
+ * DLC path (.lvl) calls it with weller1.lvl's fields. The constructor is
+ * hooked so Severed is added on the game's own thread right after the
+ * built-in episode (calling AddEpisode from another thread hangs the
+ * game). It starts with push ebx / push ebp / push esi / mov esi, ecx (5
+ * bytes, no relative operands), which the trampoline re-runs. */
+static const char SIG_ADD[] =
+    "56 81 C1 80 09 00 00 E8 ?? ?? ?? ?? 8B F0 8B 44 24 08 50 8B CE E8 ?? ?? ?? ?? 8B 4C 24 0C 51 8D 4E 10 "
+    "E8 ?? ?? ?? ?? 8B 54 24 10 52 8D 4E 20 E8 ?? ?? ?? ?? 8B 44 24 14 50 8D 4E 30 E8 ?? ?? ?? ?? 8B 4C 24 24 "
+    "51 8D 4E 40 E8 ?? ?? ?? ?? 8B 54 24 18 52 8D 4E 50 E8 ?? ?? ?? ?? 8B 44 24 1C 8B 4C 24 20 89 46 60 89 4E "
+    "64 5E C2 20 00";
+static const char SIG_CTOR[] =
+    "53 55 56 8B F1 89 35 ?? ?? ?? ?? C7 46 04 ?? ?? ?? ?? 33 DB 89 5E 0C 57 8D 7E 04 BD 01 00 00 00 89 6F 04 "
+    "C7 06 ?? ?? ?? ?? C7 07 ?? ?? ?? ?? 89 5E 30 89 5E 38 8D 4E 48 89 5E 3C 89 5E 40 89 5E 44";
+
+typedef void (__attribute__((thiscall)) *add_episode_fn)(void *self, const char *name, const char *desc,
+        const char *folder, const char *streams, const char *checkpoint, int flags, int unlock, const char *extra);
+typedef void *(__attribute__((thiscall)) *ctor_fn)(void *self);
+static ctor_fn g_ctor_tramp;
+static add_episode_fn g_add;
+
+static void *__attribute__((thiscall)) hook_frontend_ctor(void *self)
 {
-    DWORD now = GetTickCount();
-    if (!g_added || GetCurrentThreadId() != g_game_thread || now - g_heap_tick < 2000 || !heap_watch_on()) return;
-    if (!g_heap_tick) log_line("heap watch: validating all heaps every 2 s");
-    g_heap_tick = now;
-    check_heaps("by the 2 s check");
+    void *r = g_ctor_tramp(self);
+    g_add(self, "Dead Space 2: Severed", "Gabe Weller's story",
+          "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
+    log_line("front end: Severed added to the episode list");
+    return r;
 }
 
-
-/* ---- message trace (probe 33) --------------------------------------------
- * exe 0x756C60 sends a level message (arg 1: message, hash at +0): it looks
- * the hash up in the listener table (global at +0xD, buckets by hash &
- * 0xFFF, nodes: next +0, listeners +4, hash +0x10) and drops the message
- * when nobody listens. Each distinct hash is logged on its first 3 sends,
- * with its listener state; names are matched afterwards from the
- * SimGroups' message fields (hash + string). */
-static const char SIG_MSGSEND[] =
-    "51 8B 54 24 08 8B 0A 56 8B F1 57 8B 3D ?? ?? ?? ?? 81 E6 FF 0F 00 00 8B 34 B7 32 C0 85 F6";
-static DWORD **g_msg_table;
-static BYTE g_msg_count[1 << 16];          /* by low 16 bits of the hash: sends logged (max 3) */
-static volatile LONG g_msg_logs;
-
-/* probe 40: who listens to the hanging fight's messages
- * (PlayerChangeState_hanging_combat_deactivate, mm_ses_01_03_trigger,
- * ses_player_01_03): the listener list's first words, and for each word
- * that points at an object (or at one of whose first 3 words points at an
- * object; word -1 = the word itself) whose first word lies in the exe, that
- * vtable (exe offset) - the listener's class */
-static void dump_listeners(DWORD h, DWORD *lst)
+static int hook_episode_list(BYTE *add, BYTE *ctor)
 {
-    DWORD exe = (DWORD)GetModuleHandleA(NULL);
-    int k, j;
-    if (!lst || !mem_ok(lst, 0x20)) return;
-    log_line("  listeners %08lx at %08lx: %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx", h, (DWORD)lst,
-             lst[0], lst[1], lst[2], lst[3], lst[4], lst[5], lst[6], lst[7]);
-    for (k = 0; k < 8; k++) {
-        DWORD *o = (DWORD *)lst[k];
-        if (!o || !mem_ok(o, 0x10)) continue;
-        for (j = 0; j < 4; j++) {
-            DWORD *q = j ? (DWORD *)o[j - 1] : o;
-            if (q && mem_ok(q, 4) && q[0] - exe < 0x2000000)
-                log_line("    word %d -> object (word %d) vtable exe+0x%lx", k, j - 1, q[0] - exe);
-        }
-    }
+    BYTE *t = (BYTE *)VirtualAlloc(NULL, 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    DWORD old;
+    if (!t) return 0;
+    memcpy(t, ctor, 5);
+    t[5] = 0xE9; *(DWORD *)(t + 6) = (DWORD)(ctor + 5) - (DWORD)(t + 10);
+    g_ctor_tramp = (ctor_fn)t;
+    g_add = (add_episode_fn)add;
+    if (!VirtualProtect(ctor, 5, PAGE_EXECUTE_READWRITE, &old)) { VirtualFree(t, 0, MEM_RELEASE); return 0; }
+    ctor[0] = 0xE9; *(DWORD *)(ctor + 1) = (DWORD)hook_frontend_ctor - (DWORD)(ctor + 5);
+    VirtualProtect(ctor, 5, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), ctor, 5);
+    return 1;
 }
 
-static void __cdecl note_msgsend(const char *arg)
+/* ---- level start ------------------------------------------------------
+ * Level start (retail exe 0x0042C600, this = level start request, +0x28 =
+ * folder string): notes the game thread and whether Severed is loaded. */
+static const char SIG_LEVELSTART[] =
+    "81 EC 40 01 00 00 53 55 8B E9 C7 45 18 07 00 00 00 A1 ?? ?? ?? ?? 8B 40 38 D1 E8 24 01 88 44 24 0A 8A 45 1C "
+    "D0 E8 24 01 83 7D 4C 00 56 8D 75 28 88 44 24 0F 8B 06 0F 95 44 24 10 57 85 C0 75 05 B8 ?? ?? ?? ?? 68 ?? ?? ?? ?? "
+    "50 E8 ?? ?? ?? ?? 8B 0D ?? ?? ?? ??";
+static volatile DWORD g_game_thread;
+static volatile int g_severed_level;
+static void upgrade_schedule(const char *why);
+
+static void __cdecl on_level_start(void *self)
 {
-    const DWORD *msg = (const DWORD *)arg;
-    DWORD h, *node;
-    int listeners = -1;
-    BYTE *c;
-    if (!msg || !mem_ok(msg, 4) || !g_msg_table || !*g_msg_table) return;
-    h = msg[0];
-    upgrade_on_msg(h);
-    c = &g_msg_count[h & 0xFFFF];
-    /* probe 50: the final fight's tally (oracle_dead) and its end
-     * (twitcher_combat_over) are logged every time, not 3 times */
-    if (h != 0x2E9954A5 && h != 0xB545E260) {
-        if (*c >= 3) return;
-        (*c)++;
-    }
-    if (InterlockedIncrement(&g_msg_logs) > 20000) return;
-    node = (DWORD *)(*g_msg_table)[h & 0xFFF];
-    while (node && mem_ok(node, 0x14)) {
-        if (node[4] == h) { listeners = node[1] ? 1 : 0; break; }
-        node = (DWORD *)node[0];
-    }
-    log_line("MSG %08lx %s", h, listeners > 0 ? "" : listeners == 0 ? "(no listeners - dropped)" : "(unknown - dropped)");
-    if (listeners > 0 && (h == 0x5B9D1871 || h == 0x661A303D || h == 0x95F3F281))
-        dump_listeners(h, (DWORD *)node[1]);
+    const char *folder = self && mem_ok((BYTE *)self + 0x28, 4) ? *(const char **)((BYTE *)self + 0x28) : NULL;
+    char name[128];
+    int n;
+    if (!folder || !mem_ok(folder, 1)) return;
+    log_line("level start: folder %s", folder);
+    g_game_thread = GetCurrentThreadId();
+    lstrcpynA(name, folder, sizeof name);
+    n = lstrlenA(name);
+    while (n && (name[n - 1] == '\\' || name[n - 1] == '/')) name[--n] = 0;
+    g_severed_level = !lstrcmpiA(name, "pdlc1_ch01_mng");
+    if (g_severed_level) upgrade_schedule("Severed level start");
 }
 
-/* ---- Gabe's pre-upgraded Pulse Rifle (probe 34) ---------------------------
+/* ---- Gabe's pre-upgraded Pulse Rifle -----------------------------------
  * On console a Severed-only object (class 2B747EB6, neutralised by the
  * converter) buys 10 Pulse Rifle nodes on `equip_player_upgrade_nodes`.
  * The PC keeps the same state in its UpgradeManager (global read from the
- * Lua getter `GetUpgradeManager`, exe 0x1355D60): weapon trees at +0x18 (an
- * inline array of pointers, count at +0x18+0xC8), each tree: name hash +0,
- * node pointers inline from +4, count +0x170; each node: name hash +0,
- * bought flag +0x2C (what the Lua `DebugFillUpgradeNode`, exe 0x1354C80 ->
- * 0xB77040, sets). Hashes are sdbm of the lower-case name. The nodes are
- * set a few seconds after the message, and after each Severed level start
- * (saves made before probe 34 lack them). */
+ * Lua getter `GetUpgradeManager`): weapon trees at +0x18 (an inline array
+ * of pointers, count at +0x18+0xC8), each tree: name hash +0, node
+ * pointers inline from +4, count +0x170; each node: name hash +0, bought
+ * flag +0x2C. Hashes are sdbm of the lower-case name. The nodes are set a
+ * few seconds after the message, and after each Severed level start. */
 static const char SIG_UPGMGR[] =
     "83 EC 0C 56 8B 74 24 14 8D 44 24 04 50 6A 00 68 ?? ?? ?? ?? 6A 01 56 E8 ?? ?? ?? ?? 83 C4 14 85 C0 74 33 "
     "8D 4C 24 04 51 6A 02 56 E8 ?? ?? ?? ?? 83 C4 0C 85 C0 74 1F 8B 15 ?? ?? ?? ?? 68";
@@ -1743,7 +338,7 @@ static const char SIG_NODEFILL[] =   /* checks the node layout */
     "8B 81 70 01 00 00 56 33 F6 85 C0 76 2A 57 8B 7C 24 0C 83 C1 04 8B D0 8B 01 85 C0 74 06 39 38 75 02 8B F0 "
     "83 C1 04 83 EA 01 75 EC 5F 85 F6 74 07 C7 46 2C 01 00 00 00";
 static BYTE **g_upgmgr;
-static DWORD g_upg_due;                    /* tick when to set the nodes, 0 = nothing pending */
+static volatile DWORD g_upg_due;           /* tick when to set the nodes, 0 = nothing pending */
 static DWORD g_upg_deadline;
 static const char *const g_rifle_nodes[] = {
     "capacity", "capacity2", "damage", "damage3", "reload2", "altdamage", "altdamage2", "pr12", "pr21", "pr23"
@@ -1756,27 +351,21 @@ static DWORD sdbm_lower(const char *s)
     return h;
 }
 
-/* the UpgradeManager global, from the one getter whose type name is
-   "UpgradeManager" (the same code shape serves other singletons) */
+/* the getter whose type name is "UpgradeManager" (the same code shape
+   serves other singletons) */
+static int is_upgmgr_getter(BYTE *p)
+{
+    const char *name = *(const char **)(p + 0x10);
+    return mem_ok(name, 15) && !lstrcmpA(name, "UpgradeManager");
+}
+
 static BYTE **find_upgmgr(void)
 {
-    BYTE b[256], m[256], *base = (BYTE *)GetModuleHandleA(NULL), *t, *e, *p;
-    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
-    IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
-    int n = parse_sig(SIG_UPGMGR, b, m), i, c1 = 0, c2 = 0;
-    t = base + sec->VirtualAddress;
-    e = t + sec->Misc.VirtualSize - n;
-    if (!mem_ok(t, sec->Misc.VirtualSize)) return NULL;
-    if (!find_sig(SIG_TREEFIND, &c1) || !find_sig(SIG_NODEFILL, &c2)) return NULL;
-    for (p = t; p < e; p++) {
-        const char *name;
-        if (*p != b[0]) continue;
-        for (i = 1; i < n && (!m[i] || p[i] == b[i]); i++) ;
-        if (i < n) continue;
-        name = *(const char **)(p + 0x10);
-        if (mem_ok(name, 15) && !lstrcmpA(name, "UpgradeManager")) return *(BYTE ***)(p + 0x39);
-    }
-    return NULL;
+    int c = 0;
+    BYTE *p;
+    if (!find_sig(SIG_TREEFIND, &c) || !find_sig(SIG_NODEFILL, &c)) return NULL;
+    p = scan_sig(SIG_UPGMGR, &c, is_upgmgr_getter);
+    return p && is_upgmgr_getter(p) ? *(BYTE ***)(p + 0x39) : NULL;
 }
 
 static void upgrade_rifle(void)
@@ -1806,442 +395,175 @@ static void upgrade_rifle(void)
             node = ((BYTE **)(tree + 4))[i];
             if (node && mem_ok(node, 0x30) && *(DWORD *)node == h) found = node;
         }
-        if (!found) { missing++; log_line("pulse rifle upgrades: node %s not in the tree", g_rifle_nodes[k]); continue; }
+        if (!found) { missing++; continue; }
         if (*(DWORD *)(found + 0x2C) == 1) had++;
         else { *(DWORD *)(found + 0x2C) = 1; set++; }
     }
-    log_line("pulse rifle upgrades: %d node(s) set, %d already bought, %d missing (tree %p, %lu nodes)",
-             set, had, missing, tree, n);
-}
-
-/* probe 41: with severed_noupgrade.on in the game folder the nodes are
-   left alone (test: is the Pulse Rifle's odd grip from this?) */
-static int upgrade_disabled(void)
-{
-    char path[MAX_PATH], *slash;
-    GetModuleFileNameA(NULL, path, sizeof path);
-    slash = strrchr(path, '\\');
-    if (!slash) return 0;
-    lstrcpyA(slash + 1, "severed_noupgrade.on");
-    return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+    log_line("pulse rifle upgrades: %d node(s) set, %d already bought, %d missing", set, had, missing);
 }
 
 static void upgrade_schedule(const char *why)
 {
     if (!g_upgmgr) return;
-    if (upgrade_disabled()) { log_line("pulse rifle upgrades: skipped (%s; severed_noupgrade.on)", why); return; }
+    g_upg_deadline = GetTickCount() + 63000;
     g_upg_due = GetTickCount() + 3000;
-    g_upg_deadline = g_upg_due + 60000;
     log_line("pulse rifle upgrades: scheduled (%s)", why);
 }
 
-/* from the message hook, on the game thread */
-static void upgrade_on_msg(DWORD h)
+/* ---- level messages ---------------------------------------------------
+ * exe 0x756C60 sends a level message (arg 1: message, name hash at +0).
+ * The hook watches for `equip_player_upgrade_nodes` and sets the rifle
+ * nodes when due, on the game thread. */
+static const char SIG_MSGSEND[] =
+    "51 8B 54 24 08 8B 0A 56 8B F1 57 8B 3D ?? ?? ?? ?? 81 E6 FF 0F 00 00 8B 34 B7 32 C0 85 F6";
+static DWORD g_equip_hash;
+
+static void __cdecl note_msgsend(const void *arg)
 {
-    static DWORD equip;
-    if (!equip) equip = sdbm_lower("equip_player_upgrade_nodes");
-    if (h == equip && g_severed_level) upgrade_schedule("equip_player_upgrade_nodes");
+    const DWORD *msg = (const DWORD *)arg;
+    if (!msg || !mem_ok(msg, 4)) return;
+    if (msg[0] == g_equip_hash && g_severed_level) upgrade_schedule("equip_player_upgrade_nodes");
     if (g_upg_due && (LONG)(GetTickCount() - g_upg_due) >= 0 && GetCurrentThreadId() == g_game_thread)
         upgrade_rifle();
 }
 
-/* ---- texture list pass (probe 32) ---------------------------------------
- * Probe 31 found the bad slot's origin: exe 0x6DAF10 (ecx = render object)
- * binds a list of texture handles (arg 1, count arg 2) using per-shader slot
- * tables (6 dwords each: 0x2033E78 for one kind of texture, 0x2033E90 for
- * the other, index (obj+0xB0)*24 + i). An object given more textures than
- * its shader has slots reads past them (slot 176). Each such object is
- * logged once per shader: shader index, the textures (handle and record)
- * and both slot rows. */
-static const char SIG_TEXPASS[] =
-    "55 8B EC 83 E4 F0 83 EC 14 53 56 57 33 DB 33 FF 39 5D 0C 8B F1 0F 8E 94 00 00 00 8D 86 B8 00 00 00";
-static DWORD *g_slots_a, *g_slots_b;
-static DWORD g_texpass_seen[64];
-static int g_ntexpass_seen;
-static volatile LONG g_texpass_logs;
+/* ---- F7: send level messages (testing) ---------------------------------
+ * The engine's message broadcast (retail exe 0x0084F5A0, behind Lua's
+ * SendMessage): cdecl (message name, unused, payload). F7 sends each line
+ * of severed_send.txt in the game folder, on the game's thread (from its
+ * message loop, PeekMessage hook). */
+static const char SIG_SENDMSG[] =
+    "83 EC 14 8B 54 24 18 33 C0 66 89 44 24 04 52 8D 44 24 04 33 C9 50 C7 44 24 08 00 00 00 00 66 89 4C 24 0E "
+    "E8 ?? ?? ?? ?? 8B 4C 24 08 8B 54 24 28 8D 44 24 10 6A 00 50 89 4C 24 18 C6 44 24 1C 00 89 54 24 20 "
+    "E8 ?? ?? ?? ?? 8D 4C 24 10 51 E8 ?? ?? ?? ?? 83 C4 28 C3";
+typedef void (__cdecl *send_msg_fn)(const char *name, const char *unused, void *payload);
+static send_msg_fn g_sendmsg;
+#define MAX_MSGS 32
+static char g_msgs[MAX_MSGS][96];
+static volatile LONG g_msgs_pending;
+static int g_nmsgs;
 
-static void __cdecl note_texpass(const DWORD *sp)
+static void queue_message_file(void)
 {
-    DWORD obj = sp[-2], *list = (DWORD *)sp[1], count = sp[2], shader, i, bad = 0, *ra, *rb;
-    char line[1024];
-    int len, k;
-    if (!g_slots_a || !mem_ok((void *)(obj + 0xB0), 4) || count == 0 || count > 64 || !mem_ok(list, count * 4)) return;
-    shader = *(DWORD *)(obj + 0xB0);
-    if (shader > 0x10000) return;
-    ra = g_slots_a + shader * 24;
-    rb = g_slots_b + shader * 24;
-    if (!mem_ok(ra, 6 * 4) || !mem_ok(rb, 6 * 4)) return;
-    for (i = 0; i < count && i < 6; i++)
-        if ((ra[i] & 0xFF) >= 16 || (rb[i] & 0xFF) >= 16) bad = 1;
-    if (count > 6) bad = 1;
-    if (!bad) return;
-    for (k = 0; k < g_ntexpass_seen; k++) if (g_texpass_seen[k] == shader) return;
-    if (g_ntexpass_seen < 64) g_texpass_seen[g_ntexpass_seen++] = shader;
-    if (InterlockedIncrement(&g_texpass_logs) > 32) return;
-    len = wsprintfA(line, "TEXTURE LIST: object %08lx shader %lu, %lu texture(s); slot rows A", obj, shader, count);
-    for (i = 0; i < 6; i++) len += wsprintfA(line + len, " %08lx", ra[i]);
-    len += wsprintfA(line + len, " B");
-    for (i = 0; i < 6; i++) len += wsprintfA(line + len, " %08lx", rb[i]);
-    log_line("%s", line);
-    for (i = 0; i < count && i < 12; i++) {
-        DWORD h = list[i], idx = h == 0xFFFFFFFF ? 0xFFF : h, *rec;
-        if (idx >= 0x1000) { log_line("  texture %lu: handle %08lx", i, h); continue; }
-        rec = (DWORD *)(0x20E04D8 + idx * 0x3C);
-        if (!mem_ok(rec, 0x3C)) continue;
-        log_line("  texture %lu: handle %08lx record %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx",
-                 i, h, rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8], rec[9], rec[10], rec[11], rec[12], rec[13], rec[14]);
+    char path[MAX_PATH], buf[4096], *line;
+    HANDLE f;
+    DWORD got = 0;
+    int n = 0;
+    if (g_msgs_pending) { log_line("F7: the last messages are still being sent - try again"); return; }
+    if (!g_sendmsg) { log_line("F7: the game's message function was not found - nothing sent"); return; }
+    game_file(path, "severed_send.txt");
+    f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) { log_line("F7: no severed_send.txt in the game folder"); return; }
+    if (!ReadFile(f, buf, sizeof buf - 1, &got, NULL)) got = 0;
+    CloseHandle(f);
+    buf[got] = 0;
+    for (line = strtok(buf, "\r\n"); line && n < MAX_MSGS; line = strtok(NULL, "\r\n")) {
+        while (*line == ' ' || *line == '\t') line++;
+        if (*line && *line != '#') lstrcpynA(g_msgs[n++], line, sizeof g_msgs[0]);
     }
+    g_nmsgs = n;
+    InterlockedExchange(&g_msgs_pending, 1);   /* the list stays untouched until the game thread sets 0 */
+    log_line("F7: %d message(s) queued", n);
 }
 
-/* ---- scripted sequence trace (probe 22) ---------------------------------
- * A ScriptedEventSequence runs a table-driven state machine
- * (ScriptedSequenceSM: idle, gotoSS, gotoPos, trackToPos, waitAtSS, faceOrient,
- * action, done, exit). Its states' checks and actions are numbered handlers
- * dispatched by one function (retail exe 0x00ECA440, thiscall, handler number
- * = third argument, 0x0A-0x16). Each handler's result is logged when first
- * seen and whenever it changes, per state machine, so the log shows which
- * state a stuck sequence is in and what it waits for. Values only. */
-static const char SIG_SSMHANDLER[] =
-    "55 8B EC 83 E4 F0 83 EC 2C 56 8B F1 8B 4D 10 8D 41 F6 83 F8 0C 0F 87 ?? ?? ?? ?? FF 24 85 ?? ?? ?? ?? "
-    "8A 46 5C 24 01 5E 8B E5 5D C2 10 00";
-typedef DWORD (__attribute__((thiscall)) *ssm_fn)(void *self, DWORD a, DWORD b, DWORD idx, DWORD c);
-static ssm_fn g_ssm_tramp;
-#define SSM_SLOTS 256
-static struct { void *self; DWORD idx, result; } g_ssm[SSM_SLOTS];
-static int g_nssm;
-
-/* Sequence anchor (probe 36). exe 0xEA4C00 builds a sequence's anchor from
- * the ScriptedEventSequence object ([+54] - 0x10, matrix at +0x190, origin
- * +0x1C0, record at +0xC: name hash +0x18, settings flags +0x74) and, with
- * SSEQFL_NEGATE_CHAR_PROXY_OFFSET (0x4000), moves it by minus the vector at
- * [+88] + 0x80 (the hanging state's proxy offset). Logged for sequences with
- * that flag (ses_player_01_03 drops Gabe from the hanging fight), every
- * 250 ms while their state machine runs. Positions in millimetres. */
-static int mm(const BYTE *p, int i) { return (int)(((const float *)p)[i] * 1000.0f); }
-
-/* Gabe's height through the drop (probe 47). The teleport into the hanging
- * fight (a 0x4000 sequence with a real origin) gives a reference point;
- * when ses_player_01_03 starts, the probe looks in the object at [+88] and
- * two pointer levels below it for float triples within 20 m of that point
- * (positions and matrix rows), then logs them every 200 ms for 14 s from
- * the game's thread, through the sequence's end and the release. */
-static float g_pos_ref[3];
-static int g_pos_have_ref;
-static BYTE *g_pos_root;
-static DWORD g_pos_start, g_pos_last;
-#define POS_MAX 16
-static struct { float *p; int level; DWORD base, off; } g_pos[POS_MAX];
-static int g_npos = -1;
-
-static int pos_near(const float *f)
+static void run_pending_messages(void)
 {
-    int k;
-    for (k = 0; k < 3; k++)
-        if (!(f[k] > g_pos_ref[k] - 20.0f && f[k] < g_pos_ref[k] + 20.0f)) return 0;
-    return 1;
-}
-
-static void pos_scan_block(BYTE *b, SIZE_T n, int level, DWORD base)
-{
-    SIZE_T o;
-    int k;
-    if (!mem_ok(b, n)) return;
-    for (o = 0; o + 12 <= n && g_npos < POS_MAX; o += 4) {
-        float *f = (float *)(b + o);
-        if (!pos_near(f)) continue;
-        for (k = 0; k < g_npos && g_pos[k].p != f; k++) ;
-        if (k < g_npos) continue;
-        g_pos[g_npos].p = f; g_pos[g_npos].level = level; g_pos[g_npos].base = base; g_pos[g_npos].off = (DWORD)o;
-        g_npos++;
-        o += 8;
-    }
-}
-
-static void pos_scan(void)
-{
-    DWORD *a = (DWORD *)g_pos_root, *b;
-    int i, j;
-    g_npos = 0;
-    pos_scan_block(g_pos_root, 0x800, 0, (DWORD)g_pos_root);
-    if (!mem_ok(a, 0x200)) return;
-    for (i = 0; i < 0x80 && g_npos < POS_MAX; i++)
-        if (a[i] > 0x10000 && !(a[i] & 3)) pos_scan_block((BYTE *)a[i], 0x400, 1, a[i]);
-    for (i = 0; i < 0x80 && g_npos < POS_MAX; i++) {
-        b = (DWORD *)a[i];
-        if (a[i] <= 0x10000 || (a[i] & 3) || !mem_ok(b, 0x100)) continue;
-        for (j = 0; j < 0x40 && g_npos < POS_MAX; j++)
-            if (b[j] > 0x10000 && !(b[j] & 3)) pos_scan_block((BYTE *)b[j], 0x400, 2, a[i]);
-    }
-    log_line("POS reference %d %d %d mm, %d place(s) found under %08lx", (int)(g_pos_ref[0] * 1000), (int)(g_pos_ref[1] * 1000),
-             (int)(g_pos_ref[2] * 1000), g_npos, (DWORD)g_pos_root);
-    for (i = 0; i < g_npos; i++)
-        log_line("POS [%d] %08lx (level %d, under %08lx +%03lx)", i, (DWORD)g_pos[i].p, g_pos[i].level, g_pos[i].base, g_pos[i].off);
-}
-
-static void pos_watch(void)
-{
-    static LONG lines;
-    DWORD now = GetTickCount();
-    char line[1024];
-    int i, n;
-    if (!g_pos_root || GetCurrentThreadId() != g_game_thread) return;
-    if (now - g_pos_start > 14000) { g_pos_root = NULL; log_line("POS watch ended"); return; }
-    if (g_npos < 0) pos_scan();
-    if (now - g_pos_last < 200) return;
-    g_pos_last = now;
-    if (InterlockedIncrement(&lines) > 400) return;
-    n = snprintf(line, sizeof line, "POS +%5lu ms:", now - g_pos_start);
-    for (i = 0; i < g_npos && n < (int)sizeof line - 40; i++) {
-        float *f = g_pos[i].p;
-        if (mem_ok(f, 12))
-            n += snprintf(line + n, sizeof line - n, " [%d] %d %d %d", i, (int)(f[0] * 1000), (int)(f[1] * 1000), (int)(f[2] * 1000));
-        else
-            n += snprintf(line + n, sizeof line - n, " [%d] gone", i);
-    }
-    log_line("%s", line);
-}
-
-static void ssm_anchor(BYTE *o, DWORD idx)
-{
-    static LONG lines;
-    static struct { BYTE *self; DWORD tick; int v[6]; } seen[64];
-    BYTE *ses, *rec, *px;
-    DWORD flags, name, now = GetTickCount();
     int i;
-    if (!mem_ok(o + 0x54, 4) || !mem_ok(o + 0x88, 4) || !*(BYTE **)(o + 0x54)) return;
-    ses = *(BYTE **)(o + 0x54) - 0x10;
-    if (!mem_ok(ses + 0xC, 4) || !mem_ok(ses + 0x190, 0x40)) return;
-    rec = *(BYTE **)(ses + 0xC);
-    if (!mem_ok(rec + 0x18, 4) || !mem_ok(rec + 0x74, 4)) return;
-    flags = *(DWORD *)(rec + 0x74);
-    name = *(DWORD *)(rec + 0x18);
-    for (i = 0; i < 64 && seen[i].self && seen[i].self != o; i++);
-    if (i == 64) return;
-    if (!(flags & 0x4000)) {          /* other sequences: once, to check the layout */
-        if (!seen[i].self && InterlockedIncrement(&lines) <= 600)
-            log_line("SES %08lx (ssm %08lx) flags %04lx origin %d %d %d mm", name, (DWORD)o, flags,
-                     mm(ses + 0x1C0, 0), mm(ses + 0x1C0, 1), mm(ses + 0x1C0, 2));
-        seen[i].self = o; seen[i].tick = now;
-        return;
+    if (!g_msgs_pending || GetCurrentThreadId() != g_game_thread || !g_sendmsg) return;
+    if (InterlockedCompareExchange(&g_msgs_pending, 2, 1) != 1) return;
+    for (i = 0; i < g_nmsgs; i++) {
+        log_line("send message %s", g_msgs[i]);
+        g_sendmsg(g_msgs[i], NULL, NULL);
     }
-    if (seen[i].self && now - seen[i].tick < 250) return;
-    px = *(BYTE **)(o + 0x88);
-    {   /* probe 47: reference point, and the watch (at most once a minute) */
-        const float *org = (const float *)(ses + 0x1C0);
-        if (org[0] != 0.0f || org[1] != 0.0f || org[2] != 0.0f) {
-            memcpy(g_pos_ref, org, sizeof g_pos_ref);
-            g_pos_have_ref = 1;
-        }
-        if (name == 0x95F3F281 && px && g_pos_have_ref && !g_pos_root && (!g_pos_start || now - g_pos_start > 60000)) {
-            g_npos = -1; g_pos_start = now ? now : 1; g_pos_last = 0;
-            g_pos_root = px;
-            log_line("POS watch started for ses_player_01_03");
-        }
-    }
-    {   /* only when the anchor or the offset changes (probe 38) */
-        int v[6], k;
-        v[0] = mm(ses + 0x1C0, 0); v[1] = mm(ses + 0x1C0, 1); v[2] = mm(ses + 0x1C0, 2);
-        v[3] = px && mem_ok(px + 0x80, 12) ? mm(px + 0x80, 0) : 0x7FFFFFFF;
-        v[4] = px && mem_ok(px + 0x80, 12) ? mm(px + 0x80, 1) : 0;
-        v[5] = px && mem_ok(px + 0x80, 12) ? mm(px + 0x80, 2) : 0;
-        for (k = 0; k < 6 && seen[i].self && seen[i].v[k] == v[k]; k++) ;
-        seen[i].self = o; seen[i].tick = now;
-        if (k == 6) return;
-        memcpy(seen[i].v, v, sizeof v);
-    }
-    if (InterlockedIncrement(&lines) > 600) return;
-    if (px && mem_ok(px + 0x80, 12))
-        log_line("SES %08lx (ssm %08lx, handler 0x%02lx) flags %04lx origin %d %d %d mm, proxy %08lx offset %d %d %d mm",
-                 name, (DWORD)o, idx, flags, mm(ses + 0x1C0, 0), mm(ses + 0x1C0, 1), mm(ses + 0x1C0, 2),
-                 (DWORD)px, mm(px + 0x80, 0), mm(px + 0x80, 1), mm(px + 0x80, 2));
-    else
-        log_line("SES %08lx (ssm %08lx, handler 0x%02lx) flags %04lx origin %d %d %d mm, proxy %08lx (no offset: the anchor is not moved)",
-                 name, (DWORD)o, idx, flags, mm(ses + 0x1C0, 0), mm(ses + 0x1C0, 1), mm(ses + 0x1C0, 2), (DWORD)px);
+    InterlockedExchange(&g_msgs_pending, 0);
+    MessageBeep(MB_ICONASTERISK);
 }
 
-static DWORD __attribute__((thiscall)) hook_ssm(void *self, DWORD a, DWORD b, DWORD idx, DWORD c)
+typedef BOOL (WINAPI *PeekMessage_t)(LPMSG, HWND, UINT, UINT, UINT);
+static PeekMessage_t o_PeekMessageA, o_PeekMessageW;
+static BOOL WINAPI h_PeekMessageA(LPMSG m, HWND w, UINT a, UINT b, UINT r) { run_pending_messages(); return o_PeekMessageA(m, w, a, b, r); }
+static BOOL WINAPI h_PeekMessageW(LPMSG m, HWND w, UINT a, UINT b, UINT r) { run_pending_messages(); return o_PeekMessageW(m, w, a, b, r); }
+
+static DWORD WINAPI hotkey_thread(LPVOID p)
 {
-    static LONG lines;
-    DWORD r = g_ssm_tramp(self, a, b, idx, c);
-    int i;
-    ssm_anchor((BYTE *)self, idx);
-    for (i = 0; i < g_nssm; i++)
-        if (g_ssm[i].self == self && g_ssm[i].idx == idx) break;
-    if (i < g_nssm && g_ssm[i].result == r) return r;
-    if (i == g_nssm) {
-        if (g_nssm >= SSM_SLOTS) return r;
-        g_ssm[i].self = self; g_ssm[i].idx = idx; g_nssm++;
-    }
-    g_ssm[i].result = r;
-    if (InterlockedIncrement(&lines) <= 3000) {
-        BYTE *o = (BYTE *)self;
-        log_line("SSM %08lx handler 0x%02lx -> %08lx  [+20]=%08lx [+5c]=%08lx [+88]=%08lx", (DWORD)self, idx, r,
-                 mem_ok(o + 0x20, 4) ? *(DWORD *)(o + 0x20) : 0, mem_ok(o + 0x5c, 4) ? *(DWORD *)(o + 0x5c) : 0,
-                 mem_ok(o + 0x88, 4) ? *(DWORD *)(o + 0x88) : 0);
-    }
-    return r;
-}
-
-
-/* ---- name hash log ------------------------------------------------------
- * The game's name hash (retail exe 0x007423C0: lower-case sdbm of a C
- * string, cdecl) is used for archive lookups among many other things.
- * Path-like names (containing '\' or '/', or a file extension) are logged
- * once each, so a run shows every file name the game looks for. */
-static const char SIG_NAMEHASH[] =
-    "8B 54 24 04 33 C0 85 D2 74 25 8A 0A 84 C9 74 1F 56 0F B6 C9 8D 71 BF 42 83 FE 19 77 03 83 C1 20 69 C0 3F 00 01 00";
-
-#define SEEN_BITS (1 << 20)
-static BYTE g_nameseen[SEEN_BITS / 8];
-
-static void __cdecl log_name_hash(const char *n)
-{
-    static LONG count;
-    DWORD h = 0, i;
-    int pathy = 0;
-    if (!n || !mem_ok(n, 1)) return;
-    for (i = 0; n[i] && i < 260; i++) {
-        BYTE c = (BYTE)n[i];
-        if (c == '\\' || c == '/') pathy = 1;
-        if (c >= 'A' && c <= 'Z') c += 32;
-        h = h * 65599 + c;
-    }
-    if (!pathy && !(i > 4 && (n[i - 4] == '.' || n[i - 3] == '.'))) return;
-    if (g_nameseen[(h >> 3) & (SEEN_BITS / 8 - 1)] & (1 << (h & 7))) return;
-    g_nameseen[(h >> 3) & (SEEN_BITS / 8 - 1)] |= (BYTE)(1 << (h & 7));
-    if (InterlockedIncrement(&count) > 20000) return;
-    log_line("NAME #%08lX %s", h, n);
-}
-
-static DWORD WINAPI menu_hook_thread(LPVOID p)
-{
-    int na = 0, nc = 0, tries;
-    BYTE *add = NULL, *ctor = NULL, *t;
-    DWORD old, base = (DWORD)GetModuleHandleA(NULL);
     (void)p;
-    /* the Steam wrapper decrypts the code shortly after start: wait for it */
-    for (tries = 0; tries < 6000; tries++) {
-        add = find_sig(SIG_ADD, &na);
-        ctor = find_sig(SIG_CTOR, &nc);
-        if (add && ctor) break;
-        Sleep(10);
-    }
-    log_line("menu hook: AddEpisode %d match(es) at exe+0x%lx, front end constructor %d match(es) at exe+0x%lx",
-             na, add ? (DWORD)add - base : 0, nc, ctor ? (DWORD)ctor - base : 0);
-    if (!add || !ctor) { log_line("menu hook: functions not found - Severed not added"); return 0; }
-    t = (BYTE *)VirtualAlloc(NULL, 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!t) return 0;
-    memcpy(t, ctor, 5);
-    t[5] = 0xE9; *(DWORD *)(t + 6) = (DWORD)(ctor + 5) - (DWORD)(t + 10);
-    g_ctor_tramp = (ctor_fn)t;
-    g_add = (add_episode_fn)add;
-    if (!VirtualProtect(ctor, 5, PAGE_EXECUTE_READWRITE, &old)) { log_line("menu hook: cannot patch"); return 0; }
-    ctor[0] = 0xE9; *(DWORD *)(ctor + 1) = (DWORD)hook_frontend_ctor - (DWORD)(ctor + 5);
-    VirtualProtect(ctor, 5, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), ctor, 5);
-    log_line("menu hook: installed after %d ms", tries * 10);
-    hook_difficulty();
-    {
-        int ns;
-        BYTE *sr = find_sig(SIG_STREAMREQ, &ns);
-        log_line("stream request log: %d match(es) at exe+0x%lx%s", ns, sr ? (DWORD)sr - base : 0,
-                 sr && hook_log_arg1(sr, 6, log_stream_request) ? ", hooked" : "");
-        if (sr) {
-            int nl;
-            BYTE *ls = find_sig(SIG_LEVELSTART, &nl);
-            /* the stub runs the original first bytes, so the request
-               function is called through its trampoline-free entry: the
-               hooked entry still works (it just logs) */
-            g_streamreq = (stream_req_fn)sr;
-            if (ls) g_streammgr = *(void ***)(ls + 0x52);
-            {
-                int nh;
-                BYTE *nhf = find_sig(SIG_NAMEHASH, &nh);
-                /* probe 16's name hash log: only UI names go through this
-                   function, not file paths - left off (it slows the game) */
-                (void)nhf; (void)nh; (void)log_name_hash;
-            }
-            {
-                int ng;
-                BYTE *sg = find_sig(SIG_SGBLOCK, &ng);
-                log_line("simgroup block log: %d match(es) at exe+0x%lx%s", ng, sg ? (DWORD)sg - base : 0,
-                         sg && hook_wrap(sg, 6, (void *)hook_sgblock, (void **)&g_sgblock_tramp) ? ", hooked" : "");
-            }
-            {
-                int nq, k;
-                BYTE *q = NULL;
-                /* decrypted late: missed on about half the runs before probe 37 */
-                for (k = 0; k < 200 && !(q = find_sig(SIG_SSMHANDLER, &nq)); k++) Sleep(50);
-                log_line("scripted sequence trace: %d match(es) at exe+0x%lx%s", nq, q ? (DWORD)q - base : 0,
-                         q && hook_wrap(q, 9, (void *)hook_ssm, (void **)&g_ssm_tramp) ? ", hooked" : "");
-            }
-            {
-                int nm;
-                g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm);
-                log_line("message send: %d match(es) at exe+0x%lx", nm, g_sendmsg ? (DWORD)g_sendmsg - base : 0);
-            }
-            {
-                /* parts of the code are decrypted later than others (probe
-                   27's run found neither of these at 0.6 s): retry them
-                   every 200 ms for a minute */
-                int nb = 0, nm2 = 0, k;
-                BYTE *bb = find_sig(SIG_BATCHBEGIN, &nb);
-                for (k = 0; k < 300 && (!bb || !ls); k++) {
-                    Sleep(200);
-                    if (!bb) bb = find_sig(SIG_BATCHBEGIN, &nb);
-                    if (!ls) {
-                        ls = find_sig(SIG_LEVELSTART, &nl);
-                        if (ls) g_streammgr = *(void ***)(ls + 0x52);
-                    }
-                    if (!g_sendmsg) g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &nm2);
-                }
-                {
-                    int nm3 = 0, kk3;
-                    BYTE *mp = find_sig(SIG_MSGSEND, &nm3);
-                    for (kk3 = 0; kk3 < 50 && !mp; kk3++) { Sleep(200); mp = find_sig(SIG_MSGSEND, &nm3); }
-                    if (mp) g_msg_table = *(DWORD ***)(mp + 0xD);
-                    log_line("message trace: %d match(es) at exe+0x%lx, listener table global %p%s", nm3, mp ? (DWORD)mp - base : 0,
-                             g_msg_table, mp && hook_log_word(mp, 5, note_msgsend, 4) ? ", hooked" : "");
-                }
-                {
-                    int kk4;
-                    for (kk4 = 0; kk4 < 50 && !(g_upgmgr = find_upgmgr()); kk4++) Sleep(200);
-                    log_line("upgrade manager: global %p%s", g_upgmgr, g_upgmgr ? "" : " (not found: no Pulse Rifle upgrades)");
-                }
-                /* probe 48: no texture list pass check (an old crash hunt) */
-                log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s (after %d retries)", nb,
-                         bb ? (DWORD)bb - base : 0, bb && hook_log_sp(bb, 9, note_batch) ? ", hooked" : "", k);
-            }
-            hook_end_of_game();
-            log_line("level start: %d match(es) at exe+0x%lx, stream manager global 0x%08lx%s", nl,
-                     ls ? (DWORD)ls - base : 0, (DWORD)g_streammgr,
-                     ls && hook_call_ecx(ls, 6, on_level_start) ? ", hooked" : "");
+    for (;;) {
+        Sleep(200);
+        /* with Alt, Ctrl or Shift held the key belongs to other programs */
+        if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
+            while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
+            continue;
+        }
+        if (GetAsyncKeyState(VK_F7) & 0x8000) {
+            if (!g_game_thread) log_line("F7: start a level first");
+            else queue_message_file();
+            while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
         }
     }
     return 0;
 }
 
-static void add_severed(void)
+/* ---- Severed's ending: no New Game+ ------------------------------------
+ * On the console Severed's ending goes straight back to the main menu.
+ * The base game's end-of-game sequence (retail 0xA92A80, state at +0x24)
+ * would show the "save for New Game+" popup (state 0xA), record the
+ * completion (0xC), award the unlocks (3) and show New Unlocks (4) before
+ * its return to the main menu (0xE). Hooked at the state dispatch
+ * (mov eax, [esi+0x24]; dec eax; cmp eax, 0xD): in the Severed level,
+ * state 0xA becomes 0xE. */
+static const char SIG_EOG_STATE[] = "8B 46 24 48 83 F8 0D 0F 87 ?? ?? ?? ?? FF 24 85";
+
+static void __cdecl note_eog_state(void *o)
 {
-    int nc;
-    BYTE *ctor = find_sig(SIG_CTOR, &nc);   /* hooked now: pattern gone */
-    void **global = (void **)0x0201C0E4, *fe;
-    (void)ctor; (void)nc;
-    log_line("F9: Severed added %ld time(s) by the menu hook", g_added);
-    if (g_severed_level) {
-        log_line("F9: start sections queued for the game thread (%lu)", g_game_thread);
-        InterlockedExchange(&g_sections_pending, 1);
+    DWORD *st = (DWORD *)((BYTE *)o + 0x24);
+    if (g_severed_level && mem_ok(st, 4) && *st == 0xA) {
+        log_line("end of game: Severed - back to the main menu (no New Game+ popup or unlocks)");
+        *st = 0xE;
     }
-    log_class_fields(0x02098B78, 0x0575C2F4);
-    if (mem_ok(global, 4) && (fe = *global)) log_episodes(fe);
 }
 
+/* ---- installing the game hooks -----------------------------------------
+ * The Steam wrapper decrypts the code shortly after start, some parts later
+ * than others: each pattern is retried for up to a minute. */
+static DWORD WINAPI hook_thread(LPVOID p)
+{
+    BYTE *add = NULL, *ctor = NULL, *ls = NULL, *ms = NULL, *eog = NULL;
+    int na = 0, nc = 0, nl = 0, nm = 0, ne = 0, ns = 0, tries, episodes = 0, level = 0, msgs = 0, ending = 0;
+    (void)p;
+    g_equip_hash = sdbm_lower("equip_player_upgrade_nodes");
+    for (tries = 0; tries < 6000 && !(add && ctor); tries++) {
+        add = find_sig(SIG_ADD, &na);
+        ctor = find_sig(SIG_CTOR, &nc);
+        if (!(add && ctor)) Sleep(10);
+    }
+    episodes = add && ctor && hook_episode_list(add, ctor);
+    log_line("episode list: AddEpisode %d match(es) at exe+0x%lx, front end %d match(es) at exe+0x%lx%s",
+             na, exe_off(add), nc, exe_off(ctor), episodes ? ", hooked" : " - Severed NOT added");
+    for (tries = 0; tries < 300; tries++) {
+        if (!ls) ls = find_sig(SIG_LEVELSTART, &nl);
+        if (!ms) ms = find_sig(SIG_MSGSEND, &nm);
+        if (!eog) eog = find_sig(SIG_EOG_STATE, &ne);
+        if (!g_sendmsg) g_sendmsg = (send_msg_fn)find_sig(SIG_SENDMSG, &ns);
+        if (!g_upgmgr) g_upgmgr = find_upgmgr();
+        if (ls && ms && eog && g_sendmsg && g_upgmgr) break;
+        Sleep(200);
+    }
+    level = ls && hook_call_reg(ls, 6, on_level_start, 0x51);
+    msgs = ms && hook_call_arg(ms, 5, note_msgsend, 4);
+    ending = eog && hook_call_reg(eog, 7, note_eog_state, 0x56);
+    log_line("level start: %d match(es) at exe+0x%lx%s", nl, exe_off(ls), level ? ", hooked" : "");
+    log_line("level messages: %d match(es) at exe+0x%lx%s", nm, exe_off(ms), msgs ? ", hooked" : "");
+    log_line("end of game: %d match(es) at exe+0x%lx%s", ne, exe_off(eog), ending ? ", hooked" : "");
+    log_line("message send (F7): %d match(es) at exe+0x%lx", ns, exe_off(g_sendmsg));
+    log_line("upgrade manager: %s", g_upgmgr ? "found" : "not found (no Pulse Rifle upgrades)");
+    return 0;
+}
 
 /* ---- crash report -------------------------------------------------------
  * A vectored handler logs the first serious exceptions: code, where (module
  * + offset), the faulting data address, registers and the return addresses
- * found on the stack (module + offset only, no code is read). */
-static void addr_name(DWORD a, char *out, int n)
+ * found on the stack (module + offset only). */
+static void addr_name(DWORD a, char *out)
 {
     HMODULE m = NULL;
     char path[MAX_PATH], *b;
@@ -2250,601 +572,6 @@ static void addr_name(DWORD a, char *out, int n)
         b = strrchr(path, '\\');
         wsprintfA(out, "%s+0x%lx", b ? b + 1 : path, a - (DWORD)m);
     } else wsprintfA(out, "0x%08lx", a);
-    (void)n;
-}
-
-/* ---- Direct3D object guard (probe 27) -------------------------------------
- * Both quarry crashes read through the same bogus pointer (0x15FFCF8F)
- * inside Direct3D while drawing a full-screen pass, with the heaps intact:
- * likely a released resource still bound. The device's Set* methods are
- * wrapped: an object whose vtable is not in a loaded module is logged with
- * the game code that passed it (once per method and caller), and for
- * textures, buffers, shaders and declarations NULL is passed instead.
- * Textures bound earlier are rechecked before every draw. The
- * device comes from the game's own global, read from the batch flush
- * (exe 0x13D2DC0: `mov eax, [device]` at +0x78). */
-static const char SIG_FLUSH[] =
-    "51 A1 ?? ?? ?? ?? 8B 0D ?? ?? ?? ?? C6 00 00 8B 01 8B 10 56 50 8B 42 30 FF D0";
-static void ***g_devglobal;
-static int g_guard_state;              /* 0 not tried, 1 waiting for the device, 2 done */
-static volatile LONG g_guard_logs;
-static DWORD g_guard_seen[64][2];
-static volatile LONG g_guard_nseen;
-
-static int d3d_obj_ok_slow(const void *p)
-{
-    MEMORY_BASIC_INFORMATION mi;
-    const void *vt = *(const void * const *)p;
-    return vt && mem_ok(vt, 4) && VirtualQuery(vt, &mi, sizeof mi) && mi.Type == MEM_IMAGE;
-}
-
-/* the Set* methods run thousands of times a frame: pages found readable
-   this frame and vtables found inside a loaded module are remembered, so
-   VirtualQuery runs only for a new page or a new object type (the page
-   cache is cleared every frame, so a page freed since is checked again) */
-static DWORD g_okpage[256];
-static const void *g_okvt[32];
-static int g_nokvt;
-
-static int d3d_obj_ok(const void *p)
-{
-    MEMORY_BASIC_INFORMATION mi;
-    const void *vt;
-    DWORD pg = (DWORD)p >> 12;
-    int i;
-    if (!p) return 1;
-    if (((DWORD)p & 0xFFF) > 0xFFC) return mem_ok(p, 4) && d3d_obj_ok_slow(p);
-    if (g_okpage[pg & 255] != pg) {
-        if (!mem_ok(p, 4)) return 0;
-        g_okpage[pg & 255] = pg;
-    }
-    vt = *(const void * const *)p;
-    for (i = 0; i < g_nokvt; i++) if (g_okvt[i] == vt) return 1;
-    if (!vt || !mem_ok(vt, 4) || !VirtualQuery(vt, &mi, sizeof mi) || mi.Type != MEM_IMAGE) return 0;
-    if (g_nokvt < 32) g_okvt[g_nokvt++] = vt;
-    return 1;
-}
-
-/* returns 1 if p may be passed on */
-static int d3d_check(const char *method, DWORD slot, const void *p, void *ret, int replace)
-{
-    char who[MAX_PATH + 32];
-    LONG i, n;
-    if (d3d_obj_ok(p)) return 1;
-    n = g_guard_nseen < 64 ? g_guard_nseen : 64;
-    for (i = 0; i < n; i++)
-        if (g_guard_seen[i][0] == (DWORD)method && g_guard_seen[i][1] == (DWORD)ret) return !replace;
-    i = InterlockedIncrement(&g_guard_nseen) - 1;
-    if (i < 64) { g_guard_seen[i][0] = (DWORD)method; g_guard_seen[i][1] = (DWORD)ret; }
-    if (InterlockedIncrement(&g_guard_logs) <= 64) {
-        addr_name((DWORD)ret, who, sizeof who);
-        log_line("D3D GUARD: %s slot %lu given invalid object %p from %s%s", method, slot, p, who,
-                 replace ? " - NULL passed instead" : "");
-    }
-    return !replace;
-}
-
-typedef HRESULT (WINAPI *SetTexture_t)(void *, DWORD, void *);
-typedef HRESULT (WINAPI *SetStreamSource_t)(void *, UINT, void *, UINT, UINT);
-typedef HRESULT (WINAPI *SetOne_t)(void *, void *);
-typedef HRESULT (WINAPI *SetRT_t)(void *, DWORD, void *);
-static SetTexture_t o_SetTexture;
-static SetStreamSource_t o_SetStreamSource;
-static SetOne_t o_SetIndices, o_SetVertexDeclaration, o_SetVertexShader, o_SetPixelShader, o_SetDepthStencil;
-static SetRT_t o_SetRenderTarget;
-
-/* what is bound per texture stage (0-15, vertex samplers 257-260 as
-   16-19) and by whom, rechecked before each draw: a texture freed while
-   still bound is unbound there */
-static void *g_bound[20], *g_boundby[20];
-
-static int stage_slot(DWORD st)
-{
-    return st < 16 ? (int)st : st >= 257 && st <= 260 ? (int)(st - 257 + 16) : -1;
-}
-
-/* vertex textures (stages 257-260): the 360 reads any format in a vertex
-   shader, PC cards only a few (mostly floating point). Each distinct one is
-   logged with its format; with severed_novtf.on in the game folder they are
-   unbound before every dynamic-geometry draw (from the batch flush). */
-static void *g_vtf_seen[64];
-static int g_nvtf_seen, g_novtf;
-static BYTE *g_flush_draw_ret;         /* return address of the flush's DrawIndexedPrimitive */
-
-static void log_vertex_texture(DWORD st, void *t, void *ret)
-{
-    typedef DWORD (WINAPI *GetType_t)(void *);
-    typedef HRESULT (WINAPI *GetLevelDesc_t)(void *, UINT, DWORD *);
-    DWORD desc[8] = {0}, type;
-    char who[MAX_PATH + 32];
-    int i;
-    for (i = 0; i < g_nvtf_seen; i++) if (g_vtf_seen[i] == t) return;
-    if (g_nvtf_seen < 64) g_vtf_seen[g_nvtf_seen++] = t;
-    type = ((GetType_t)(*(void ***)t)[10])(t);                 /* IDirect3DResource9::GetType */
-    if (type == 3)                                             /* D3DRTYPE_TEXTURE */
-        ((GetLevelDesc_t)(*(void ***)t)[17])(t, 0, desc);      /* IDirect3DTexture9::GetLevelDesc */
-    addr_name((DWORD)ret, who, sizeof who);
-    if (InterlockedIncrement(&g_guard_logs) <= 64)
-        log_line("vertex texture: stage %lu texture %p type %lu format 0x%08lx (%c%c%c%c) %lux%lu, from %s", st, t, type,
-                 desc[0], (char)(desc[0] & 0xFF) >= 32 ? (char)(desc[0] & 0xFF) : '.',
-                 (char)(desc[0] >> 8 & 0xFF) >= 32 ? (char)(desc[0] >> 8 & 0xFF) : '.',
-                 (char)(desc[0] >> 16 & 0xFF) >= 32 ? (char)(desc[0] >> 16 & 0xFF) : '.',
-                 (char)(desc[0] >> 24 & 0xFF) >= 32 ? (char)(desc[0] >> 24 & 0xFF) : '.', desc[6], desc[7], who);
-}
-
-/* Probe 30's crash: sampler states on stage 417 just before it. The game's
-   texture apply (exe 0x13D8540) adds 0xF1 to slots >= 16, so slot 176 was
-   asked for; Direct3D 9 has stages 0-15 and 256-260 only, and an
-   unchecked stage writes past its tables (the corruption seen in every
-   crash). Such calls are refused here and logged once per call chain. */
-static DWORD g_badstage_seen[32];
-static int g_nbadstage;
-
-static int stage_valid(DWORD st)
-{
-    return st < 16 || (st >= 256 && st <= 260);
-}
-
-static void log_bad_stage(const char *method, DWORD st, DWORD state, void *ret)
-{
-    DWORD *sp = (DWORD *)__builtin_frame_address(0), exe = (DWORD)GetModuleHandleA(NULL), key = 0;
-    DWORD chain[8];
-    char who[MAX_PATH + 32], line[1024];
-    int i, n = 0, len;
-    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(exe + ((IMAGE_DOS_HEADER *)exe)->e_lfanew);
-    DWORD end = exe + nt->OptionalHeader.SizeOfImage;
-    for (i = 0; i < 256 && n < 8; i++) {           /* exe return addresses on the stack */
-        DWORD v;
-        if (!mem_ok(sp + i, 4)) break;
-        v = sp[i];
-        if (v > exe + 0x1000 && v < end && mem_ok((void *)(v - 5), 5) && ((BYTE *)v)[-5] == 0xE8)
-            chain[n++] = v;
-    }
-    for (i = 0; i < n && i < 4; i++) key = key * 31 + chain[i];
-    for (i = 0; i < g_nbadstage; i++) if (g_badstage_seen[i] == key) return;
-    if (g_nbadstage < 32) g_badstage_seen[g_nbadstage++] = key;
-    if (InterlockedIncrement(&g_guard_logs) > 64) return;
-    addr_name((DWORD)ret, who, sizeof who);
-    len = wsprintfA(line, "D3D GUARD: %s stage %lu (state %lu) is not a Direct3D stage - refused; from %s, chain", method, st, state, who);
-    for (i = 0; i < n && len < 900; i++) len += wsprintfA(line + len, " exe+0x%lx", chain[i] - exe);
-    log_line("%s", line);
-}
-
-static HRESULT WINAPI g_SetTexture(void *d, DWORD st, void *t)
-{
-    void *ret = __builtin_return_address(0);
-    int k = stage_slot(st);
-    if (!stage_valid(st)) { log_bad_stage("SetTexture", st, 0, ret); return 0x8876086C; /* D3DERR_INVALIDCALL */ }
-    if (!d3d_check("SetTexture", st, t, ret, 1)) t = NULL;
-    if (t && st >= 257 && st <= 260) log_vertex_texture(st, t, ret);
-    if (k >= 0) { g_bound[k] = t; g_boundby[k] = ret; }
-    return o_SetTexture(d, st, t);
-}
-
-static void check_bound(void *d, void *drawret)
-{
-    char who[MAX_PATH + 32], draw[MAX_PATH + 32];
-    int k;
-    if (g_novtf && drawret == g_flush_draw_ret)
-        for (k = 16; k < 20; k++)
-            if (g_bound[k]) { o_SetTexture(d, (DWORD)(257 + k - 16), NULL); g_bound[k] = NULL; }
-    for (k = 0; k < 20; k++) {
-        if (!g_bound[k] || d3d_obj_ok(g_bound[k])) continue;
-        if (InterlockedIncrement(&g_guard_logs) <= 64) {
-            addr_name((DWORD)g_boundby[k], who, sizeof who);
-            addr_name((DWORD)drawret, draw, sizeof draw);
-            log_line("D3D GUARD: texture %p on stage %d (set from %s) is no longer valid at a draw from %s - unbound",
-                     g_bound[k], k < 16 ? k : 257 + k - 16, who, draw);
-        }
-        o_SetTexture(d, k < 16 ? (DWORD)k : (DWORD)(257 + k - 16), NULL);
-        g_bound[k] = NULL;
-    }
-}
-
-/* ---- state calls (probe 30) ---------------------------------------------
- * Probe 29 found every bound object valid at the crash, with 0x15FFCF8F
- * still in a register: possibly a state value used by Direct3D as an
- * index. Render, texture stage and sampler state calls go into a ring
- * (shown at a crash, with any call whose value matches a register), and
- * sampler states outside their valid ranges are logged when set. */
-typedef HRESULT (WINAPI *SetState_t)(void *, DWORD, DWORD);
-typedef HRESULT (WINAPI *SetStage_t)(void *, DWORD, DWORD, DWORD);
-static SetState_t o_SetRenderState;
-static SetStage_t o_SetTextureStageState, o_SetSamplerState;
-static volatile DWORD g_st_ring[256][5];   /* kind, stage, state, value, caller */
-static volatile LONG g_st_pos;
-
-static void note_state(DWORD kind, DWORD stage, DWORD state, DWORD value, void *ret)
-{
-    LONG i = InterlockedIncrement(&g_st_pos) & 255;
-    g_st_ring[i][0] = kind; g_st_ring[i][1] = stage; g_st_ring[i][2] = state;
-    g_st_ring[i][3] = value; g_st_ring[i][4] = (DWORD)ret;
-}
-
-static int sampler_value_ok(DWORD state, DWORD v)
-{
-    switch (state) {
-    case 1: case 2: case 3: return v >= 1 && v <= 5;          /* ADDRESSU/V/W */
-    case 5: case 6: case 7: return v <= 8;                    /* MAG/MIN/MIPFILTER */
-    case 9: return v < 16;                                    /* MAXMIPLEVEL */
-    case 10: return v <= 16;                                  /* MAXANISOTROPY */
-    case 11: return v <= 1;                                   /* SRGBTEXTURE */
-    case 12: return v < 256;                                  /* ELEMENTINDEX */
-    case 4: case 8: case 13: return 1;                        /* border colour, LOD bias, DMAP offset */
-    default: return 0;                                        /* no such state */
-    }
-}
-
-static HRESULT WINAPI g_SetRenderState(void *d, DWORD st, DWORD v)
-{ note_state(1, 0, st, v, __builtin_return_address(0)); return o_SetRenderState(d, st, v); }
-static HRESULT WINAPI g_SetTextureStageState(void *d, DWORD stage, DWORD st, DWORD v)
-{ note_state(2, stage, st, v, __builtin_return_address(0)); return o_SetTextureStageState(d, stage, st, v); }
-static HRESULT WINAPI g_SetSamplerState(void *d, DWORD stage, DWORD st, DWORD v)
-{
-    void *ret = __builtin_return_address(0);
-    note_state(3, stage, st, v, ret);
-    if (!stage_valid(stage)) { log_bad_stage("SetSamplerState", stage, st, ret); return 0x8876086C; }
-    if (!sampler_value_ok(st, v)) {
-        char who[MAX_PATH + 32];
-        LONG i, n = g_guard_nseen < 64 ? g_guard_nseen : 64;
-        for (i = 0; i < n; i++)
-            if (g_guard_seen[i][0] == 3 && g_guard_seen[i][1] == (DWORD)ret) goto pass;
-        i = InterlockedIncrement(&g_guard_nseen) - 1;
-        if (i < 64) { g_guard_seen[i][0] = 3; g_guard_seen[i][1] = (DWORD)ret; }
-        if (InterlockedIncrement(&g_guard_logs) <= 64) {
-            addr_name((DWORD)ret, who, sizeof who);
-            log_line("D3D GUARD: SetSamplerState stage %lu state %lu value 0x%08lx out of range, from %s",
-                     stage, st, v, who);
-        }
-    }
-pass:
-    return o_SetSamplerState(d, stage, st, v);
-}
-
-static void log_states(const CONTEXT *c)
-{
-    static const char *kinds[] = { "?", "RenderState", "TextureStageState", "SamplerState" };
-    DWORD regs[7] = { c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp };
-    char who[MAX_PATH + 32];
-    LONG last = g_st_pos, k;
-    int r, shown = 0;
-    for (k = 0; k < 256; k++) {           /* calls whose value is in a register */
-        volatile DWORD *e = g_st_ring[(DWORD)(last - k) & 255];
-        if (!e[0] || e[3] < 0x10000) continue;
-        for (r = 0; r < 7; r++)
-            if (e[3] == regs[r] || (e[3] & ~0xF) == (regs[r] & ~0xF)) {
-                addr_name(e[4], who, sizeof who);
-                log_line("  %s stage %lu state %lu = 0x%08lx (in a register at the crash), %ld calls ago, from %s",
-                         kinds[e[0] & 3], e[1], e[2], e[3], (long)k, who);
-                shown++;
-                break;
-            }
-    }
-    for (k = 0; k < 24; k++) {            /* the last calls */
-        volatile DWORD *e = g_st_ring[(DWORD)(last - k) & 255];
-        if (!e[0]) continue;
-        addr_name(e[4], who, sizeof who);
-        log_line("  state call -%ld: %s stage %lu state %lu = 0x%08lx from %s", (long)k, kinds[e[0] & 3], e[1], e[2], e[3], who);
-    }
-    (void)shown;
-}
-
-typedef HRESULT (WINAPI *DrawPrim_t)(void *, DWORD, UINT, UINT);
-typedef HRESULT (WINAPI *DrawIdx_t)(void *, DWORD, INT, UINT, UINT, UINT, UINT);
-typedef HRESULT (WINAPI *DrawPrimUP_t)(void *, DWORD, UINT, const void *, UINT);
-typedef HRESULT (WINAPI *DrawIdxUP_t)(void *, DWORD, UINT, UINT, UINT, const void *, DWORD, const void *, UINT);
-static DrawPrim_t o_DrawPrimitive;
-static DrawIdx_t o_DrawIndexedPrimitive;
-static DrawPrimUP_t o_DrawPrimitiveUP;
-static DrawIdxUP_t o_DrawIndexedPrimitiveUP;
-
-/* ---- shader hiding (probe 43, F6/F5) --------------------------------------
- * Probe 42's census could not tell the airless hallway's black shape apart
- * (the world is drawn in passes whose material textures are not on stages 0
- * and 1). F6 now collects the pixel shaders of the next 1500 draws (about
- * two frames) and hides the first; each further F6 hides the next one
- * instead, and after the last all are shown again. F5 marks the shader hidden
- * now (press it when the artefact is gone), F4 (probe 44) stops hiding at
- * once: the hidden shader otherwise stays hidden everywhere (probe 43's test
- * left Gabe and the rooms after the hallway drawn black). Each shader is
- * logged with the
- * textures of its first draw (stages 0-3), the stream 0 stride and counts. */
-#define MAX_SHADERS 128
-static void *g_ps;
-static UINT g_stride0;
-static void *g_shaders[MAX_SHADERS];
-static volatile LONG g_nshaders, g_collect, g_hide_k;
-static void *volatile g_hide_ps;
-
-static void tex_desc(void *t, char *out, int n)
-{
-    typedef DWORD (WINAPI *GetType_t)(void *);
-    typedef HRESULT (WINAPI *GetLevelDesc_t)(void *, UINT, DWORD *);
-    DWORD desc[8] = {0};
-    if (!t || !mem_ok(t, 4) || !mem_ok(*(void **)t, 18 * 4)) { wsprintfA(out, "-"); return; }
-    if (((GetType_t)(*(void ***)t)[10])(t) == 3) ((GetLevelDesc_t)(*(void ***)t)[17])(t, 0, desc);
-    wsprintfA(out, "%lux%lu/%08lx", desc[6], desc[7], desc[0]);
-    (void)n;
-}
-
-static void collect(DWORD t, UINT nv, UINT pc, void *ret)
-{
-    LONG i, n = g_nshaders;
-    char a[4][40], who[MAX_PATH + 32];
-    for (i = 0; i < n; i++) if (g_shaders[i] == g_ps) break;
-    if (i == n && n < MAX_SHADERS && g_ps) {
-        g_shaders[n] = g_ps;
-        g_nshaders = n + 1;
-        for (i = 0; i < 4; i++) tex_desc(g_bound[i], a[i], sizeof a[i]);
-        addr_name((DWORD)ret, who, sizeof who);
-        log_line("  shader %ld: ps %p, first draw prim %lu verts %u count %u stride %u tex %s %s %s %s from %s",
-                 n + 1, g_ps, t, nv, pc, g_stride0, a[0], a[1], a[2], a[3], who);
-    }
-    if (InterlockedDecrement(&g_collect) == 0) {
-        log_line("F6: %ld shaders on screen; hiding shader 1 (ps %p)", g_nshaders, g_shaders[0]);
-        g_hide_k = 1;
-        g_hide_ps = g_shaders[0];
-    }
-}
-
-static void hide_next(void)
-{
-    if (g_collect > 0) return;
-    if (g_hide_k == 0 || g_hide_k >= g_nshaders) {
-        if (g_hide_k) log_line("F6: all shaders shown again (next F6 collects them anew)");
-        else {
-            log_line("F6: collecting the pixel shaders of the next 1500 draws");
-            g_nshaders = 0;
-            g_collect = 1500;
-        }
-        g_hide_ps = NULL;
-        g_hide_k = 0;
-        return;
-    }
-    g_hide_ps = g_shaders[g_hide_k];
-    g_hide_k++;
-    log_line("F6: hiding shader %ld of %ld (ps %p)", g_hide_k, g_nshaders, g_hide_ps);
-}
-
-/* ---- piece hiding (probe 45, F3) -------------------------------------------
- * Probe 44's run: hiding single shaders never removed the hallway's black box
- * except with the whole level (the lightmapped world shader). F3, pressed
- * while F6 hides such a shader, splits it: the draws made with it over the
- * next 1500 draws are collected as pieces (vertex buffer, index buffer,
- * base vertex, start index, triangle count), the shader is drawn again and
- * the first piece alone is hidden; each further F3 hides the next piece.
- * Each piece is logged with its counts and textures (stages 0-3). */
-#define MAX_PIECES 256
-typedef struct { void *vb, *ib; INT b; UINT si, pc; } piece_t;
-static void *g_vb0, *g_ib;
-static piece_t g_pieces[MAX_PIECES];
-static void *volatile g_piece_ps;
-static volatile LONG g_npieces, g_pcollect, g_piece_k;
-static piece_t g_hide_piece;
-
-static int same_piece(const piece_t *a, INT b, UINT si, UINT pc)
-{
-    return a->vb == g_vb0 && a->ib == g_ib && a->b == b && a->si == si && a->pc == pc;
-}
-
-static void collect_piece(DWORD t, INT b, UINT nv, UINT si, UINT pc)
-{
-    LONG i, n = g_npieces;
-    char a[4][40];
-    for (i = 0; i < n; i++) if (same_piece(&g_pieces[i], b, si, pc)) break;
-    if (i == n && n < MAX_PIECES) {
-        g_pieces[n].vb = g_vb0; g_pieces[n].ib = g_ib; g_pieces[n].b = b;
-        g_pieces[n].si = si; g_pieces[n].pc = pc;
-        g_npieces = n + 1;
-        for (i = 0; i < 4; i++) tex_desc(g_bound[i], a[i], sizeof a[i]);
-        log_line("  piece %ld: prim %lu verts %u start %u count %u base %d stride %u vb %p ib %p tex %s %s %s %s",
-                 n + 1, t, nv, si, pc, b, g_stride0, g_vb0, g_ib, a[0], a[1], a[2], a[3]);
-    }
-    if (InterlockedDecrement(&g_pcollect) == 0) {
-        log_line("F3: %ld pieces drawn with ps %p; hiding piece 1", g_npieces, g_piece_ps);
-        g_hide_piece = g_pieces[0];
-        g_piece_k = 1;
-    }
-}
-
-static void piece_next(void)
-{
-    if (g_pcollect > 0) return;
-    if (!g_piece_k) {
-        if (!g_hide_ps) { log_line("F3: hide a shader with F6 first (the one that makes the level vanish)"); return; }
-        g_piece_ps = g_hide_ps;
-        g_hide_ps = NULL;
-        g_npieces = 0;
-        log_line("F3: collecting the pieces drawn with ps %p over the next 1500 draws", g_piece_ps);
-        g_pcollect = 1500;
-        return;
-    }
-    if (g_piece_k >= g_npieces) {
-        log_line("F3: all pieces shown again");
-        g_piece_k = 0;
-        g_piece_ps = NULL;
-        return;
-    }
-    g_hide_piece = g_pieces[g_piece_k];
-    g_piece_k++;
-    log_line("F3: hiding piece %ld of %ld (start %u count %u)", g_piece_k, g_npieces, g_hide_piece.si, g_hide_piece.pc);
-}
-
-/* probe 46: after F5 marks a piece, the next 4000 draws that use the same
- * index buffer with an overlapping index range are logged (any pass), with
- * the pixel shader and the textures on stages 0-7: which material, if any,
- * draws the piece in colour. */
-static volatile LONG g_trace;
-static piece_t g_trace_piece[2];
-static int g_ntrace;
-
-static void trace_piece(DWORD t, INT b, UINT nv, UINT si, UINT pc, void *ret)
-{
-    char a[8][40], who[MAX_PATH + 32];
-    int i, k;
-    if (InterlockedDecrement(&g_trace) <= 0) { g_trace = 0; log_line("F5: piece trace done"); return; }
-    for (k = 0; k < g_ntrace; k++) {
-        piece_t *q = &g_trace_piece[k];
-        if (g_ib == q->ib && si < q->si + q->pc + 2 && si + pc + 2 > q->si) break;
-    }
-    if (k == g_ntrace) return;
-    for (i = 0; i < 8; i++) tex_desc(g_bound[i], a[i], sizeof a[i]);
-    addr_name((DWORD)ret, who, sizeof who);
-    log_line("  %s piece: ps %p prim %lu verts %u start %u count %u base %d stride %u vb %p tex %s %s %s %s %s %s %s %s from %s",
-             k ? "earlier" : "marked", g_ps, t, nv, si, pc, b, g_stride0, g_vb0,
-             a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], who);
-}
-
-static int draw_hidden(DWORD t, INT b, UINT nv, UINT si, UINT pc, void *ret)
-{
-    if (g_trace > 0) trace_piece(t, b, nv, si, pc, ret);
-    if (g_collect > 0) collect(t, nv, pc, ret);
-    if (g_piece_ps && g_ps == g_piece_ps) {
-        if (g_pcollect > 0) collect_piece(t, b, nv, si, pc);
-        else if (g_piece_k && same_piece(&g_hide_piece, b, si, pc)) return 1;
-    }
-    return g_hide_ps && g_ps == g_hide_ps;
-}
-
-static HRESULT WINAPI g_DrawPrimitive(void *d, DWORD t, UINT s0, UINT n)
-{
-    check_bound(d, __builtin_return_address(0));
-    if (draw_hidden(t, 0, 0, s0, n, __builtin_return_address(0))) return 0;
-    return o_DrawPrimitive(d, t, s0, n);
-}
-static HRESULT WINAPI g_DrawIndexedPrimitive(void *d, DWORD t, INT b, UINT mn, UINT nv, UINT si, UINT pc)
-{
-    check_bound(d, __builtin_return_address(0));
-    if (draw_hidden(t, b, nv, si, pc, __builtin_return_address(0))) return 0;
-    return o_DrawIndexedPrimitive(d, t, b, mn, nv, si, pc);
-}
-static HRESULT WINAPI g_DrawPrimitiveUP(void *d, DWORD t, UINT n, const void *v, UINT st)
-{ check_bound(d, __builtin_return_address(0)); return o_DrawPrimitiveUP(d, t, n, v, st); }
-static HRESULT WINAPI g_DrawIndexedPrimitiveUP(void *d, DWORD t, UINT mn, UINT nv, UINT pc, const void *i, DWORD f, const void *v, UINT st)
-{ check_bound(d, __builtin_return_address(0)); return o_DrawIndexedPrimitiveUP(d, t, mn, nv, pc, i, f, v, st); }
-static HRESULT WINAPI g_SetStreamSource(void *d, UINT n, void *vb, UINT off, UINT stride)
-{
-    if (!d3d_check("SetStreamSource", n, vb, __builtin_return_address(0), 1)) vb = NULL;
-    if (n == 0) { g_stride0 = stride; g_vb0 = vb; }
-    return o_SetStreamSource(d, n, vb, off, stride);
-}
-static HRESULT WINAPI g_SetIndices(void *d, void *ib)
-{ if (!d3d_check("SetIndices", 0, ib, __builtin_return_address(0), 1)) ib = NULL; g_ib = ib; return o_SetIndices(d, ib); }
-static HRESULT WINAPI g_SetVertexDeclaration(void *d, void *v)
-{ if (!d3d_check("SetVertexDeclaration", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetVertexDeclaration(d, v); }
-static HRESULT WINAPI g_SetVertexShader(void *d, void *v)
-{ if (!d3d_check("SetVertexShader", 0, v, __builtin_return_address(0), 1)) v = NULL; return o_SetVertexShader(d, v); }
-static HRESULT WINAPI g_SetPixelShader(void *d, void *v)
-{
-    if (!d3d_check("SetPixelShader", 0, v, __builtin_return_address(0), 1)) v = NULL;
-    g_ps = v;
-    return o_SetPixelShader(d, v);
-}
-static HRESULT WINAPI g_SetRenderTarget(void *d, DWORD i, void *v)
-{ d3d_check("SetRenderTarget", i, v, __builtin_return_address(0), 0); return o_SetRenderTarget(d, i, v); }
-static HRESULT WINAPI g_SetDepthStencil(void *d, void *v)
-{ d3d_check("SetDepthStencilSurface", 0, v, __builtin_return_address(0), 0); return o_SetDepthStencil(d, v); }
-
-static void vt_patch(void **vt, int i, void *hook, void **orig)
-{
-    DWORD old;
-    if (vt[i] == hook) return;
-    if (!VirtualProtect(&vt[i], 4, PAGE_EXECUTE_READWRITE, &old)) return;
-    *orig = vt[i];
-    vt[i] = hook;
-    VirtualProtect(&vt[i], 4, old, &old);
-}
-
-static void d3d_guard(void)
-{
-    void **dev, **vt;
-    if (GetCurrentThreadId() != g_game_thread) return;
-    if (g_guard_state == 2) { memset(g_okpage, 0, sizeof g_okpage); return; }
-    if (g_guard_state == 0) {
-        /* the code may still be encrypted early on (probe 28's run looked
-           at 0.19 s): look again every 2 s for 10 minutes */
-        static DWORD next, tries;
-        int n = 0;
-        BYTE *f;
-        if (GetTickCount() < next) return;
-        next = GetTickCount() + 2000;
-        f = find_sig(SIG_FLUSH, &n);
-        if (!f || n != 1 || f[0x78] != 0xA1) {
-            if (++tries >= 300) {
-                log_line("D3D guard: batch flush not found (%d matches) after 10 minutes - guard off", n);
-                g_guard_state = 2;
-            }
-            return;
-        }
-        log_line("D3D guard: batch flush found after %lu tries", tries);
-        g_devglobal = *(void ****)(f + 0x79);
-        g_flush_draw_ret = f + 0xBA;    /* after the flush's call [DrawIndexedPrimitive] (exe 0x13D2E7A) */
-        {
-            char path[MAX_PATH], *slash;
-            GetModuleFileNameA(NULL, path, sizeof path);
-            slash = strrchr(path, '\\');
-            if (slash) lstrcpyA(slash + 1, "severed_novtf.on");
-            g_novtf = GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
-            log_line("D3D guard: vertex textures %s before dynamic-geometry draws%s", g_novtf ? "UNBOUND" : "left as they are",
-                     g_novtf ? " (severed_novtf.on)" : "");
-        }
-        g_guard_state = 1;
-    }
-    if (!mem_ok(g_devglobal, 4) || !*g_devglobal || !mem_ok(*g_devglobal, 4)) return;
-    dev = (void **)*g_devglobal;
-    vt = (void **)*dev;
-    if (!mem_ok(vt, 108 * 4)) return;
-    vt_patch(vt, 37, (void *)g_SetRenderTarget, (void **)&o_SetRenderTarget);
-    vt_patch(vt, 39, (void *)g_SetDepthStencil, (void **)&o_SetDepthStencil);
-    vt_patch(vt, 57, (void *)g_SetRenderState, (void **)&o_SetRenderState);
-    vt_patch(vt, 65, (void *)g_SetTexture, (void **)&o_SetTexture);
-    vt_patch(vt, 67, (void *)g_SetTextureStageState, (void **)&o_SetTextureStageState);
-    vt_patch(vt, 69, (void *)g_SetSamplerState, (void **)&o_SetSamplerState);
-    vt_patch(vt, 81, (void *)g_DrawPrimitive, (void **)&o_DrawPrimitive);
-    vt_patch(vt, 82, (void *)g_DrawIndexedPrimitive, (void **)&o_DrawIndexedPrimitive);
-    vt_patch(vt, 83, (void *)g_DrawPrimitiveUP, (void **)&o_DrawPrimitiveUP);
-    vt_patch(vt, 84, (void *)g_DrawIndexedPrimitiveUP, (void **)&o_DrawIndexedPrimitiveUP);
-    vt_patch(vt, 87, (void *)g_SetVertexDeclaration, (void **)&o_SetVertexDeclaration);
-    vt_patch(vt, 92, (void *)g_SetVertexShader, (void **)&o_SetVertexShader);
-    vt_patch(vt, 100, (void *)g_SetStreamSource, (void **)&o_SetStreamSource);
-    vt_patch(vt, 104, (void *)g_SetIndices, (void **)&o_SetIndices);
-    vt_patch(vt, 107, (void *)g_SetPixelShader, (void **)&o_SetPixelShader);
-    g_guard_state = 2;
-    log_line("D3D guard: device %p, Set* methods checked from now on", dev);
-}
-
-/* a loaded mesh: header 'MGAE'; header 0x20 = model name (offset, or pointer after relocation) */
-static int mesh_name(DWORD q, char *out, int n)
-{
-    DWORD off;
-    const char *s;
-    int i;
-    if (q < 0x10000 || (q & 3) || !mem_ok((void *)q, 0x24) || memcmp((void *)q, "MGAE", 4) != 0) return 0;
-    off = *(DWORD *)(q + 0x20);         /* file offset, or a pointer once relocated */
-    if (off < 0x24) return 0;
-    s = off < 0x4000000 ? (const char *)(q + off) : (const char *)off;
-    for (i = 0; i < n - 1 && mem_ok(s + i, 1) && s[i] >= 32 && s[i] < 127; i++) out[i] = s[i];
-    out[i] = 0;
-    return i > 0;
-}
-
-/* meshes reachable from a register: the pointed object and the objects its
-   first 64 words point to (data only) */
-static void log_meshes_near(const char *reg, DWORD p)
-{
-    char name[96];
-    DWORD i, j, q, r, found = 0;
-    if (mesh_name(p, name, sizeof name)) { log_line("  %s -> mesh %s", reg, name); return; }
-    if (p < 0x10000 || !mem_ok((void *)p, 256)) return;
-    for (i = 0; i < 64 && found < 4; i++) {
-        q = ((DWORD *)p)[i];
-        if (mesh_name(q, name, sizeof name)) { log_line("  %s+0x%02lx -> mesh %s", reg, i * 4, name); found++; continue; }
-        if (q < 0x10000 || (q & 3) || !mem_ok((void *)q, 128)) continue;
-        for (j = 0; j < 32; j++) {
-            r = ((DWORD *)q)[j];
-            if (mesh_name(r, name, sizeof name)) { log_line("  %s+0x%02lx+0x%02lx -> mesh %s", reg, i * 4, j * 4, name); found++; break; }
-        }
-    }
 }
 
 static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
@@ -2853,70 +580,23 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
     static volatile DWORD seen[32];             /* addresses already reported */
     EXCEPTION_RECORD *r = e->ExceptionRecord;
     CONTEXT *c = e->ContextRecord;
-    char where[MAX_PATH + 32], ra[MAX_PATH + 32];
+    char where[MAX_PATH + 32];
     DWORD *sp, i, found = 0;
     if (r->ExceptionCode < 0xC0000000 || r->ExceptionCode == 0xC0000027 /* unwind */ ||
-        r->ExceptionCode == 0xE06D7363 /* C++ throw */ || !g_added /* start-up: the DRM uses exceptions */)
+        r->ExceptionCode == 0xE06D7363 /* C++ throw */ || !g_game_thread /* start-up: the DRM uses exceptions */)
         return EXCEPTION_CONTINUE_SEARCH;
-    /* an exception the game handles itself can repeat: report each address
-       once, so the budget is left for the crash */
+    /* an exception the game handles itself can repeat: report each address once */
     for (i = 0; i < 32; i++)
         if (seen[i] == (DWORD)r->ExceptionAddress) return EXCEPTION_CONTINUE_SEARCH;
-    if (InterlockedIncrement(&count) > 20) return EXCEPTION_CONTINUE_SEARCH;
+    if (InterlockedIncrement(&count) > 10) return EXCEPTION_CONTINUE_SEARCH;
     seen[(count - 1) & 31] = (DWORD)r->ExceptionAddress;
-    g_crash_thread = GetCurrentThreadId();
-    addr_name((DWORD)r->ExceptionAddress, where, sizeof where);
-    log_line("EXCEPTION 0x%08lx at %s thread %lu%s", r->ExceptionCode, where, GetCurrentThreadId(),
-             r->ExceptionCode == 0xC0000005 ? "" : "");
+    addr_name((DWORD)r->ExceptionAddress, where);
+    log_line("EXCEPTION 0x%08lx at %s thread %lu", r->ExceptionCode, where, GetCurrentThreadId());
     if (r->ExceptionCode == 0xC0000005 && r->NumberParameters >= 2)
         log_line("  %s address 0x%08lx", r->ExceptionInformation[0] == 0 ? "reading" : r->ExceptionInformation[0] == 1 ? "writing" : "executing",
                  (DWORD)r->ExceptionInformation[1]);
     log_line("  eax %08lx ebx %08lx ecx %08lx edx %08lx esi %08lx edi %08lx ebp %08lx esp %08lx",
              c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Ebp, c->Esp);
-    {
-        LONG k, last = g_batch_pos;
-        char who[MAX_PATH + 32];
-        for (k = 0; k < 16; k++) {               /* unset slots are 0; wraps safely */
-            volatile DWORD *b = g_batch_ring[(DWORD)(last - k) & 15];
-            if (!b[0]) continue;
-            addr_name(b[0], who, sizeof who);
-            log_line("  geometry batch %ld started from %s (prim %lu, verts %lu, stride %lu, %08lx, count %lu, %lu)",
-                     (long)k, who, b[1], b[2], b[3], b[4], b[5], b[6]);
-        }
-    }
-    if (GetCurrentThreadId() == g_game_thread) check_heaps("at the crash");
-    {
-        int k;
-        char who[MAX_PATH + 32];
-        for (k = 0; k < 20; k++) {
-            if (!g_bound[k]) continue;
-            addr_name((DWORD)g_boundby[k], who, sizeof who);
-            log_line("  texture stage %d: %p%s, set from %s", k < 16 ? k : 257 + k - 16, g_bound[k],
-                     mem_ok(g_bound[k], 4) ? "" : " (NOT readable)", who);
-        }
-        log_states(c);
-    }
-    if ((DWORD)r->ExceptionAddress - (DWORD)GetModuleHandleA(NULL) == 0x115F0F) {
-        /* sample decoder (exe 0x515EE0) with a null block pointer: the
-           voice (ebx, 0x50 bytes; +8 sample data, +0x34 read pointer) and
-           the sample's EA header, to identify the sample (probe 39) */
-        BYTE *v = (BYTE *)c->Ebx, *smp;
-        int k;
-        for (k = 0; k < 0x50 && mem_ok(v + k, 16); k += 16)
-            log_line("  voice +%02x: %08lx %08lx %08lx %08lx", k, *(DWORD *)(v + k), *(DWORD *)(v + k + 4),
-                     *(DWORD *)(v + k + 8), *(DWORD *)(v + k + 12));
-        smp = mem_ok(v + 8, 4) ? *(BYTE **)(v + 8) : NULL;
-        if (smp && mem_ok(smp, 24))
-            log_line("  sample data %p: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x", smp,
-                     smp[0], smp[1], smp[2], smp[3], smp[4], smp[5], smp[6], smp[7],
-                     smp[8], smp[9], smp[10], smp[11], smp[12], smp[13], smp[14], smp[15]);
-        for (k = 0; k < 0x40 && mem_ok((BYTE *)c->Edi + 0x60 + k, 16); k += 16)
-            log_line("  player +%02x: %08lx %08lx %08lx %08lx", 0x60 + k, *(DWORD *)((BYTE *)c->Edi + 0x60 + k),
-                     *(DWORD *)((BYTE *)c->Edi + 0x64 + k), *(DWORD *)((BYTE *)c->Edi + 0x68 + k), *(DWORD *)((BYTE *)c->Edi + 0x6C + k));
-    }
-    log_meshes_near("eax", c->Eax); log_meshes_near("ebx", c->Ebx); log_meshes_near("ecx", c->Ecx);
-    log_meshes_near("edx", c->Edx); log_meshes_near("esi", c->Esi); log_meshes_near("edi", c->Edi);
-    log_meshes_near("ebp", c->Ebp);
     sp = (DWORD *)c->Esp;
     for (i = 0; i < 2048 && found < 24 && mem_ok(sp + i, 4); i++) {
         MEMORY_BASIC_INFORMATION mi;
@@ -2924,83 +604,33 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *e)
         if (v < 0x10000 || !VirtualQuery((void *)v, &mi, sizeof mi) || mi.State != MEM_COMMIT ||
             !(mi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
             continue;
-        addr_name(v, ra, sizeof ra);
-        log_line("  stack +0x%03lx %s", i * 4, ra);
+        addr_name(v, where);
+        log_line("  stack +0x%03lx %s", i * 4, where);
         found++;
     }
-    g_crash_thread = 0;
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
-static DWORD WINAPI hotkey_thread(LPVOID p)
-{
-    (void)p;
-    for (;;) {
-        Sleep(200);
-        /* with Alt, Ctrl or Shift held the keys belong to other programs
-           (Alt+F9 records in the Nvidia overlay) */
-        if ((GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_SHIFT)) & 0x8000) {
-            while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
-            continue;
-        }
-        if (GetAsyncKeyState(VK_F7) & 0x8000) {
-            if (!g_game_thread) log_line("F7: game thread not known yet (start a level first)");
-            else queue_message_file();
-            while (GetAsyncKeyState(VK_F7) & 0x8000) Sleep(100);
-        }
-    }
-    return 0;
-}
+/* ---- start ------------------------------------------------------------ */
 
-static void start(HMODULE self)
+static void start(void)
 {
-    char path[MAX_PATH], *slash;
+    char path[MAX_PATH];
     OSVERSIONINFOA vi;
 
     InitializeCriticalSection(&g_cs);
-    InitializeCriticalSection(&g_acs);
-    g_main_thread = GetCurrentThreadId();
-    g_tls = TlsAlloc();
     g_tick0 = GetTickCount();
-    GetModuleFileNameA(NULL, path, sizeof path);
-    slash = strrchr(path, '\\');
-    if (slash) lstrcpyA(slash + 1, "severed_probe.log");
+    game_file(path, "severed_probe.log");
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-    GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 55 - process %s", path);
+    log_line("severed hook " HOOK_VERSION);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
-    GetModuleFileNameA(self, path, sizeof path);
-    log_line("probe dll %s", path);
-
-    install("CreateFileA", (void *)h_CreateFileA, (void **)&o_CreateFileA);
-    install("CreateFileW", (void *)h_CreateFileW, (void **)&o_CreateFileW);
-    install("FindFirstFileA", (void *)h_FindFirstFileA, (void **)&o_FindFirstFileA);
-    install("FindFirstFileW", (void *)h_FindFirstFileW, (void **)&o_FindFirstFileW);
-    install("FindFirstFileExA", (void *)h_FindFirstFileExA, (void **)&o_FindFirstFileExA);
-    install("FindFirstFileExW", (void *)h_FindFirstFileExW, (void **)&o_FindFirstFileExW);
-    install("GetFileAttributesA", (void *)h_GetFileAttributesA, (void **)&o_GetFileAttributesA);
-    install("GetFileAttributesW", (void *)h_GetFileAttributesW, (void **)&o_GetFileAttributesW);
-    install("GetFileAttributesExA", (void *)h_GetFileAttributesExA, (void **)&o_GetFileAttributesExA);
-    install("GetFileAttributesExW", (void *)h_GetFileAttributesExW, (void **)&o_GetFileAttributesExW);
-    install("CloseHandle", (void *)h_CloseHandle, (void **)&o_CloseHandle);
-    install("ReadFile", (void *)h_ReadFile, (void **)&o_ReadFile);
     install("PeekMessageA", (void *)h_PeekMessageA, (void **)&o_PeekMessageA);
     install("PeekMessageW", (void *)h_PeekMessageW, (void **)&o_PeekMessageW);
-    log_line("--- hooks installed ---");
     CloseHandle(CreateThread(NULL, 0, hotkey_thread, NULL, 0, NULL));
-    CloseHandle(CreateThread(NULL, 0, menu_hook_thread, NULL, 0, NULL));
+    CloseHandle(CreateThread(NULL, 0, hook_thread, NULL, 0, NULL));
     AddVectoredExceptionHandler(1, crash_handler);
-    /* probe 48: the per-frame position watch, the D3D guard (draw hooks behind
-       F3-F6) and the texture list check are off for play-throughs; kept for
-       later probes */
-    /* probe 49: F8 (RIG scene handover), F9 (episode list), F10/F11 (scans)
-       removed from the keys, all confirmed working or done with */
-    (void)add_severed; (void)reflect_scan; (void)desc_dump; (void)g_handover;
-    (void)pos_watch; (void)d3d_guard; (void)hide_next; (void)piece_next; (void)note_texpass; (void)SIG_TEXPASS;
-    log_line("Severed is added to the episode list when the front end starts; F7 sends the messages in severed_send.txt");
 }
 
 /* ---- dinput8 forwarding ----------------------------------------------- */
@@ -3012,7 +642,7 @@ static FARPROC real(const char *name)
         GetSystemDirectoryA(p, MAX_PATH);   /* SysWOW64 for a 32-bit process */
         lstrcatA(p, "\\dinput8.dll");
         g_real = LoadLibraryA(p);
-        log_line("loaded real dinput8 from %s -> %s", p, g_real ? "ok" : "FAILED");
+        log_line("real dinput8: %s", g_real ? "loaded" : "FAILED to load");
     }
     return g_real ? GetProcAddress(g_real, name) : NULL;
 }
@@ -3057,7 +687,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(inst);
-        start(inst);
+        start();
     }
     return TRUE;
 }

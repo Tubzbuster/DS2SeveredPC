@@ -12,7 +12,7 @@ Section names are the level's stream folders
 scene and audio numbering (`igc_01_xx` = chapter 1, `igc_02_xx` = chapter 2)
 and is corrected as we play.
 
-## Summary (2026-10-18, v0.8.2)
+## Summary (2026-10-18, v0.8.5, first full release)
 
 **Where we are:** Severed is fully playable on PC, start to finish: all of
 chapter 1 and chapter 2, the final fight, the last stand, the ending video,
@@ -39,10 +39,10 @@ What is left are minor issues, listed under Open bugs; none blocks the game.
 - the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
-1. End of the DLC (probe 55): copy the new `dinput8.dll`, load the final
-   hack checkpoint and play to the credits: the game should go straight
-   back to the main menu, with no New Game+ popup or New Unlocks screen
-   (log: `END OF GAME: Severed - no New Game+ popup ...`).
+1. Release hook (56, the slimmed-down DLL in v0.8.5): Severed in the
+   episode select, the Pulse Rifle upgrades on a new game, and the ending
+   going straight back to the main menu with no New Game+ popup or New
+   Unlocks screen (log: `end of game: Severed - back to the main menu`).
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
