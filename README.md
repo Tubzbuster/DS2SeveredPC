@@ -57,7 +57,7 @@ I'm not gonna sugercoat it, I don't know the first thing about how the xbox 360 
                            TABLE OF CONTENTS
 ================================================================================
   [SV00] ........ Version History
-  [SV01] ........ Introduction (READ THIS FIRST)
+  [SV01] ........ Introduction 
   [SV02] ........ What Works / What Doesn't
   [SV03] ........ What You Need
   [SV04] ........ Trying the Test Build
