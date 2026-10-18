@@ -26,4 +26,5 @@ if exist ffmpeg\ffmpeg.exe (
   echo ffmpeg not bundled: the wizard will ask for ffmpeg.exe
 )
 copy /y ..\..\LICENSE dist\DS2SeveredPC\LICENSE.txt >nul
+copy /y "Keep all files together in the same folder.txt" dist\DS2SeveredPC\ >nul
 if not "%1"=="nopause" pause

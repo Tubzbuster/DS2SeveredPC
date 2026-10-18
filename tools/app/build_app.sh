@@ -12,3 +12,4 @@ ${PYTHON:-python3} -m PyInstaller --noconfirm --clean --onedir --windowed --name
   severed_installer.py
 if [ -x ffmpeg/ffmpeg ] || [ -f ffmpeg/ffmpeg.exe ]; then cp -r ffmpeg dist/DS2SeveredPC/; fi
 cp ../../LICENSE dist/DS2SeveredPC/LICENSE.txt
+cp "Keep all files together in the same folder.txt" dist/DS2SeveredPC/
