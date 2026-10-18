@@ -80,19 +80,22 @@ hall, the psych arrival hall and the landing bay finale.
 - ~~Gabe does not drop to the floor after the hanging fight~~ fixed
   (worked on two runs, a third to come): gravity on during the drop, hanging
   spot moved 0.35 m, the door started 2 s after the drop (FINDINGS 48)
-- thump in the opening scene (not the two corpses, Gabe's gun or the
-  tunnel's 4 physics props, tests 1-4)
-- the Pulse Rifle sits oddly in Gabe's hands (other weapons are fine): deferred to a future release
-- saves show the base "Chapter 1"/"Chapter 2" titles and pictures: the
-  chapter 16 numbering was reverted (suspected of the gunship float); a
-  release hook will give Severed saves their own (see To do for a release)
+- ~~thump in the opening scene~~ fixed and confirmed: gone since the
+  drill tunnel's two bodies hold still (`corpse_freeze`, FINDINGS 56)
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)
 - frame drops near some lights in the drill tunnel
 
 **No longer bugs** (confirmed by the user): the stretched slabs after the
-intro terminal, the alt-tab hang, the gunship hull textures.
+intro terminal, the alt-tab hang, the gunship hull textures. The Pulse
+Rifle grip (a misread on screen, the rifle is held properly).
+
+**For the full release** (not bugs): Severed saves still show the base
+game's "Chapter 1"/"Chapter 2" titles and pictures, as decided: giving
+them their own broke more than it was worth (the chapter 16 numbering,
+FINDINGS 52). To try again with the release hook (see To do for a
+release).
 
 **To double-check sometime** (notes, not counted as bugs):
 - quarry Twitchers seemed not to take hits while climbing out of their
@@ -119,7 +122,7 @@ intro terminal, the alt-tab hang, the gunship hull textures.
 
 | Area / sections | Status | Notes |
 |---|---|---|
-| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works, fix pending | thumping in the opening scene (fine once it ends). Ruled out: raising both corpses 12 cm; removing either corpse; removing Gabe's dropped Flamethrower (tests 1-3). Test 4 (step `prop_test.ok`, `simgroup.NUDGE`): the tunnel's 4 ScriptableProps 200 m below the level, everything else in place |
+| drill_tunnel: drill_tunnel_01, drill_tunnel_02 | works | the thump in the opening scene is gone since the two bodies hold still ("Freeze on limp", `corpse_freeze`, FINDINGS 56); confirmed by the user |
 | drill_tunnel: drill_cavern_01 | partial | Flamethrower picked up without a crash once the PC game's own assets were used |
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
@@ -163,10 +166,10 @@ intro terminal, the alt-tab hang, the gunship hull textures.
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle upgrades | works | probe 34: `10 node(s) set, 0 missing`; the user confirmed the upgraded rifle in game. RIG upgrades not looked at yet |
 | Twitchers | not reproduced since | parked by the user; previously: one Twitcher alone keeps Gabe in his flinch: each slash lands before the flinch ends (Normal and Casual; no grab). Their `Zombie` settings differ from the slashers' in an authored way (pain interrupt delays 4/2 s, dodge 0.9, turn speeds doubled, 8 damage per hit), nothing that looks like a conversion error. Next: A/B against the base game's own Twitchers (Government Sector) on the same PC, and a 60 fps cap test (the user plays at 75 fps with external V-Sync) |
-| Scripted hang after the cargo lift | partial | the entry into the hang looks like the console. Gabe still does not drop to the floor at the end. Probe 37: `ses_player_01_03` runs and finishes; its anchor is the origin (no transform, as on the 360) and the hanging proxy offset is tiny, so neither explains it (FINDINGS 48). Next: F7 test sending `PlayerChangeState_hanging_combat_deactivate` as the fight ends |
+| Scripted hang after the cargo lift | works | Gabe drops to the grate, gets up and runs through the door (two runs, a third to come): gravity on during `ses_player_01_03`, hanging spot moved 0.35 m, the door's sequence started 2 s after the drop (FINDINGS 48) |
 | Weapons: Flamethrower pickup | works | |
 | Weapons, kinesis | works | |
-| Weapon in Gabe's hands | partial | only the Pulse Rifle sits oddly (other weapons are held properly); not caused by its upgrades (tested without them). Deferred to a future release: the rifle's files are the PC's own, the likeliest cause is Gabe's converted animation bank `pc_nolegs_patrol.bnk` (Severed-only, nothing to check it against) |
+| Weapon in Gabe's hands | works | the Pulse Rifle looked off once; the user confirmed it was a misread, all weapons are held properly |
 | Necromorph AI | works | navmesh checksums recomputed (the game had rejected every converted navmesh) |
 | Crash in the quarry | works | fixed by the LUT conversion; probe 31 stays as a safety net |
 | Save stations | partial | saving and loading a save work; using the terminal again during its closing animation locks it up; saves are listed as "Chapter 1" and so get chapter 1's picture in the load menu (the PC picks it from a `ch01`-`ch15` table by chapter number). On console the load menu shows "Severed, chapter N" with its own picture (Gabe in a corridor, from footage); Severed's files hold only the two 64x64 Xbox dashboard icons (`weller1_ch1/ch2.png`), so that picture is probably in a front-end file still to find |
