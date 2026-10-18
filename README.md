@@ -40,7 +40,7 @@ I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 fi
 ================================================================================
   Episode Select ............ Implemented
   Chapter 1 ................. Fully Playable
-  Chapter 2 ................. 80% Playable
+  Chapter 2 ................. 95% Playable
   Sound ..................... OK
   Dialogue .................. OK
   Cutscenes ................. OK
