@@ -12,16 +12,14 @@ Section names are the level's stream folders
 scene and audio numbering (`igc_01_xx` = chapter 1, `igc_02_xx` = chapter 2)
 and is corrected as we play.
 
-## Summary (2026-10-17)
+## Summary (2026-10-18)
 
-**Where we are:** all of chapter 1 plays, and about three quarters of
-chapter 2 (11 of its 15 checkpoints). Furthest reached (new game, probe 46
-log): through the hospital (morgue, lobby, upper corridors, surgery ward,
-recreation and observation) and the `igc_02_01` scene in the psych ward's
-development room with Lexine, the Oracle and the captain, then the psych
-ward halls to the chase hall saferoom (`chase_hall_saferoom_z01`), where the
-session ended at the menu. Not reached yet: the security room, the chase
-hall, the psych arrival hall and the landing bay finale.
+**Where we are:** Severed plays from the start through to the final boss.
+All of chapter 1 and chapter 2 up to the landing bay finale play, with only
+minor fixes left here and there (listed under Open bugs). The hospital's
+black shapes and the zero-oxygen hallway are fixed and confirmed. Not
+confirmed yet: the landing bay final cutscene (a camera fix is waiting for a
+test, see below), the final boss and the end of the DLC (credits).
 
 **Fixed so far** (confirmed in game unless marked):
 - Severed in Episode Select; intro terminal, RIG call scene, hand-over
@@ -38,6 +36,9 @@ hall, the psych arrival hall and the landing bay finale.
 - gunship hull textures (built from the PC game's own mesh)
 - crash entering the decompression room (looping sounds split)
 - the gift shop's strobing lights (calmed)
+- black shapes and slabs across the hospital, and the zero-oxygen hallway's
+  black box and beige windows (vertex positions, FINDINGS 59)
+- the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
 1. Landing bay final cutscene (fix `anim_tracks.ok`): rerun the converter,
@@ -132,11 +133,11 @@ release).
 | drill_tunnel: drill_saferoom | works | door, bench, store, save station (second use of the save station locked up in an earlier run: recheck) |
 | bomb_run: grinder_hall_z01/z02, grinder_room | works | |
 | bomb_run: quarry_entrance, quarry_z01/z02, escape_hall | works | loads and plays (probe 31, and no `D3D GUARD` lines since the LUT fix). Price's scene and attack, the override switch, the door encounter and the cargo lift all work. The black screen when the quarry door opened is fixed (colour-grading LUTs, FINDINGS 45). The door that drew as a solid black slab (`door_inner_01_am`) is fixed and confirmed (20-byte UV streams, FINDINGS 46) |
-| mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | partial | played through to the docking station. The upside-down tentacle grab after the lift plays; pressing stomp during it put Gabe inside the ceiling (he got out once the animation ended). The quarantine lockdown with 3 override terminals starts. Died there: Twitchers sometimes repeat the same attack and stunlock Gabe in a damage loop |
-| elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | untested | elevator crash scenes (`ses_player_01_02`, `01_03`) |
-| docking_station: docking_airlock_01, docking_station_z01/z02 | works, fix pending | the gunship fight, destroying it and boarding work (FINDINGS 47). The smeared hull textures: Severed's `exterior_black_win` is the base game's gunship hull with another window material; it is now built from the PC game's own `exterior.dae` with that material (`pcassets.DERIVED`, step `gunship_hull.ok`, FINDINGS 51) |
+| mining_camp: mining_camp_hall, mining_camp01/02, mining_camp_z01 | works | played through to the docking station. The upside-down tentacle grab after the lift plays; pressing stomp during it put Gabe inside the ceiling (he got out once the animation ended). The quarantine lockdown with 3 override terminals starts. Died there: Twitchers sometimes repeat the same attack and stunlock Gabe in a damage loop |
+| elevator: elevator_hall, elevator_z01-z03, elevator_shaft_04-12 | works | played through on the way to the docking station, elevator crash scenes included (`ses_player_01_02`, `01_03`) |
+| docking_station: docking_airlock_01, docking_station_z01/z02 | works | the gunship fight, destroying it and boarding work (FINDINGS 47). The smeared hull textures: Severed's `exterior_black_win` is the base game's gunship hull with another window material; it is now built from the PC game's own `exterior.dae` with that material (`pcassets.DERIVED`, step `gunship_hull.ok`, FINDINGS 51); confirmed |
 | chapter 1 -> 2 transition (emergency_arrival) | works | confirmed: the crash-landing scene, its dialogue and the Chapter 2 title play (FINDINGS 49). A side-by-side screenshot with console footage at the psych ward line matches |
-| emergency / psych ward: Tormentor fight, airless hallway | works, issues | the Tormentor boss fight works; a flat black shape floats in the zero-oxygen hallway (Gabe walks through it). The hallway turns on a depth-of-field effect (`msg_vfx_airless_dof_start`), but that effect, the floating debris meshes and all the hallway's materials are the PC game's own, and its glass converts exactly like the base game's: cause still open |
+| emergency / psych ward: Tormentor fight, airless hallway | works | the Tormentor boss fight works; the flat black shape in the zero-oxygen hallway is fixed and confirmed (vertex positions, `mesh_positions.ok`, FINDINGS 59) |
 | decompression room | works | confirmed passed in two runs. Was: crashed on entering (doors open, light supports destroyed): audio thread, exe 0x515F0F, the sample decoder (0x515EE0) read a block through a null pointer (voice +0x34). Severed's sound banks are the only XAS bank samples the PC plays (its own banks are all EALayer3). Probe 39 dumps the voice and the sample header at this crash |
 
 ## Chapter 2: the hospital
@@ -144,16 +145,17 @@ release).
 | Area / sections | Status | Notes |
 |---|---|---|
 | emergency: emergency_arrival_z01, emergency_arrival_hall_z01, storage_z01, hacking_room_z01 | works | crash landing, Tormentor fight |
-| emergency: decompression_z01, decom_hall_z01, airless_hall_z01, vista_sprawl_z01/z03 | partial | decompression crash fixed; gift shop lights calmed (confirmed); the zero-oxygen hallway's black box is its scratched-metal wall panels drawn black, and its windows are flat beige (FINDINGS 53) |
-| trauma: elevator_morgue_z01, morgue_z01, morgue_hall_z01-z03, triage_z01, triage_hall_z01 | works, issues | passed; black stretched shapes in several rooms (likely the same black lightmap-shader surfaces) |
-| hospital_entrance: lower_lobby_z01/z02, upper_lobby_z01/z02, reception_z01 | works, issues | passed; black shapes as above |
-| upper_corridors: patient_hall_z02-z05, patient_z01/z02, store_room_z01, surgery_lobby_z01 | works, issues | passed; black shapes as above |
-| surgery_ward: decontamination_z01, surgery_z01, surgery_hall_z01, surgery_observation_z01, surgery_pit_z01, elev_surg_pit_z01 | works, issues | passed; the slanted reflections in the clinic overlook window match the base game on PC |
+| emergency: decompression_z01, decom_hall_z01, airless_hall_z01, vista_sprawl_z01/z03 | works | decompression crash fixed; gift shop lights calmed (confirmed); the zero-oxygen hallway's black box and beige windows fixed and confirmed (FINDINGS 59) |
+| trauma: elevator_morgue_z01, morgue_z01, morgue_hall_z01-z03, triage_z01, triage_hall_z01 | works | passed; the black shapes are fixed and confirmed (FINDINGS 59) |
+| hospital_entrance: lower_lobby_z01/z02, upper_lobby_z01/z02, reception_z01 | works | passed; the black shapes are fixed and confirmed |
+| upper_corridors: patient_hall_z02-z05, patient_z01/z02, store_room_z01, surgery_lobby_z01 | works | passed; the black shapes are fixed and confirmed |
+| surgery_ward: decontamination_z01, surgery_z01, surgery_hall_z01, surgery_observation_z01, surgery_pit_z01, elev_surg_pit_z01 | works | passed; black slabs fixed and confirmed; the slanted reflections in the clinic overlook window match the base game on PC |
 | recreation: elevator_recreation_hall, recreation_hall_z01-z03, recreation_z01/z02, elevator_rec_z01/z02 | works | passed |
 | observation: observation_z01, observation_hall_z01, psycho_development_z01 | works | passed; scene `igc_02_01` (Lexine, the Oracle, the captain) plays |
-| psych_ward: psych_hall_z01/z03/z04, chase_hall_saferoom_z01 | works | reached the saferoom (furthest point so far) |
-| security: security_z01, security_hall_z01; psych_ward: isaacs_cell_z01 | untested | streamed in, not yet played |
-| chase_hall: chase_hall_z01/z02; psych_ward: psych_arrival_hall_z01, landing_bay_psycho_z01/z02 | untested | the finale (final battle, final hack, `igc_02_03` onwards) |
+| psych_ward: psych_hall_z01/z03/z04, chase_hall_saferoom_z01 | works | passed |
+| security: security_z01, security_hall_z01; psych_ward: isaacs_cell_z01 | works | passed |
+| chase_hall: chase_hall_z01/z02; psych_ward: psych_arrival_hall_z01 | works | passed |
+| psych_ward: landing_bay_psycho_z01/z02 | fix pending | the finale: the final battle and the battery swap play; opening the door after it started the final cutscene with the camera zoomed in on the skybox, then crashed. Camera tracks fixed (`anim_tracks.ok`, FINDINGS 60), waiting for a test. The final boss is not reached yet |
 | Also in the DLC: entry_hall, pre_moonquake | works | played in chapter 1 (mining camp to the docking station) |
 | End of the DLC (credits) | untested | |
 
@@ -161,12 +163,12 @@ release).
 
 | System | Status | Notes |
 |---|---|---|
-| Level geometry, lighting, collision | works | in the areas seen so far |
+| Level geometry, lighting, collision | works | up to the final boss; the hospital's black shapes fixed (FINDINGS 59) |
 | Gabe (security suit) | works | |
 | HUD, menus, inventory screen | works | |
 | Subtitles | works | |
 | Dialogue and audio logs (stereo streams) | works | |
-| Cutscene audio (5.1 streams) | fix pending | stereo downmix |
+| Cutscene audio (5.1 streams) | works | stereo downmix |
 | RIG health spine | works | since the PC game's own RIG bar meshes are used |
 | Starting equipment (`equip_command_player_initial`) | works | Pulse Rifle, Seeker Rifle, ammo; 50,000 credits (to compare with the console) |
 | Gabe's Pulse Rifle upgrades | works | probe 34: `10 node(s) set, 0 missing`; the user confirmed the upgraded rifle in game. RIG upgrades not looked at yet |
