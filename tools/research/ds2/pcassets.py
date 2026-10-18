@@ -85,3 +85,30 @@ def derive_mesh(pc_mesh, sev_360_mesh):
     for tp, tx in zip(gp.tables, gx.tables):
         struct.pack_into('<I', out, tp.entry + 0x0C, struct.unpack_from('>I', sev_360_mesh, tx.entry + 0x0C)[0])
     return bytes(out)
+
+
+def match_materials(pc_mesh, sev_360_mesh):
+    """a mesh taken from the PC game, with the material ids (DT1 +0x0C) of
+    Severed's own mesh where they differ, as (bytes, [(table, PC id,
+    Severed id)]); None if nothing differs or the tables do not line up.
+    The PC copy of a mesh Severed re-used can name another material than
+    Severed's: the Oracle Twitcher's body and limbs are the PC game's, but
+    Severed gives them its own material, so the PC ids name a material that
+    is not loaded in the landing bay (exe 0x8347EA reads a null material)."""
+    import struct
+    from . import geo
+    gp, gx = geo.parse(pc_mesh, False), geo.parse(sev_360_mesh, True)
+    if len(gp.tables) != len(gx.tables):
+        return None
+    name = lambda d, t: d[t.name_offset:d.find(b'\0', t.name_offset)] if t.name_offset else b''
+    if any(name(pc_mesh, tp) != name(sev_360_mesh, tx) for tp, tx in zip(gp.tables, gx.tables)):
+        return None
+    out = bytearray(pc_mesh)
+    changed = []
+    for i, (tp, tx) in enumerate(zip(gp.tables, gx.tables)):
+        old = struct.unpack_from('<I', pc_mesh, tp.entry + 0x0C)[0]
+        new = struct.unpack_from('>I', sev_360_mesh, tx.entry + 0x0C)[0]
+        if old != new:
+            struct.pack_into('<I', out, tp.entry + 0x0C, new)
+            changed.append((i, old, new))
+    return (bytes(out), changed) if changed else None

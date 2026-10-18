@@ -1927,3 +1927,40 @@ gunship hull in the landing bay is the same asset the hull fix builds
 (section 51). Whether the crash follows from the broken camera is to be
 seen with the camera fixed.
 
+
+## 61. The landing bay crash: the Oracle Twitchers' material
+
+With the camera fixed (section 60) the final cutscene played correctly, then
+crashed at the same place: exe 0x8347EA, 0.45 s after
+`pop_cam_se_02_16_single_splinecam` (which also sends
+`pdlc1_ch02_hos_streamset_psych_ward_2b1` and `oracle_invincibility_on`).
+The faulting code builds a draw sort key: `[item+0x54]` is the item's
+material, `+8` its shader, whose `+0x0C` is added to the key. The material
+was null, on a `mesh_body_dism` part.
+
+The two `spawn_infector_twitcher` objects spawn the Zombie template in
+`landing_bay.str` (B0A29C40), whose model stream is
+`pdlc_twitcher_oracle.str` (the Infector's `SpawnedNPC` too). The probe log
+shows that stream first read with the landing bay (2,103 s); no Oracle
+Twitcher is spawned before the cutscene (the waves are Stalkers and the
+Pack), so these are the first Oracle Twitchers the game ever draws.
+
+`pdlc_twitcher_oracle.str`: 92 of its 140 assets are taken from the PC game
+(stream 0E74B90F, the PC's twitcher stream), among them the body, head and
+limb meshes (same names and ids as the PC's `chars\twitcheroracle`). Its
+material `skinned_twitcheroracle_mat_skinned_twitcheroracle` is not in the
+PC game: it is Severed's own (converted). A mesh table names its material
+by the id at material +0x08; Severed's material is 53D777CB, and every
+Severed mesh of the stream names 53D777CB. The PC copies of the meshes were
+exported against the PC game's own material, so they can name an id that
+nothing in the landing bay loads: a null material at the first draw. (The
+security Twitcher's material is the PC game's own, so its PC meshes and
+material agree: no crash with those, all game long.)
+
+Fix: `pcassets.match_materials` writes the material ids of Severed's own
+mesh into every mesh taken from the PC game, table by table, where they
+differ (only when the tables line up by name; the gunship hull's
+`derive_mesh` does the same for one renamed table). Step
+`pc_mesh_materials.ok`; the log names each mesh changed, with the old and
+new ids. The PC data was not available here, so the PC ids are confirmed
+by that log line.

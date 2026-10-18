@@ -41,10 +41,13 @@ test, see below), the final boss and the end of the DLC (credits).
 - the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
-1. Landing bay final cutscene (fix `anim_tracks.ok`): rerun the converter,
-   load the final-battle checkpoint, open the door after the battery swap.
-   The camera should follow the scene (console: the gunship parked, Lexine
-   running to it, Gabe grabbed). Send the log, crash or not (FINDINGS 60).
+1. Landing bay final cutscene, crash fix (`pc_mesh_materials.ok`): rerun
+   the converter (its log should list `pdlc_twitcher_oracle.str` meshes
+   with a material change), load the final-battle checkpoint and open the
+   door after the battery swap. The camera fix is confirmed; the game then
+   crashed drawing the Oracle Twitchers spawned in the scene, whose PC
+   meshes named a material that is not loaded (FINDINGS 61). Send the
+   log, crash or not.
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -155,7 +158,7 @@ release).
 | psych_ward: psych_hall_z01/z03/z04, chase_hall_saferoom_z01 | works | passed |
 | security: security_z01, security_hall_z01; psych_ward: isaacs_cell_z01 | works | passed |
 | chase_hall: chase_hall_z01/z02; psych_ward: psych_arrival_hall_z01 | works | passed |
-| psych_ward: landing_bay_psycho_z01/z02 | fix pending | the finale: the final battle and the battery swap play; opening the door after it started the final cutscene with the camera zoomed in on the skybox, then crashed. Camera tracks fixed (`anim_tracks.ok`, FINDINGS 60), waiting for a test. The final boss is not reached yet |
+| psych_ward: landing_bay_psycho_z01/z02 | fix pending | the finale: the final battle and the battery swap play. The final cutscene's camera is fixed and confirmed (`anim_tracks.ok`, FINDINGS 60): Lexine runs to the gunship and the Oracle Twitchers spawn. It then crashed drawing them (material, FINDINGS 61): fix `pc_mesh_materials.ok` waiting for a test. The final boss is not reached yet |
 | Also in the DLC: entry_hall, pre_moonquake | works | played in chapter 1 (mining camp to the docking station) |
 | End of the DLC (credits) | untested | |
 

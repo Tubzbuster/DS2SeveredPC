@@ -564,6 +564,41 @@ def derive_pc_meshes(root, dst, idx):
                 open(p, 'wb').write(y)
 
 
+def match_pc_mesh_materials(root, dst):
+    """meshes taken from the PC game get the material ids of Severed's own
+    mesh where they differ (pcassets.match_materials: the Oracle Twitcher)"""
+    table = pcassets.load()
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if not f.lower().endswith('.str'):
+                continue
+            p = os.path.join(d, f)
+            src = os.path.join(root, os.path.relpath(p, dst))
+            if not os.path.exists(src):
+                continue
+            assets = streamfile.read(open(p, 'rb').read())[1]
+            keys = [pcassets.key(a.type, a.name, a.ids) for a in assets]
+            hits = [i for i, (a, k) in enumerate(zip(assets, keys)) if a.type == 'Mesh' and k in table]
+            if not hits:
+                continue
+            sx = {pcassets.key(a.type, a.name, a.ids): a for a in streamfile.read(open(src, 'rb').read())[1]}
+            fresh = {}
+            for i in hits:
+                if keys[i] not in sx:
+                    continue
+                r = pcassets.match_materials(assets[i].payload(), sx[keys[i]].payload())
+                if r is not None:
+                    fresh[i] = r[0]
+                    log('  %s: %s, material %s' % (os.path.relpath(p, dst), assets[i].name, ', '.join(
+                        sorted({'%08X -> %08X' % (old, new) for _, old, new in r[1]}))))
+            if not fresh:
+                continue
+            w = streamwrite.Writer()
+            for i, a in enumerate(assets):
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, fresh.get(i, a.payload()))
+            open(p, 'wb').write(w.data())                 # same sizes: the TOC stays
+
+
 def refresh_snu_channels(root, dst):
     """re-encode the audio streams whose channel count the PC cannot play as
     XAS (6-channel cutscene audio: snu.pad_channels)"""
@@ -684,7 +719,8 @@ def remove(game):
 # converted before a fix. A fresh conversion runs the same converters with
 # every fix already in, so it marks them all done and skips them (and their
 # log lines). New fixes of this kind add their marker here too. Not listed:
-# the stages a conversion always needs (pc_assets, lut_fix, gunship_hull).
+# the stages a conversion always needs (pc_assets, lut_fix, gunship_hull,
+# pc_mesh_materials).
 CATCH_UP = (
     'uniform_fix.ok', 'neutral_fix.ok', 'hkx_fix.ok', 'strip_fix2.ok', 'snu_channels2.ok', 'nav_sums.ok',
     'reloc_fix.ok', 'uv_streams.ok', 'mesh_vb68.ok', 'store_suits.ok', 'bnk_blend.ok', 'prop_test.ok',
@@ -843,6 +879,10 @@ def main():
         log('Building the gunship hull from the PC game\'s own (Severed\'s window material)')
         derive_pc_meshes(root, dst, idx)
         open(os.path.join(work, 'gunship_hull.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'pc_mesh_materials.ok')):
+        log('Meshes taken from the PC game: Severed\'s own materials (the Oracle Twitchers, final battle)')
+        match_pc_mesh_materials(root, dst)
+        open(os.path.join(work, 'pc_mesh_materials.ok'), 'w').write('ok')
     if not os.path.exists(os.path.join(work, 'prop_test.ok')):
         log('Opening scene test: the tunnel\'s 4 physics props go below the level, Gabe\'s gun back in place')
         refresh_simgroups(root, dst, 0x1AADC065)       # DismemberableProp: corpses back (simgroup.NUDGE)
