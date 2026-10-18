@@ -1391,6 +1391,25 @@ without NO_GRAVITY_COLLISION (flags 0x4025 -> 0x4021,
 `simgroup.SES_FLAGS`), with the hanging state still on, so gravity should
 keep him at floor level through the animation.
 
+Result (hang_gravity, probe 47): the drop works. Gabe goes up 1.7 m and
+straight back to the floor (Y -15.22) within 0.8 s, then gets up there.
+The run then ends at the door the animation carries him through
+(`door_pubh01_ind`, ScriptableProp A3A24BD7 in `mining_camp_hall`, at
+X -98.34, Z -44.13). With collision on he stops at X -98.0, Z -43.78,
+0.35 m to the side of the door's centre, against its frame. At the release
+the floor there unloads (`ses_player_01_03_end` also switches the stream
+destinations) and he falls out of the level.
+
+Why he is off line: the drop has move type NONE and no matrix, so it runs
+from wherever Gabe faces after the fight. His path drifts 0.9 m in Z over
+7.4 m in X (about 7 degrees off); the run without collision showed the
+same path. The teleport into the fight (9109C6FA, matrix at -93.086,
+-11.147, -44.152, turned 90 degrees) stands in line with the door
+(Z -44.15 against -44.13). Test (`hang_place.ok`, `simgroup.SES_PLACE`):
+the drop's object record shares the teleport's matrix and gets move type 4
+(teleport, as 9109C6FA has), so it starts from that spot and direction.
+Gravity stays on.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe

@@ -135,6 +135,19 @@ SES_FLAGS = {
     0xC767274B: (0x4025, 0x4021),
 }
 
+# Scripted sequences given another sequence's placement: {object hash:
+# (object whose matrix it shares, new move type)}. With gravity on, the
+# drop (ses_player_01_03, no matrix, move type NONE) runs from wherever Gabe
+# faced in the hanging fight: its path drifted 0.9 m sideways and hit the
+# frame of the door it runs through (door_pubh01_ind at -98.34, -44.13;
+# Gabe at -98.0, -43.78), where the level unloads under him at the end.
+# The teleport into the fight (9109C6FA) stands at -93.09, -44.15, straight
+# in line with that door: the drop now teleports there first (move type 4,
+# as that sequence does) and runs in its direction.
+SES_PLACE = {
+    0xC767274B: (0x9109C6FA, 4),
+}
+
 # Chapter numbers (PlayerSetChapter) are never changed: Severed keeps
 # chapters 1 and 2, as on the console. Renumbering them (to 16, for the
 # save pictures) stopped Gabe's landing sequence after the gunship scene,
@@ -332,6 +345,7 @@ def convert(x, stats=None):
         names.append((h, ver))
         out[B + hs + 8 * i:B + hs + 8 * i + 8] = struct.pack('<II', h, ver)
     by_obj = {}
+    by_rec = {}
     for i in range(cnt):
         e = B + toff + 16 * i
         ro, oh, ln, a, b = struct.unpack_from('>IIIHH', x, e)
@@ -348,6 +362,8 @@ def convert(x, stats=None):
             out[B + ro:B + ro + ln] = bytes(ln)      # blank NavFolder
             continue
         _record(out, x, B + ro, ln, cls, stats)
+        if cls is not None and cls['name'] == 'ScriptedEventSequence':
+            by_rec[oh] = B + ro
         if oh in RETARGET:
             _retarget(out, x, B + ro, ln, oh, stats)
         if oh in DELAYS:
@@ -374,4 +390,26 @@ def convert(x, stats=None):
             else:
                 stats['group_hash_unverified'] = stats.get('group_hash_unverified', 0) + 1
     _nudge(out, x, oC, n16, stats)
+    _place(out, x, oC, n14, by_rec, stats)
     return bytes(out)
+
+
+def _place(out, x, oC, count, by_rec, stats):
+    """object records (0x44 bytes: record hash pointer at +8, matrix offset
+    at +48): SES_PLACE sequences take the other object's matrix and a new
+    move type (record offset 112)"""
+    if not any(h in by_rec for h in SES_PLACE):
+        return
+    mats = {}
+    for i in range(count):
+        e = oC + 0x44 * i
+        hp = struct.unpack_from('>I', x, e + 8)[0]
+        if hp + 4 <= len(x):
+            mats[struct.unpack_from('>I', x, hp)[0]] = e
+    for oh, (src, move) in SES_PLACE.items():
+        if oh in mats and src in mats and oh in by_rec:
+            m = struct.unpack_from('>I', x, mats[src] + 48)[0]
+            if m and not struct.unpack_from('>I', x, mats[oh] + 48)[0]:
+                struct.pack_into('<I', out, mats[oh] + 48, m)
+                struct.pack_into('<I', out, by_rec[oh] + 112, move)
+                stats['ses_placed'] = stats.get('ses_placed', 0) + 1
