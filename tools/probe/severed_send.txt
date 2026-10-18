@@ -1,0 +1,12 @@
+# Copy into the Dead Space 2 folder (next to deadspace2.exe) and press F7 in game.
+# A Windows "asterisk" beep confirms the messages were sent. Delete a line or
+# put # in front of it to leave it out.
+#
+# Gabe cannot be killed (the switch the script uses in its own scenes).
+# Loading a checkpoint or dying may turn it off again: press F7 again.
+invincible_weller_on
+#
+# Unlocks the door to the final fight, as putting the power cell in the
+# landing bay receptacle does (the gunship arrives too). The stalkers stay:
+# run past them to the door.
+hotshot_pdlc_boss_door_unlock

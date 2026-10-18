@@ -197,3 +197,12 @@ only), then opens the save screen only if a save target is set (exe
 0xA92D90 checks `[[esi+0x28]+0x5C]`), else moves on. Probe 51 logs
 `END OF GAME:` lines: the check with that pointer, and whether the save
 screen opened (state 0xD) or was skipped (state 3).
+
+## Test shortcut: invincibility and the boss door
+
+`tools/probe/severed_send.txt` is a ready-made F7 file. Copy it next to
+`deadspace2.exe` and press F7 in the landing bay:
+- `invincible_weller_on` makes Gabe unkillable (Severed's own switch for
+  its scenes); press F7 again after loading a checkpoint;
+- `hotshot_pdlc_boss_door_unlock` unlocks the door to the final fight, as
+  the power cell in the receptacle does, so the stalker room can be skipped.
