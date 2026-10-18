@@ -1596,6 +1596,18 @@ save pictures is out (the hook in PROGRESS, To do for a release, instead). Confi
 longer touches PlayerSetChapter at all, and the save picture streams
 (`saveicons.py`) are left out of the build.
 
+Again (user, loading the Continue checkpoint): the same picture. The run
+started from the dock save station's checkpoint
+(`aud_lua_checkpoint_pdlc1_docking_station_save_kiosk`), went through
+`pdlc1_ch01_ch02_streamset_transition`, `ses_player_02_02_initial`
+(origin 87.604, 33.896, 24.967 m) and `mm_sync_02_01`, and
+`ses_player_02_01` (01E927BB) again waited on handler 0x14 = 0 for good;
+no `player_set_chapter_*` was sent. Same signature as the chapter 16
+saves, so the likeliest cause is a Continue checkpoint left from the
+chapter 16 build (the earlier fix re-saved a save slot, not the Continue
+checkpoint). To confirm: F7 `player_set_chapter_1` on that checkpoint
+before boarding, then a fresh save at the dock overwrites it.
+
 ## 53. The airless hallway: what is converted there
 
 The hallway's geometry is Severed's own `airless_hall_z01` section
