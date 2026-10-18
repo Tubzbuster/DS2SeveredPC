@@ -189,3 +189,11 @@ condition 4). The Infector and the Oracle Twitcher template send
 `oracle_dead` both when they die and when they go to sleep. Probe 50 logs
 every `oracle_dead` and `twitcher_combat_over` (other messages: the first
 3 sends as before), to see the count when the fight does not end.
+
+## The end-of-game save (probe 51)
+
+After the credits the end-of-game sequence shows "save for New Game+" (OK
+only), then opens the save screen only if a save target is set (exe
+0xA92D90 checks `[[esi+0x28]+0x5C]`), else moves on. Probe 51 logs
+`END OF GAME:` lines: the check with that pointer, and whether the save
+screen opened (state 0xD) or was skipped (state 3).

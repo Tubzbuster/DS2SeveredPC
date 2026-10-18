@@ -2031,11 +2031,22 @@ the intro looks right as it is, and is left unchanged. Step
 
 Compared with the console footage, still open:
 - after `all_fuses_destroyed` Gabe has his legs again for the last
-  seconds (the last stand plays him legless: `pc_nolegs.bnk`);
+  seconds. The console footage (55:18-55:26) shows the same: knees and
+  legs as he is pulled towards the airlock ("Goodbye Lex"), so this is how
+  the scene was made, not a conversion fault;
 - after the video, the console is black until the end screens; the PC
   shows the room for about 3 s (350.5 s video end, 353.5 s
-  `iMsgUIEndOfGame`);
+  `iMsgUIEndOfGame`). The video (VidScreen D41F9BD5, `pdlc1_vt_02_01`)
+  plays with `pdlc_static_black.vfx` (converts cleanly), whose last step
+  starts `pdlc_outro` at 7.5 s: the black after the video is the outro's
+  own background, so this should come right with the outro's step times
+  (`vfx_headers.ok`). The end-of-game fade (`fadetoblack2.vfx`) is the PC
+  game's own;
 - the end-of-game "save for New Game+" message returns to the main menu
-  without offering a save;
+  without offering a save. In the exe (0xA92C40-0xA92DE4, a state machine
+  at +0x24): state 0xB shows the message ($ui_gpop_endOfGameSaveTitle /
+  Message, button $ui_ok_uc); after OK and a delay it opens the save
+  screen (0xBAE040, state 0xD) only if `[[esi+0x28]+0x5C]` is set, else
+  moves on (state 3). Probe 51 logs which way it goes and that pointer;
 - a pale see-through sheet still shows under the Oracle corpses, now
   built from the PC game's Oracle mesh (section 62).

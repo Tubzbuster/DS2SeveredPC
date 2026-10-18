@@ -1398,6 +1398,45 @@ static int hook_call_ecx(BYTE *fn, int len, void (__cdecl *cb)(void *))
 }
 
 
+/* ---- End of game: the New Game+ save (probe 51) --------------------------
+ * After the credits the end-of-game sequence (retail exe 0xA92xxx, a state
+ * machine at +0x24) shows "save for New Game+" (OK only), then opens the
+ * save screen (0xBAE040, state 0xD) only if [[esi+0x28]+0x5C] is set, else
+ * moves on (state 3). Severed's ending returned to the main menu without a
+ * save screen: log which way it goes. */
+static const char SIG_EOG_SAVE[] =
+    "8B 4E 28 E8 ?? ?? ?? ?? 8B 4E 28 8B 49 5C 85 C9 74 23 E8 ?? ?? ?? ?? C7 46 24 0D 00 00 00";
+
+static void __cdecl note_eog_check(void *o)
+{
+    DWORD *p = (DWORD *)o;
+    log_line("END OF GAME: save check, object %p, save target [+0x5c] = %08lx", o,
+             p && mem_ok(p, 0x60) ? p[0x5C / 4] : 0xFFFFFFFF);
+}
+
+static void __cdecl note_eog_open(void *o)
+{
+    (void)o;
+    log_line("END OF GAME: save screen opened (state 0xD)");
+}
+
+static void __cdecl note_eog_skip(void *o)
+{
+    (void)o;
+    log_line("END OF GAME: no save screen (state 3)");
+}
+
+static void hook_end_of_game(void)
+{
+    int n = 0;
+    BYTE *s = find_sig(SIG_EOG_SAVE, &n), *k = s ? s + 0x35 : NULL;
+    int ok = s && n == 1 && k[0] == 0xC7 && k[1] == 0x46 && k[2] == 0x24 && k[3] == 0x03
+             && hook_call_ecx(s + 0x0B, 5, note_eog_check)
+             && hook_call_ecx(s + 0x17, 7, note_eog_open)
+             && hook_call_ecx(k, 7, note_eog_skip);
+    log_line("end-of-game save: %d match(es)%s", n, ok ? ", hooked" : "");
+}
+
 /* ---- SimGroup block loads -----------------------------------------------
  * The SimGroup data block dispatcher (retail exe 0x0085D090, cdecl,
  * argument = block, returns al) sends block 0x011795D9 (packed records,
@@ -2068,6 +2107,7 @@ static DWORD WINAPI menu_hook_thread(LPVOID p)
                 log_line("geometry batch tracker: %d match(es) at exe+0x%lx%s (after %d retries)", nb,
                          bb ? (DWORD)bb - base : 0, bb && hook_log_sp(bb, 9, note_batch) ? ", hooked" : "", k);
             }
+            hook_end_of_game();
             log_line("level start: %d match(es) at exe+0x%lx, stream manager global 0x%08lx%s", nl,
                      ls ? (DWORD)ls - base : 0, (DWORD)g_streammgr,
                      ls && hook_call_ecx(ls, 6, on_level_start) ? ", hooked" : "");
@@ -2823,7 +2863,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 50 - process %s", path);
+    log_line("severed probe 51 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

@@ -99,17 +99,17 @@ screens and the credits. Fixes in this round:
   named DS2SeveredPC-Converter with a "keep all files together" note
 
 Still to fix (minor, none blocks the game): a pale see-through sheet under
-the Oracle corpses; an ending glitch (spoiler below); after the ending video the room shows for a few seconds
+the Oracle corpses; after the ending video the room shows for a few seconds
 where the console fades to black; the end-of-game "save for New Game+"
 prompt returns to the main menu without a save; the save station can lock
 up if used again while it closes; frame drops near some lights in the drill
 tunnel; saves show the base game's chapter titles and pictures. See
 `docs/PROGRESS.md`.
 
-<details><summary>Ending glitch (spoiler)</summary>
+<details><summary>Not a bug (spoiler)</summary>
 
 Gabe's legs come back for the last few seconds after the four airlock
-fuses.
+fuses: the console version shows the same.
 
 </details>
 
