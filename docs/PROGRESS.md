@@ -40,13 +40,10 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Hanging fight drop: worked on two runs; one more before it is marked
-   confirmed. (Bodies confirmed: the quarantine area's react normally, the
-   freeze is confined to the drill tunnel's two.)
-2. Zero-oxygen hallway with probe 46: as before (F6 until the level
+1. Zero-oxygen hallway with probe 46: as before (F6 until the level
    vanishes, F3 through the pieces, F5 when the box goes), then wait 5
    seconds before F4: F5 now also logs every draw of that piece.
-3. Bed room after the elevator: check again with F4 pressed (the black
+2. Bed room after the elevator: check again with F4 pressed (the black
    bar may have been probe 43's hidden shader).
 
 **Reported in the replay (new game):**
@@ -81,8 +78,8 @@ hall, the psych arrival hall and the landing bay finale.
   base game's). `msg_vfx_airless_dof_stop` changed nothing; the broken
   windows there also show flat beige. Next F7 tests:
   `lt_airless_hall_post_fx_off`, `msg_vfx_airless_stop`
-- ~~Gabe does not drop to the floor after the hanging fight~~ fixed
-  (worked on two runs, a third to come): gravity on during the drop, hanging
+- ~~Gabe does not drop to the floor after the hanging fight~~ fixed and
+  confirmed (consistent over several runs): gravity on during the drop, hanging
   spot moved 0.35 m, the door started 2 s after the drop (FINDINGS 48)
 - ~~thump in the opening scene~~ fixed and confirmed: gone since the
   drill tunnel's two bodies hold still (`corpse_freeze`, FINDINGS 56)

@@ -199,7 +199,7 @@ How it works:
 | Physics and collision | Works |
 | Playing as Gabe (security suit), HUD, inventory, starting weapons with the Pulse Rifle upgrades | Works |
 | Stores, benches, save stations | Work (suit packs removed from the stores; saves show the base game's chapter titles and pictures for now) |
-| Levels and geometry | In progress: black panels and flat beige windows in the zero-oxygen hallway, sideways reflections in the clinic overlook room |
+| Levels and geometry | In progress: black panels and flat beige windows in the zero-oxygen hallway, a black bar in the bed room after the elevator |
 | Textures | In progress |
 | Save stations | Can lock up if used again while the terminal is closing |
 | Performance | Frame drops near some lights in the drill tunnel |
