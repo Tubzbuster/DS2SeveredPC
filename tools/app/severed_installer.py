@@ -217,7 +217,7 @@ class Wizard:
 
     # ---- page frames ---------------------------------------------------------
 
-    def side_page(self):
+    def side_page(self, credit=False):
         """Welcome / Finish: the dark banner on the left, white text area"""
         f = tk.Frame(self.body, bg='white')
         f.pack(fill='both', expand=True)
@@ -229,6 +229,14 @@ class Wizard:
         banner.create_text(24, 112, anchor='nw', text='for PC', fill='#8a939b', font=(FONT, 10))
         if self.logo:
             banner.create_image(98, 280, image=self.logo)
+        if credit:       # the icon's maker, linked, under the icon
+            banner.create_text(24, 362, anchor='nw', text='App icon by', fill='#8a939b', font=(FONT, 8))
+            link = banner.create_text(24, 378, anchor='nw', text=ICON_BY, fill='#b9c0c6',
+                                      font=(FONT, 8, 'underline'))
+            banner.create_text(24, 394, anchor='nw', text='(SteamGridDB)', fill='#8a939b', font=(FONT, 8))
+            banner.tag_bind(link, '<Button-1>', lambda e: webbrowser.open(ICON_URL))
+            banner.tag_bind(link, '<Enter>', lambda e: banner.config(cursor='hand2'))
+            banner.tag_bind(link, '<Leave>', lambda e: banner.config(cursor=''))
         banner.create_text(24, 460, anchor='sw', text='Converted from your own\nXbox 360 add-on',
                            fill='#6b747c', font=(FONT, 8))
         inner = ttk.Frame(f, style='White.TFrame', padding=(24, 24))
@@ -259,7 +267,7 @@ class Wizard:
         self.refresh()
 
     def page_welcome(self):
-        f = self.side_page()
+        f = self.side_page(credit=True)
         ttk.Label(f, text='Welcome to the %s Setup Wizard' % TITLE, style='Big.TLabel',
                   justify='left', wraplength=440).pack(anchor='w')
         ttk.Label(f, style='Body.TLabel', wraplength=440, justify='left', text=(
@@ -274,15 +282,8 @@ class Wizard:
         for v, t in (('install', 'Install Severed'), ('remove', 'Remove Severed from the game')):
             ttk.Radiobutton(f, text=t, value=v, variable=self.mode, style='White.TRadiobutton').pack(
                 anchor='w', padx=8, pady=2)
-        credit = tk.Frame(f, bg='white')
-        credit.pack(side='bottom', anchor='w')
-        tk.Label(credit, text='App icon by', bg='white', fg='#8a8a8a', font=(FONT, 8)).pack(side='left')
-        link = tk.Label(credit, text=ICON_BY, bg='white', fg='#8a8a8a', font=(FONT, 8, 'underline'), cursor='hand2')
-        link.pack(side='left')
-        link.bind('<Button-1>', lambda e: webbrowser.open(ICON_URL))
-        tk.Label(credit, text='(SteamGridDB)', bg='white', fg='#8a8a8a', font=(FONT, 8)).pack(side='left')
 
-    def path_row(self, f, label, var, buttons, combo=None):
+    def path_row(self, f, label, var, buttons, combo=None, note=None):
         ttk.Label(f, text=label).pack(anchor='w', pady=(10, 2))
         row = ttk.Frame(f)
         row.pack(fill='x')
@@ -293,6 +294,8 @@ class Wizard:
         e.pack(side='left', fill='x', expand=True)
         for text, cmd in buttons:
             ttk.Button(row, text=text, command=cmd).pack(side='left', padx=(6, 0))
+        if note:
+            ttk.Label(f, text=note, foreground='#8a8a8a', font=(FONT, 8)).pack(anchor='w', pady=(2, 0))
         var.trace_add('write', lambda *a: self.refresh())
 
     def page_locations(self):
@@ -300,8 +303,9 @@ class Wizard:
         f = self.head_page('Choose locations', 'Point the wizard at your files.' if install
                            else 'Choose the game folder to remove Severed from.')
         if install:
-            self.path_row(f, 'Severed add-on: the package file 29E2FCC0..., or any file in a folder it was unpacked to:',
-                          self.addon, (('Browse...', self.pick_addon),))
+            self.path_row(f, 'Location of the Xbox 360 Severed DLC Addon File or Extracted Addon File Folder:',
+                          self.addon, (('Browse...', self.pick_addon),),
+                          note='The package file 29E2FCC0..., or any file in a folder it was unpacked to.')
         self.path_row(f, 'Dead Space 2 folder (holds deadspace2.exe)%s:' % (
             ', found automatically' if self.games else ''), self.game,
             (('Browse...', self.pick_game),), combo=self.games or None)
