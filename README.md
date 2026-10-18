@@ -230,7 +230,7 @@ How it works:
    deletes them when it finishes.
 2. Run `DS2SeveredPC.exe`. Choose **Install Severed** and click **Next**.
 
-   <p align="center"><img src="docs/img/install/1_welcome.png" alt="Welcome page" width="540"></p>
+   <p align="center"><img src="docs/img/install/install_1_welcome.png" alt="Welcome page" width="540"></p>
 
 3. Point the app at your files:
    - **Severed add-on:** click **Browse...** and pick the package file, or
@@ -241,18 +241,22 @@ How it works:
    The page shows how much free space each location has. If either one
    says "not enough", free some space or move the app to another drive.
 
-   <p align="center"><img src="docs/img/install/2_locations.png" alt="Choose locations page" width="540"></p>
+   <p align="center"><img src="docs/img/install/install_2_locations.png" alt="Choose locations page" width="540"></p>
 
-4. Check the summary and click **Install**. Converting takes about an hour.
-   If it stops or you cancel it, run the app again: it picks up where it
-   left off.
+4. Check the summary and click **Install**.
 
-   <p align="center"><img src="docs/img/install/3_ready.png" alt="Ready to install page" width="540"></p>
+   <p align="center"><img src="docs/img/install/install_3_ready.png" alt="Ready to install page" width="540"></p>
+
+   Converting takes about an hour. The window shows the current step and
+   the converter's log. If it stops or you cancel it, run the app again: it
+   picks up where it left off.
+
+   <p align="center"><img src="docs/img/install/install_4_installing.png" alt="Installing page" width="540"></p>
 
 5. When it's done, leave **Delete the temporary files** ticked and click
    **Finish**. The `severed_work` folder is removed.
 
-   <p align="center"><img src="docs/img/install/5_finish.png" alt="Finish page" width="540"></p>
+   <p align="center"><img src="docs/img/install/install_5_finish.png" alt="Finish page" width="540"></p>
 
 6. Copy `tools\probe\bin\dinput8.dll` from this repository into the Dead
    Space 2 folder, next to `deadspace2.exe`. It adds Severed to the episode
@@ -277,15 +281,27 @@ to update or remove the archive later.
 
 1. Run `DS2SeveredPC.exe`, choose **Remove Severed from the game** and click
    **Next**.
-2. Check that the Dead Space 2 folder is right, click **Next**, then
-   **Remove**.
 
-   <p align="center"><img src="docs/img/install/7_remove_locations.png" alt="Choose the game folder to remove Severed from" width="540"></p>
+   <p align="center"><img src="docs/img/install/remove_1_welcome.png" alt="Welcome page with Remove selected" width="540"></p>
 
-3. Delete `dinput8.dll` from the Dead Space 2 folder (and put back any
+2. Check that the Dead Space 2 folder is right and click **Next**.
+
+   <p align="center"><img src="docs/img/install/remove_2_locations.png" alt="Choose the game folder to remove Severed from" width="540"></p>
+
+3. Click **Remove**.
+
+   <p align="center"><img src="docs/img/install/remove_3_ready.png" alt="Ready to remove page" width="540"></p>
+
+   It only takes a moment.
+
+   <p align="center"><img src="docs/img/install/remove_4_removing.png" alt="Removing page" width="540"></p>
+
+4. Click **Finish**.
+
+   <p align="center"><img src="docs/img/install/remove_5_finish.png" alt="Severed is removed" width="540"></p>
+
+5. Delete `dinput8.dll` from the Dead Space 2 folder (and put back any
    `dinput8.dll` from another mod you moved away).
-
-   <p align="center"><img src="docs/img/install/8_removed.png" alt="Severed is removed" width="540"></p>
 
 Your game is back to normal. The app only deletes an archive it created
 itself: it checks for the marker file `DS2DAT2.DAT.severed` first (older

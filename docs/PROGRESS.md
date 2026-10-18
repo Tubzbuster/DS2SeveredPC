@@ -240,6 +240,21 @@ release).
   when started by hand (no build on every push); testing goes through
   `Make-SeveredTest.bat`.
 
+- **The app installs `dinput8.dll` itself (all-in-one, decided by the
+  user).** Users should not copy any file by hand. The release app carries
+  the release `dinput8.dll` (the hook, not the test probe), copies it next to
+  `deadspace2.exe` on install, and deletes it on removal. If another mod's
+  `dinput8.dll` is already there, the app sets it aside and puts it back on
+  removal. Then drop the manual copy step from the README's Installation
+  and Uninstallation sections ([SV03], [SV04]).
+
+- **App: the Installing/Removing page hides the button bar.** The log box
+  (a `tk.Text` with its default 24-line height) pushes the bottom bar, and
+  its Cancel button, out of the 720x520 window. Seen in the README
+  screenshots (`docs/img/install/install_4_installing.png`). Fix: give the
+  log box a small height (it still expands) or pack the bar before the
+  body. Refresh those screenshots after.
+
 - **Check the user's add-on before converting.** People's copies can have
   any file name, so the app identifies the add-on by its contents, not its
   name:
