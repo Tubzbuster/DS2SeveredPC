@@ -1410,6 +1410,32 @@ the drop's object record shares the teleport's matrix and gets move type 4
 (teleport, as 9109C6FA has), so it starts from that spot and direction.
 Gravity stays on.
 
+Result (hang_place, probe 47): with move type 4 the root motion is applied
+in all three axes, which move type NONE never did. Gabe starts at
+(-90.58, -10.53, -43.97): 2.65 m behind the teleport spot and 0.6 m above
+it, turned the wrong way. From 2.6 s to 4.3 s he falls 4.7 m (a real
+fall, the console's timing) and lands at X -96.4. He stops at X -96.87,
+1.5 m short of the door, and drops out of the level at the release.
+
+What the three runs show together:
+- the area between the hanging spot and the door has no floor of its own
+  (the elevator's collision is removed when it crashes,
+  `remove_elevator_collision`). While the hanging state is on it holds
+  Gabe up; once it ends he must already be past the door. The breadcrumb
+  messages sent at the release (`deactivate_drill_saferoom_destinations`)
+  are only objective markers (EditBreadcrumbs), not streaming;
+- the walk crosses the door 0.35 m off its centre with any start (the
+  animation's path curves 0.84 m sideways), so with collision on it
+  catches the frame. On the console collision is off during the drop and
+  he passes through;
+- so the console's flags are needed, and only the 2.6 m lift at the start
+  (and with it the get-up played in the air) is wrong on PC.
+
+Both changes are off again (`hang_console2.ok`): the console flow, which
+is playable (he lands past the door after the release and walks on). The
+lift is left for later: it needs the exe's root-motion code for move type
+NONE (why the start is raised 2.6 m and the vertical motion dropped).
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe

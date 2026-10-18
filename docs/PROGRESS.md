@@ -40,11 +40,11 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-1. Hanging fight, drop lined up with the door (`hang_place.ok`, rebuild
-   with `Make-SeveredTest.bat`; keep probe 47 in). Gravity drop as last
-   time, now starting from the fight's own spot and facing: does Gabe
-   run straight through the door and stay on the floor after the scene?
-   Send the log.
+1. Hanging fight back to the console flow (`hang_console2.ok`, rebuild with
+   `Make-SeveredTest.bat`): should be playable again as in the probe 47
+   run (get-up in the air, then he drops past the door and walks on).
+   Just confirm you can carry on; no log needed. The lift itself is
+   parked (FINDINGS 48).
 2. Zero-oxygen hallway with probe 46: as before (F6 until the level
    vanishes, F3 through the pieces, F5 when the box goes), then wait 5
    seconds before F4: F5 now also logs every draw of that piece.

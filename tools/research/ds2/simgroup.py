@@ -131,9 +131,13 @@ RAGDOLL_FLAGS = {
 # there (NO_GRAVITY_COLLISION, 0x4) until the hanging state ends with it,
 # then falling 2.7 m. Test: the flag off, so gravity keeps him at floor
 # level through the animation, with the hanging state still on.
-SES_FLAGS = {
-    0xC767274B: (0x4025, 0x4021),
-}
+# Result: he dropped to the floor, but the walk then stopped against the
+# frame of the door it carries him through, and at the release he fell out
+# of the level (the area before that door has no floor of its own; the
+# hanging state holds him up). Off again: the console's flags, with which
+# he passes through the door frame and lands past the door (playable; the
+# get-up just plays 2.6 m up). Form: {0xC767274B: (0x4025, 0x4021)}.
+SES_FLAGS = {}
 
 # Scripted sequences given another sequence's placement: {object hash:
 # (object whose matrix it shares, new move type)}. With gravity on, the
@@ -144,9 +148,11 @@ SES_FLAGS = {
 # The teleport into the fight (9109C6FA) stands at -93.09, -44.15, straight
 # in line with that door: the drop now teleports there first (move type 4,
 # as that sequence does) and runs in its direction.
-SES_PLACE = {
-    0xC767274B: (0x9109C6FA, 4),
-}
+# Result: the root motion then also moved him vertically (a real fall) but
+# from the wrong place: he started 2.65 m behind that spot, turned the
+# wrong way, stopped 1.5 m short of the door and fell out at the release.
+# Off again. Form: {0xC767274B: (0x9109C6FA, 4)}.
+SES_PLACE = {}
 
 # Chapter numbers (PlayerSetChapter) are never changed: Severed keeps
 # chapters 1 and 2, as on the console. Renumbering them (to 16, for the

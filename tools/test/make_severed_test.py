@@ -812,6 +812,10 @@ def main():
         log('Hanging fight: the drop starts from the fight\'s own spot, lined up with the door (Gabe caught its frame)')
         refresh_simgroups(root, dst, 0x4FE92B71)       # ScriptedEventSequence (simgroup.SES_PLACE)
         open(os.path.join(work, 'hang_place.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'hang_console2.ok')):
+        log('Hanging fight: the drop sequence as on the console again (playable; the get-up plays in the air)')
+        refresh_simgroups(root, dst, 0x4FE92B71)       # ScriptedEventSequence (SES_FLAGS, SES_PLACE now empty)
+        open(os.path.join(work, 'hang_console2.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
