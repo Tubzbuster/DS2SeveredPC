@@ -91,6 +91,11 @@ test, see below), the final boss and the end of the DLC (credits).
   spot moved 0.35 m, the door started 2 s after the drop (FINDINGS 48)
 - ~~thump in the opening scene~~ fixed and confirmed: gone since the
   drill tunnel's two bodies hold still (`corpse_freeze`, FINDINGS 56)
+- final fight sometimes does not end: in one of two runs no
+  `twitcher_combat_over` after the last kill (no dialogue, the hacking
+  panel stays locked). The end needs more than 3 `oracle_dead` (each enemy
+  sends it on death and again on going to sleep); probe 50 logs every one.
+  Way past it: `twitcher_combat_over` in `severed_send.txt`, then F7
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)
