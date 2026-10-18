@@ -13,7 +13,7 @@ set R=..\research
 rem PYTHON (environment) picks the Python to build with; else the py launcher
 if defined PYTHON (set "PY=%PYTHON%") else (set "PY=py -3")
 %PY% -m PyInstaller --noconfirm --clean --onedir --windowed --noupx --name DS2SeveredPC ^
-  --version-file version_info.txt --icon icon.ico --add-data "icon.ico;." ^
+  --version-file version_info.txt --icon icon.ico --add-data "icon.ico;." --add-data "icon.png;." ^
   --paths ..\test --paths %R% --hidden-import make_severed_test --collect-submodules ds2 ^
   --add-data "%R%\ds2\*.pkl;ds2" --add-data "%R%\ds2\*.json;ds2" --add-data "%R%\ds2\*.txt;ds2" ^
   --add-binary "%R%\native\xasenc.dll;native" ^

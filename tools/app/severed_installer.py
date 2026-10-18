@@ -162,9 +162,14 @@ class Wizard:
     def __init__(self, root):
         self.root = root
         root.title('%s Setup' % TITLE)
-        icon = os.path.join(getattr(sys, '_MEIPASS', HERE), 'icon.ico')   # icon by youngpotart (SteamGridDB)
+        res = getattr(sys, '_MEIPASS', HERE)            # icon by youngpotart (SteamGridDB)
+        icon = os.path.join(res, 'icon.ico')
         if WIN and os.path.isfile(icon):
             root.iconbitmap(default=icon)
+        try:
+            self.logo = tk.PhotoImage(file=os.path.join(res, 'icon.png')).subsample(2)   # 128 px
+        except tk.TclError:
+            self.logo = None
         root.geometry('720x520')
         root.minsize(640, 480)
         style = ttk.Style(root)
@@ -220,6 +225,8 @@ class Wizard:
         banner.create_text(24, 40, anchor='nw', text='DEAD SPACE 2', fill=BANNER_FG, font=(FONT, 13, 'bold'))
         banner.create_text(24, 72, anchor='nw', text='SEVERED', fill=ACCENT, font=(FONT, 19, 'bold'))
         banner.create_text(24, 112, anchor='nw', text='for PC', fill='#8a939b', font=(FONT, 10))
+        if self.logo:
+            banner.create_image(98, 280, image=self.logo)
         banner.create_text(24, 460, anchor='sw', text='Converted from your own\nXbox 360 add-on',
                            fill='#6b747c', font=(FONT, 8))
         inner = ttk.Frame(f, style='White.TFrame', padding=(24, 24))

@@ -465,7 +465,7 @@ own risk. Back up your saves.
                                            (reimplemented, no code used)
   * 4Kodda - DS1-3 Modding Toolkit ..... mesh format reference (no code used)
   * Havok .............................. for shipping class descriptions
-  * youngpotart (SteamGridDB) .......... the app icon
+  * youngpotart (SteamGridDB) .......... the app icon and logo
                                            steamgriddb.com/profile/76561198110359023
   
 ```
