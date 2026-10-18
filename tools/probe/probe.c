@@ -1498,6 +1498,23 @@ static void __cdecl note_eog_skip(void *o)
     log_line("END OF GAME: no save screen (state 3)");
 }
 
+/* probe 55: Severed has no New Game+. On the console its ending goes
+ * straight back to the main menu: no "save for New Game+" popup (state
+ * 0xA), no completion record (0xC), no unlocks (3) or New Unlocks screen
+ * (4). Hooked at the state dispatch (mov eax, [esi+0x24]; dec eax;
+ * cmp eax, 0xD): in the Severed level, state 0xA becomes 0xE, the
+ * sequence's own return to the main menu. */
+static const char SIG_EOG_STATE[] = "8B 46 24 48 83 F8 0D 0F 87 ?? ?? ?? ?? FF 24 85";
+
+static void __cdecl note_eog_state(void *o)
+{
+    DWORD *st = (DWORD *)((BYTE *)o + 0x24);
+    if (g_severed_level && mem_ok(st, 4) && *st == 0xA) {
+        log_line("END OF GAME: Severed - no New Game+ popup or unlocks, back to the main menu");
+        *st = 0xE;
+    }
+}
+
 static void hook_end_of_game(void)
 {
     int n = 0, i;
@@ -1517,6 +1534,11 @@ static void hook_end_of_game(void)
              && hook_call_ecx(s + 0x17, 7, note_eog_open)
              && hook_call_ecx(k, 7, note_eog_skip);
     log_line("end-of-game save: %d match(es)%s", n, ok ? ", hooked" : "");
+    {
+        int ns = 0;
+        BYTE *d = find_sig(SIG_EOG_STATE, &ns);
+        log_line("end-of-game states: %d match(es)%s", ns, d && hook_call_reg(d, 7, note_eog_state, 0x56) ? ", hooked" : "");
+    }
 }
 
 /* ---- SimGroup block loads -----------------------------------------------
@@ -2946,7 +2968,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 54 - process %s", path);
+    log_line("severed probe 55 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

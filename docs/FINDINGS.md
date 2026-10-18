@@ -2085,3 +2085,18 @@ Hardcore and points the table's Hardcore text at Severed's line.
 
 Probe 54 undoes the change: Hardcore stays available for Severed as the
 players' choice (its rules apply), and the hook only logs.
+
+## 65. No New Game+ for Severed (probe 55)
+
+The console's Severed ending goes straight back to the main menu. On PC the
+base game's end-of-game sequence ran instead (retail 0xA92A80, state at
++0x24, jump table 0xA92DE8):
+- 0xA: the "save for New Game+" popup (`$ui_gpop_endOfGameSave*`, OK only);
+- 0xB: waits for OK; 0xC: records the completion (0xA33CA0), then the save
+  screen if [[+0x28]+0x5C] is set (it was 0 in Severed: state 3);
+- 3: awards the unlocks (0xA61430 for types 0, 2, 3, and 1 after
+  Hardcore); 4: the New Unlocks screen if any are new, else 0xE;
+- 0xE: back to the main menu.
+
+Probe 55 hooks the dispatch and, in the Severed level, turns state 0xA into
+0xE: no popup, no completion record, no unlocks.

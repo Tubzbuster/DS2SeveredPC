@@ -39,9 +39,10 @@ What is left are minor issues, listed under Open bugs; none blocks the game.
 - the installer app: converts, installs the hook, removes everything again
 
 **Tests waiting on you:**
-1. New Game+ save (probe 52): copy the new `dinput8.dll`, load the final
-   hack checkpoint, play to the credits and press OK on the save message.
-   Send the log (`end-of-game save` and `END OF GAME:` lines).
+1. End of the DLC (probe 55): copy the new `dinput8.dll`, load the final
+   hack checkpoint and play to the credits: the game should go straight
+   back to the main menu, with no New Game+ popup or New Unlocks screen
+   (log: `END OF GAME: Severed - no New Game+ popup ...`).
 
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
@@ -97,9 +98,9 @@ What is left are minor issues, listed under Open bugs; none blocks the game.
   (FINDINGS 63)
 - ~~after the ending video the room shows for about 3 s~~ fixed and
   confirmed: the camera moves into the RIG screen and fades to black
-- the end-of-game "save for New Game+" message returns to the main menu
-  without offering a save (the message has only OK). Probe 51's hook did
-  not attach; probe 52 logs the bytes at the check (FINDINGS 63)
+- the end-of-game "save for New Game+" message and the New Unlocks
+  screen: Severed has no New Game+ (console footage goes straight to the
+  main menu); probe 55 skips both (FINDINGS 65)
 - save station lock-up: happens when the terminal is used again during
   its closing animation
 - Twitchers stunlocking Gabe (not reproduced since)
@@ -169,7 +170,7 @@ release).
 | chase_hall: chase_hall_z01/z02; psych_ward: psych_arrival_hall_z01 | works | passed |
 | psych_ward: landing_bay_psycho_z01/z02 | works | the final battle, the final cutscene (camera, FINDINGS 60), the Infectors and Oracle Twitchers fight (crash fixed, FINDINGS 61; corpses held for the Infectors, FINDINGS 62), the final hack, Bartlett's grenade, the last stand and the four fuses, the decompression and the ending video all play. Open: legs back after the fuses, the room after the video, a pale sheet under the corpses |
 | Also in the DLC: entry_hall, pre_moonquake | works | played in chapter 1 (mining camp to the docking station) |
-| End of the DLC (end screens, credits) | works, issues | the credits play and the game returns to the main menu. End screens overlaid (fix pending, FINDINGS 63); no New Game+ save offered | |
+| End of the DLC (end screens, credits) | works, issues | the credits play and the game returns to the main menu. End screens fixed (FINDINGS 63); no New Game+ popup or unlocks, as on the console (probe 55, FINDINGS 65) | |
 
 ## Systems
 

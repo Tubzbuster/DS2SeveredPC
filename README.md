@@ -102,8 +102,7 @@ screens and the credits. Fixes in this round:
   named DS2SeveredPC-Converter with a "keep all files together" note
 
 Still to fix (minor, none blocks the game): a pale see-through sheet under
-the Oracle corpses (perhaps as on the console); the end-of-game "save for New Game+"
-prompt returns to the main menu without a save; the save station can lock
+the Oracle corpses (perhaps as on the console); the save station can lock
 up if used again while it closes; frame drops near some lights in the drill
 tunnel; saves show the base game's chapter titles and pictures. See
 `docs/PROGRESS.md`.
@@ -229,7 +228,7 @@ How it works:
 | Chapter 1: drill tunnel, quarry, mining camp, hanging fight, docking station, gunship | Fully playable |
 | Chapter 2: crash landing, hospital, psych ward, security room, chase hall, landing bay finale | Fully playable |
 | Ending: final fight, last stand, ending video, end screens, credits | Plays to the credits (minor issues, see v0.8.2 in [SV00]) |
-| New Game+ save after the credits | Not offered yet (returns to the main menu) |
+| After the credits | Back to the main menu, as on the console (Severed has no New Game+; probe 55) |
 | Sound, dialogue, audio logs, videos, music | Works |
 | Cutscenes and animations | Works |
 | Necromorph AI and navigation, Tormentor boss | Works |

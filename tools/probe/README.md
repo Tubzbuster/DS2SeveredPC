@@ -222,3 +222,11 @@ enabled ...` each time the screen opens.
 A Hardcore run of Severed applies Hardcore's rules, so Hardcore is left
 available as a choice for Severed. The probe no longer greys it out; it
 only logs the difficulty screen (`difficulty screen: episode N ...`).
+
+## No New Game+ for Severed (probe 55)
+
+Severed has no New Game+: on the console its ending returns straight to the
+main menu. Probe 55 skips the base game's end-of-game popup ("save for New
+Game+"), its completion record and the unlocks (New Unlocks screen) in the
+Severed level. The log shows `END OF GAME: Severed - no New Game+ popup or
+unlocks, back to the main menu`.
