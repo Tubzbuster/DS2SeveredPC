@@ -167,7 +167,7 @@ class Wizard:
         ttk.Label(f, style='Body.TLabel', wraplength=440, justify='left', text=(
             '\nThis wizard converts your own copy of the Xbox 360 add-on "Dead Space 2: '
             'Severed" for the PC version of Dead Space 2. Severed is then started from '
-            'Single Player > Episode Select.\n\n'
+            'Single Player > New Game > Episode Select.\n\n'
             'Converting takes about an hour. It can be stopped and started again: it '
             'picks up where it left off.\n\nWhat would you like to do?')).pack(anchor='w')
         for v, t in (('install', 'Install Severed'), ('remove', 'Remove Severed from the game')):
@@ -270,7 +270,7 @@ class Wizard:
         install = self.mode.get() == 'install'
         if self.ok:
             title = 'Severed is installed' if install else 'Severed is removed'
-            text = ('Start Dead Space 2 and choose Single Player > Episode Select > Dead Space 2: Severed.'
+            text = ('Start Dead Space 2 and choose Single Player > New Game > Episode Select > Dead Space 2: Severed.'
                     if install else 'Dead Space 2 is back to normal.')
         else:
             title = 'Setup did not finish'

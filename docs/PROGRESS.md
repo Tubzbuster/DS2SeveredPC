@@ -100,7 +100,7 @@ intro terminal, the alt-tab hang, the gunship hull textures.
 | Step | Status | Notes |
 |---|---|---|
 | Building the test archive (`Make-SeveredTest.bat`) | works | |
-| Severed in Single Player > Episode Select | works | via the probe DLL |
+| Severed in Single Player > New Game > Episode Select | works | via the probe DLL |
 | Level loads (no black void, no crash) | works | |
 | Intro terminal ("Primary mission assets", RIG call video, dialogue) | works | |
 | Gabe on the ground, RIG call scene, getting up | works | since probe 23 stopped loading a second copy of the level data |

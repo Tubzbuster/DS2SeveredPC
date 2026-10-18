@@ -8,7 +8,7 @@ Update this file whenever the state or the next steps change.
 ## The project
 
 Make the Xbox 360 DLC **Dead Space 2: Severed** playable on the PC Dead Space
-2, started from Single Player > Episode Select, as on the console. It has two
+2, started from Single Player > New Game > Episode Select, as on the console. It has two
 parts:
 - **Converter:** turns the user's own Severed add-on file
   (`29E2FCC04BEF1D2532C48269EC42EF2E3DBFC45845`) into `DS2DAT2.DAT` for the

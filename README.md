@@ -144,7 +144,7 @@ files the PC game can load. It also adds Severed to the PC episode select,
 so you start it the way you do on console:
 
 ```text
-  Main Menu > Single Player > Episode Select
+  Main Menu > Single Player > New Game > Episode Select
       Dead Space 2
       Dead Space 2: Severed      <-- this one
 ```
@@ -218,7 +218,7 @@ How it works:
 3. Copy `tools\probe\bin\dinput8.dll` into the Dead Space 2 folder, next to
    `deadspace2.exe`. If a `dinput8.dll` from another mod is already there,
    move it somewhere safe first.
-4. Start the game as normal. Go to **Single Player > Episode Select** and
+4. Start the game as normal. Go to **Single Player > New Game > Episode Select** and
    pick **Dead Space 2: Severed**.
 5. If Gabe's RIG call scene doesn't hand control back, press **F8**. This
    sends the scene's own "finished" message: you get the normal camera,
