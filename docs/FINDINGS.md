@@ -1356,6 +1356,19 @@ from the animation or the hanging state's exit, not the script timing.
 Next: log Gabe's position through the sequence (probe) to see whether the
 root motion moves him down at all on PC.
 
+Update (probe 46 log, console flow): unchanged, the console's order runs
+as written: `ses_player_01_02_end` with the hanging state and the
+teleport (sequence origin -93.085, -11.146, -44.152 m), the spawns 5 s
+later, `mm_ses_01_03_trigger` 50 s after the teleport, `ses_player_01_03`
+(origin 0, 0, 0; proxy offset 0.1, 0, -0.15 m) runs 6.25 s, then
+`ses_player_01_03_end` and the release in the same frame. The user's
+footage shows the get-up still played at hanging height. Probe 47 takes
+the teleport origin as a reference, looks under the sequence's [+88]
+object (and two pointer levels down) for positions within 20 m of it, and
+logs them every 200 ms for 14 s from the drop sequence's start (`POS`
+lines): whether any of Gabe's positions goes down a storey during the
+animation, and which one snaps at the release.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe

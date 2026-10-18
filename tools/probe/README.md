@@ -147,3 +147,12 @@ own message broadcast (the function behind Lua's `SendMessage`, retail exe
 - **F7** sends every line of `severed_send.txt` from the Dead Space 2 folder
   (one message name per line; `#` starts a comment), for trying other
   triggers without a new build.
+
+## Gabe's position through the hanging-fight drop (probe 47)
+
+When `ses_player_01_03` starts, the probe takes the hanging-fight teleport
+point as a reference and looks for positions within 20 m of it in the
+sequence's player-side object ([+88]) and two pointer levels below. It
+logs where it found them (`POS [n] address (level, under base +offset)`)
+and then their values in millimetres every 200 ms for 14 seconds
+(`POS +ms: [n] x y z ...`, Y is up). Nothing to press.

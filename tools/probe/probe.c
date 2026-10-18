@@ -1207,6 +1207,7 @@ static volatile LONG g_sections_pending;
 static int g_severed_level;
 static void upgrade_schedule(const char *why);
 static void upgrade_on_msg(DWORD h);
+static void pos_watch(void);
 static DWORD g_game_thread;
 static DWORD g_main_thread;            /* the thread that loaded the probe: the game's main thread */
 static const char *g_sections[] = {
@@ -1320,6 +1321,7 @@ static void run_pending_sections(void)
         log_line("game thread: %lu (the main thread)", g_game_thread);
     }
     run_pending_messages();
+    pos_watch();
     heap_watch();
     d3d_guard();
     if (!g_sections_pending || GetCurrentThreadId() != g_game_thread || !g_streamreq || !g_streammgr || !*g_streammgr)
@@ -1772,6 +1774,88 @@ static int g_nssm;
  * 250 ms while their state machine runs. Positions in millimetres. */
 static int mm(const BYTE *p, int i) { return (int)(((const float *)p)[i] * 1000.0f); }
 
+/* Gabe's height through the drop (probe 47). The teleport into the hanging
+ * fight (a 0x4000 sequence with a real origin) gives a reference point;
+ * when ses_player_01_03 starts, the probe looks in the object at [+88] and
+ * two pointer levels below it for float triples within 20 m of that point
+ * (positions and matrix rows), then logs them every 200 ms for 14 s from
+ * the game's thread, through the sequence's end and the release. */
+static float g_pos_ref[3];
+static int g_pos_have_ref;
+static BYTE *g_pos_root;
+static DWORD g_pos_start, g_pos_last;
+#define POS_MAX 16
+static struct { float *p; int level; DWORD base, off; } g_pos[POS_MAX];
+static int g_npos = -1;
+
+static int pos_near(const float *f)
+{
+    int k;
+    for (k = 0; k < 3; k++)
+        if (!(f[k] > g_pos_ref[k] - 20.0f && f[k] < g_pos_ref[k] + 20.0f)) return 0;
+    return 1;
+}
+
+static void pos_scan_block(BYTE *b, SIZE_T n, int level, DWORD base)
+{
+    SIZE_T o;
+    int k;
+    if (!mem_ok(b, n)) return;
+    for (o = 0; o + 12 <= n && g_npos < POS_MAX; o += 4) {
+        float *f = (float *)(b + o);
+        if (!pos_near(f)) continue;
+        for (k = 0; k < g_npos && g_pos[k].p != f; k++) ;
+        if (k < g_npos) continue;
+        g_pos[g_npos].p = f; g_pos[g_npos].level = level; g_pos[g_npos].base = base; g_pos[g_npos].off = (DWORD)o;
+        g_npos++;
+        o += 8;
+    }
+}
+
+static void pos_scan(void)
+{
+    DWORD *a = (DWORD *)g_pos_root, *b;
+    int i, j;
+    g_npos = 0;
+    pos_scan_block(g_pos_root, 0x800, 0, (DWORD)g_pos_root);
+    if (!mem_ok(a, 0x200)) return;
+    for (i = 0; i < 0x80 && g_npos < POS_MAX; i++)
+        if (a[i] > 0x10000 && !(a[i] & 3)) pos_scan_block((BYTE *)a[i], 0x400, 1, a[i]);
+    for (i = 0; i < 0x80 && g_npos < POS_MAX; i++) {
+        b = (DWORD *)a[i];
+        if (a[i] <= 0x10000 || (a[i] & 3) || !mem_ok(b, 0x100)) continue;
+        for (j = 0; j < 0x40 && g_npos < POS_MAX; j++)
+            if (b[j] > 0x10000 && !(b[j] & 3)) pos_scan_block((BYTE *)b[j], 0x400, 2, a[i]);
+    }
+    log_line("POS reference %d %d %d mm, %d place(s) found under %08lx", (int)(g_pos_ref[0] * 1000), (int)(g_pos_ref[1] * 1000),
+             (int)(g_pos_ref[2] * 1000), g_npos, (DWORD)g_pos_root);
+    for (i = 0; i < g_npos; i++)
+        log_line("POS [%d] %08lx (level %d, under %08lx +%03lx)", i, (DWORD)g_pos[i].p, g_pos[i].level, g_pos[i].base, g_pos[i].off);
+}
+
+static void pos_watch(void)
+{
+    static LONG lines;
+    DWORD now = GetTickCount();
+    char line[1024];
+    int i, n;
+    if (!g_pos_root || GetCurrentThreadId() != g_game_thread) return;
+    if (now - g_pos_start > 14000) { g_pos_root = NULL; log_line("POS watch ended"); return; }
+    if (g_npos < 0) pos_scan();
+    if (now - g_pos_last < 200) return;
+    g_pos_last = now;
+    if (InterlockedIncrement(&lines) > 400) return;
+    n = snprintf(line, sizeof line, "POS +%5lu ms:", now - g_pos_start);
+    for (i = 0; i < g_npos && n < (int)sizeof line - 40; i++) {
+        float *f = g_pos[i].p;
+        if (mem_ok(f, 12))
+            n += snprintf(line + n, sizeof line - n, " [%d] %d %d %d", i, (int)(f[0] * 1000), (int)(f[1] * 1000), (int)(f[2] * 1000));
+        else
+            n += snprintf(line + n, sizeof line - n, " [%d] gone", i);
+    }
+    log_line("%s", line);
+}
+
 static void ssm_anchor(BYTE *o, DWORD idx)
 {
     static LONG lines;
@@ -1797,6 +1881,18 @@ static void ssm_anchor(BYTE *o, DWORD idx)
     }
     if (seen[i].self && now - seen[i].tick < 250) return;
     px = *(BYTE **)(o + 0x88);
+    {   /* probe 47: reference point, and the watch (at most once a minute) */
+        const float *org = (const float *)(ses + 0x1C0);
+        if (org[0] != 0.0f || org[1] != 0.0f || org[2] != 0.0f) {
+            memcpy(g_pos_ref, org, sizeof g_pos_ref);
+            g_pos_have_ref = 1;
+        }
+        if (name == 0x95F3F281 && px && g_pos_have_ref && !g_pos_root && (!g_pos_start || now - g_pos_start > 60000)) {
+            g_npos = -1; g_pos_start = now ? now : 1; g_pos_last = 0;
+            g_pos_root = px;
+            log_line("POS watch started for ses_player_01_03");
+        }
+    }
     {   /* only when the anchor or the offset changes (probe 38) */
         int v[6], k;
         v[0] = mm(ses + 0x1C0, 0); v[1] = mm(ses + 0x1C0, 1); v[2] = mm(ses + 0x1C0, 2);
@@ -2784,7 +2880,7 @@ static void start(HMODULE self)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
     GetModuleFileNameA(NULL, path, sizeof path);
-    log_line("severed probe 46 - process %s", path);
+    log_line("severed probe 47 - process %s", path);
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
