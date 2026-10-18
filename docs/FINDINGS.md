@@ -1636,6 +1636,13 @@ always starts 5 s after both the death and the end of `at_01_11`; the
 cutscene starts 17-20 s later, so the preload has time. This reproduces
 the good run's order however fast the gunship dies.
 
+Result (gunship_audio): confirmed. The user killed the gunship as fast as
+possible (death at 66.7 s, before `at_01_11` even started at 68.9 s); the
+cutscene audio was primed with `pdlc1_at_01_12_start` (83.9 s), the
+landing's voice stream `pdlc1_gps_02_08` was read (308 reads) as
+`ses_player_02_02_initial` fired, handler 0x14 returned 1 for
+`ses_player_02_01`, and Gabe landed and went on into chapter 2.
+
 ## 53. The airless hallway: what is converted there
 
 The hallway's geometry is Severed's own `airless_hall_z01` section

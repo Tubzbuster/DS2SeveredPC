@@ -40,10 +40,6 @@ hall, the psych arrival hall and the landing bay finale.
 - the gift shop's strobing lights (calmed)
 
 **Tests waiting on you:**
-0. Gunship landing (`gunship_audio.ok`): rebuild, load the dock save
-   station checkpoint and kill the gunship as fast as you can, while
-   Gabe's second radio message is still playing (that is what broke it
-   every time). Gabe should land on the ship. Send the log either way.
 1. Hanging fight drop: worked on two runs; one more before it is marked
    confirmed. (Bodies confirmed: the quarantine area's react normally, the
    freeze is confined to the drill tunnel's two.)
@@ -54,7 +50,11 @@ hall, the psych arrival hall and the landing bay finale.
    bar may have been probe 43's hidden shader).
 
 **Reported in the replay (new game):**
-- ~~Gabe floats above the gunship after the docking transition~~ fixed:
+- ~~Gabe floats above the gunship after the docking transition (again,
+  from the dock checkpoint)~~ fixed and confirmed: the landing waits for
+  its voice stream, which never loaded when the gunship was killed during
+  Gabe's second radio log; the cutscene audio is now preloaded with the
+  next radio log instead (`gunship_audio.ok`, FINDINGS 52). Earlier:
   caused by the chapter 16 numbering (FINDINGS 52). Chapters stay 1 and 2
   for good. Saves made with the chapter 16 build need `player_set_chapter_1`
   sent once with F7 (`severed_send.txt`), confirmed working.
