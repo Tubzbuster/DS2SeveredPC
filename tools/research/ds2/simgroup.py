@@ -71,7 +71,12 @@ STORE_HIDDEN = {
 # 1-4 (the two corpses in drill_tunnel_01 raised 12 cm, then each moved
 # 200 m below the level, then Gabe's gun proxy, then the tunnel's 4
 # ScriptableProps) did not stop the thump in the opening scene.
-NUDGE = {}
+NUDGE = {
+    # teleport_player_to_hanging_combat (9109C6FA): the hanging spot, so the
+    # drop's walk (SES_FLAGS) crosses door_pubh01_ind (Z -44.13) at its
+    # middle instead of Z -43.78
+    (0x52CBAB87, 0x92A326ED, 0x52414B53, 0x41415653): (0.0, 0.0, -0.35),
+}
 
 # Message listeners moved to another message: {object hash: (old message,
 # new message)} (CMD_SetTargetName, the record's first field: hash, 0,
@@ -132,12 +137,14 @@ RAGDOLL_FLAGS = {
 # then falling 2.7 m. Test: the flag off, so gravity keeps him at floor
 # level through the animation, with the hanging state still on.
 # Result: he dropped to the floor, but the walk then stopped against the
-# frame of the door it carries him through, and at the release he fell out
-# of the level (the area before that door has no floor of its own; the
-# hanging state holds him up). Off again: the console's flags, with which
-# he passes through the door frame and lands past the door (playable; the
-# get-up just plays 2.6 m up). Form: {0xC767274B: (0x4025, 0x4021)}.
-SES_FLAGS = {}
+# frame of the door it carries him through (0.35 m off its centre), and at
+# the release he fell out of the level (the area before that door has no
+# floor of its own; the hanging state holds him up). Second try: the same,
+# with the hanging spot moved 0.35 m so the walk meets the door's middle
+# (NUDGE, teleport_player_to_hanging_combat).
+SES_FLAGS = {
+    0xC767274B: (0x4025, 0x4021),
+}
 
 # Scripted sequences given another sequence's placement: {object hash:
 # (object whose matrix it shares, new move type)}. With gravity on, the

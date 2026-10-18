@@ -1436,6 +1436,15 @@ is playable (he lands past the door after the release and walks on). The
 lift is left for later: it needs the exe's root-motion code for move type
 NONE (why the start is raised 2.6 m and the vertical motion dropped).
 
+Second gravity try (`hang_gravity2.ok`, at the user's request: the first
+gravity run only missed the door's middle): flags 0x4021 again, and the
+hanging spot moved 0.35 m in Z (-44.152 -> -44.502, `simgroup.NUDGE` on
+the teleport's object record) so the walk crosses the door at Z -44.13.
+The matrix is shared by three sequences of the elevator scene
+(`ses_player_elevator_crash_intro`, `ses_player_01_02`, the teleport), so
+all three move with it. If he passes the door he is past the missing floor
+when the hanging state ends.
+
 ## 49. BNK blend weights (the chapter 2 opening never started)
 
 After the gunship scene (`igc_01_05`) the screen stayed black. exe
