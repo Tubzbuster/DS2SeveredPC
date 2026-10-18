@@ -1620,3 +1620,14 @@ along the texture's u direction worked out from positions and UVs in 370 of
 tangents convert as the props' do, and the slanted reflections in the
 clinic overlook's window are not a tangent-frame error.
 
+The window's reflection comes from its material, not the mesh: the
+lightmap material `opt_model1_lightmaps_cln_glassclean01_hospital_observation_...`
+samples a mirror map (`g_MirrorMapSampler`, texture
+`cln_glassclean01_hospital_observation`, 512x256, 10 mips) next to the AO
+map and lightmap. That texture, its `_s` specular and the `glassclean02 _ca`
+overlay are all the PC game's own files (identical keys), as are all 47 of
+Severed's glass materials. The same glass is in the base game's chapter 1
+clinic (the room where the patient cuts his throat), so the base game on PC
+is the comparison: if its reflections slant the same way, that is how the PC
+renderer draws this mirror map.
+
