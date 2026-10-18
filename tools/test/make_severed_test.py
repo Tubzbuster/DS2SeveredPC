@@ -680,6 +680,21 @@ def remove(game):
     log('Removed', target)
 
 
+# Update steps: each re-converts files that an earlier version of this script
+# converted before a fix. A fresh conversion runs the same converters with
+# every fix already in, so it marks them all done and skips them (and their
+# log lines). New fixes of this kind add their marker here too. Not listed:
+# the stages a conversion always needs (pc_assets, lut_fix, gunship_hull).
+CATCH_UP = (
+    'uniform_fix.ok', 'neutral_fix.ok', 'hkx_fix.ok', 'strip_fix2.ok', 'snu_channels2.ok', 'nav_sums.ok',
+    'reloc_fix.ok', 'uv_streams.ok', 'mesh_vb68.ok', 'store_suits.ok', 'bnk_blend.ok', 'prop_test.ok',
+    'hang_release.ok', 'loop_split.ok', 'calm_lights5.ok', 'hall_glass_back.ok', 'chapters_restored.ok',
+    'hang_drop2.ok', 'hang_console.ok', 'corpse_freeze.ok', 'hang_gravity.ok', 'hang_place.ok',
+    'hang_console2.ok', 'hang_gravity2.ok', 'hang_door.ok', 'hang_door2.ok', 'corpse_freeze2.ok',
+    'gunship_audio.ok', 'mesh_positions.ok',
+)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--game', required=True)
@@ -755,6 +770,8 @@ def main():
                 for n in v[:10]:
                     log('      ' + n)
         open(os.path.join(work, 'converted.ok'), 'w').write('ok')
+        for m in CATCH_UP:                        # this conversion already has those fixes
+            open(os.path.join(work, m), 'w').write('ok')
     else:
         log('Using the files converted by an earlier run (delete %s to convert again)' % os.path.join(work, 'converted.ok'))
 
