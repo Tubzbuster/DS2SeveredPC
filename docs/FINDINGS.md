@@ -1851,3 +1851,44 @@ bound to the AO and lightmap samplers for the marked piece) is still the
 next step; it works anywhere, so the operating room is a second place to
 take it.
 
+## 59. The black slabs: vertex positions left unswapped (found against the base game)
+
+Severed reuses 47 of the base game's hospital section names
+(`ch01_hos\ch01_hos\<area>\<section>\<section>.str`), so the base game's
+PC copies are a reference drawn by the same engine. The user exported five
+of them (`tools/research/extract_base_sections.py`): the airless hallway,
+emergency arrival, and the surgery pit, surgery room and surgery
+observation.
+
+The airless hallway's `opt_model1` has the same first vertex buffer as the
+base game's (65,533 vertices) and the same tables. Comparing the triangles
+of each table: our table 2 (`industrial_mat_ind_metalscratched02_diffuse`,
+the black box of section 53) had 45 triangles with an edge of 5e28 m, the
+base game's longest being 4.7 m; table 6 likewise. Twelve vertices were
+thrown far off or to nearly zero: in each, one or two of the three floats
+were still big-endian (vertex 10443: `42 58 30 6F 42 00 74 1F 98 4B 30 42`,
+x and y unswapped, z swapped).
+
+Cause: level meshes keep their positions (3 floats, descriptor flags
+`000c0000`) in the mesh itself, and `meshconv.convert` had no rule for that
+buffer. It fell to the catch-all that swaps every remaining 32-bit word
+except text, and float words whose bytes read as name characters
+(`42 58 30 6F` = "BX0o", inside an 8+ character run) were taken for text and
+left as stored. Across Severed: 173 words in 17 meshes, most in the
+hospital: `surgery_z01` 29, `psycho_development_z01` 22,
+`airless_hall_z01` 18, `surgery_observation_z01` 14, `triage_z01` 14,
+`recreation_z02` 10, and others. A vertex thrown off drags its triangles
+into the huge smooth slabs seen in the hallway and the operating room
+(section 58); the depth-only reading of probe 45 came from the same
+triangles.
+
+Fix: `meshconv.convert` swaps in-mesh position buffers (12 bytes per vertex,
+flags byte 1 = 0x0C) as floats and marks them done before the catch-all.
+Checked on the hallway: the 12 vertices change, nothing else in the mesh (72
+bytes); where Severed's geometry is the base game's (vertices 22038 on),
+the fixed positions equal the base game's exactly; table 2's longest edge
+is 4.7 m as in the base game. Existing conversions are patched by step
+`mesh_positions.ok`, which rewrites only the differing position words from
+the 360 source (patched mesh identical to a fresh conversion; stream sizes
+unchanged).
+

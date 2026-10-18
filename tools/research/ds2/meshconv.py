@@ -113,6 +113,15 @@ def convert(x, tmpl):
             mark(t.bone_palette_offset, t.bone_palette_offset + 2 * t.palette_count)
         if t.name_offset:
             mark(t.name_offset, x.find(b'\0', t.name_offset) + 1)
+    # position buffers kept in the mesh itself (level meshes): 3 floats per
+    # vertex. Converted here, not by the text check below, which left float
+    # words that read as text (42 58 30 6F, "BX0o") unswapped.
+    for size, count, flags, ptr in a.dt2:
+        if (count and ptr < a.local_uv_offset and size == 12 * count and flags[1] == 0x0C
+                and ptr + size <= len(x) and not any(done[ptr:ptr + size])):
+            for o in range(ptr, ptr + size, 4):
+                _swap(out, o)
+            mark(ptr, ptr + size)
     # everything else: 32-bit values, except text
     for i in range(0, len(x) - 3, 4):
         if done[i] or done[i + 3]:

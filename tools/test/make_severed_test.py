@@ -407,6 +407,55 @@ def restore_hall_parts(root, dst):
             refresh_uv_streams(os.path.join(root, rel), d, pick=lambda x, g, w: True)
 
 
+def refresh_mesh_positions(root, dst):
+    """level meshes keep their vertex positions (3 floats) in the mesh itself;
+    the first converter left float words that read as text unswapped (vertices
+    thrown far off: the black slabs in the hospital). Rewrites those words from
+    the 360 source; the stream sizes do not change. Meshes whose position
+    buffer is not ours (counts differ, or most words differ: the PC game's own
+    copies) are left alone."""
+    from ds2 import geo
+    for d, _, fs in os.walk(dst):
+        for f in fs:
+            if not f.lower().endswith('.str'):
+                continue
+            p = os.path.join(d, f)
+            src = os.path.join(root, os.path.relpath(p, dst))
+            if not os.path.exists(src):
+                continue
+            fresh = {(a.name, a.ids): a for a in streamfile.read(open(src, 'rb').read())[1] if a.type == 'Mesh'}
+            data = open(p, 'rb').read()
+            assets = streamfile.read(data)[1]
+            w = streamwrite.Writer()
+            fixed = 0
+            for a in assets:
+                y = a.payload()
+                x = fresh.get((a.name, a.ids)) if a.type == 'Mesh' else None
+                if x is not None:
+                    x = x.payload()
+                    gx, gy = geo.parse(x, True), geo.parse(y, False)
+                    out = None
+                    for (sx, cx, fx, px), (sy, cy, fy, py) in zip(gx.dt2, gy.dt2):
+                        if not (cx and cx == cy and sx == sy == 12 * cx and fx[1] == 0x0C and fy[0] == 0x0C
+                                and px < gx.local_uv_offset and py < gy.local_uv_offset
+                                and px + sx <= len(x) and py + sy <= len(y)):
+                            continue
+                        want = b''.join(x[o:o + 4][::-1] for o in range(px, px + sx, 4))
+                        diff = [o for o in range(0, sx, 4) if y[py + o:py + o + 4] != want[o:o + 4]]
+                        if not diff or len(diff) * 100 > sx // 4:
+                            continue
+                        out = out or bytearray(y)
+                        for o in diff:
+                            out[py + o:py + o + 4] = want[o:o + 4]
+                        fixed += len(diff)
+                    if out is not None:
+                        y = bytes(out)
+                w.add(a.type_hash, a.flags, a.ids, a.name, a.path, a.type, y)
+            if fixed:
+                open(p, 'wb').write(w.data())
+                log('  %d position word(s) fixed in %s' % (fixed, os.path.relpath(p, dst)))
+
+
 def refresh_uv_streams(root, dst, pick=None):
     """meshes with lightmap materials (ds2/uvwide.py): re-convert Severed's
     own ones and their volatiles with the PC's 20-byte UV streams; PC copies
@@ -853,6 +902,10 @@ def main():
         log('Gunship: its cutscene audio is preloaded with the next radio log, not at its death (the landing\'s voice never loaded)')
         refresh_simgroups(root, dst, 0x4FE92B71)       # ScriptedEventSequence (simgroup.FIELD_RETARGET)
         open(os.path.join(work, 'gunship_audio.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'mesh_positions.ok')):
+        log('Level meshes: vertex positions that read as text are converted too (the black slabs in the hospital)')
+        refresh_mesh_positions(root, dst)
+        open(os.path.join(work, 'mesh_positions.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')
