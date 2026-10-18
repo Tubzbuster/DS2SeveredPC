@@ -13,7 +13,8 @@ the ds_2 episode's names, chapter 1's stream sets blanked, level list
 entry patched).
 Nothing else is changed; remove it with --remove (the game is normal
 again). Never overwrites an archive it did not create (marker file
-DS2DAT2.DAT.severedtest next to it).
+DS2DAT2.DAT.ds2severedpc next to it; older builds used .severedtest,
+which is renamed on the next run).
 
     py -3 make_severed_test.py --severed <addon file> --game "<Dead Space 2 folder>" [--ffmpeg <ffmpeg.exe>] [--work <folder>]
     py -3 make_severed_test.py --game "<Dead Space 2 folder>" --remove
@@ -31,6 +32,19 @@ except ImportError:
 
 LEVEL_LIST = 0xE4529CFE        # level list (text), identical on PC and 360
 SLOT = 'DS2DAT2.DAT'
+MARKER = '.ds2severedpc'        # next to SLOT: this archive is ours
+OLD_MARKER = '.severedtest'     # the name earlier builds used
+
+
+def _marker(target):
+    """the marker's path, renaming one left by an earlier build"""
+    m, old = target + MARKER, target + OLD_MARKER
+    if os.path.exists(old):
+        if os.path.exists(m):
+            os.remove(old)
+        else:
+            os.rename(old, m)
+    return m
 
 
 LOG_FILE = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False)   # built app: next to it
@@ -604,7 +618,7 @@ def take_pc_assets(dst, idx, cache_dir):
 
 def remove(game):
     target = os.path.join(game, SLOT)
-    marker = target + '.severedtest'
+    marker = _marker(target)
     if not os.path.exists(target):
         log('Nothing to remove:', target, 'does not exist.')
         return
@@ -632,7 +646,7 @@ def main():
     if not a.severed:
         raise SystemExit('--severed <addon file> is needed')
     target = os.path.join(a.game, SLOT)
-    marker = target + '.severedtest'
+    marker = _marker(target)
     if os.path.exists(target) and not os.path.exists(marker):
         raise SystemExit(target + ' already exists and was not created by this script; not overwriting it.')
     eaaudio.FFMPEG = a.ffmpeg
@@ -883,7 +897,9 @@ def main():
     tmp = target + '.tmp'
     names = bigarchive.write(tmp, files + extra, trailer, raw=raw)
     os.replace(tmp, target)
-    open(marker, 'w').write('Severed test archive created by tools/test/make_severed_test.py. Remove with --remove.')
+    open(marker, 'w').write('DS2DAT2.DAT was created by DS2SeveredPC (Dead Space 2: Severed for PC). '
+                            'Keep this file: it lets the converter update or remove that archive. '
+                            'Remove both with Remove-SeveredTest.bat.')
     log('Done: %d files in %s (%.1f GB)' % (len(names), target, os.path.getsize(target) / 1e9))
     if left_out:
         log('Some files were left out; please send me this window\'s text.')
