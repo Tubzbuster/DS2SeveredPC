@@ -1631,3 +1631,7 @@ clinic (the room where the patient cuts his throat), so the base game on PC
 is the comparison: if its reflections slant the same way, that is how the PC
 renderer draws this mirror map.
 
+Result: the user's screenshot of the base game's chapter 1 clinic window on
+PC shows the same slanted reflections. It is how the PC game draws this
+glass; nothing to fix.
+

@@ -66,7 +66,9 @@ hall, the psych arrival hall and the landing bay finale.
   the console one lies draped on a spike). Nothing in the level pins them:
   both are ragdoll corpses in a dead pose, ragdoll flags 0. Test build: both
   get "Freeze on limp" (`corpse_freeze.ok`, FINDINGS 56)
-- the clinic overlook room's reflections are sideways.
+- ~~the clinic overlook room's reflections are sideways~~ not a bug: the
+  base game's chapter 1 clinic window (same glass files) looks the same on
+  PC (FINDINGS 57).
 
 **Open bugs** (strike out any that are no longer bugs):
 - ~~crash entering the decompression room~~ fixed (looping sound split)
@@ -131,7 +133,7 @@ intro terminal, the alt-tab hang, the gunship hull textures.
 | trauma: elevator_morgue_z01, morgue_z01, morgue_hall_z01-z03, triage_z01, triage_hall_z01 | works, issues | passed; black stretched shapes in several rooms (likely the same black lightmap-shader surfaces) |
 | hospital_entrance: lower_lobby_z01/z02, upper_lobby_z01/z02, reception_z01 | works, issues | passed; black shapes as above |
 | upper_corridors: patient_hall_z02-z05, patient_z01/z02, store_room_z01, surgery_lobby_z01 | works, issues | passed; black shapes as above |
-| surgery_ward: decontamination_z01, surgery_z01, surgery_hall_z01, surgery_observation_z01, surgery_pit_z01, elev_surg_pit_z01 | works, issues | passed; the reflections in the clinic overlook room are sideways |
+| surgery_ward: decontamination_z01, surgery_z01, surgery_hall_z01, surgery_observation_z01, surgery_pit_z01, elev_surg_pit_z01 | works, issues | passed; the slanted reflections in the clinic overlook window match the base game on PC |
 | recreation: elevator_recreation_hall, recreation_hall_z01-z03, recreation_z01/z02, elevator_rec_z01/z02 | works | passed |
 | observation: observation_z01, observation_hall_z01, psycho_development_z01 | works | passed; scene `igc_02_01` (Lexine, the Oracle, the captain) plays |
 | psych_ward: psych_hall_z01/z03/z04, chase_hall_saferoom_z01 | works | reached the saferoom (furthest point so far) |
