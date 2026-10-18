@@ -48,3 +48,4 @@ __pycache__/
 tools/app/build/
 tools/app/dist/
 tools/app/*.spec
+tools/app/ffmpeg/

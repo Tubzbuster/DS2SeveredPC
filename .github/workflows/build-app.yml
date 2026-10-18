@@ -1,0 +1,67 @@
+name: Build installer app
+
+# Builds the DS2SeveredPC wizard for Windows from the repository's code alone
+# (no game files): its own Python (PyInstaller) and an LGPL ffmpeg build.
+# The result is the "DS2SeveredPC-app" artifact of the run.
+on:
+  workflow_dispatch:
+  push:
+    branches: [DS2PCDLC-Main]
+    paths:
+      - 'tools/app/**'
+      - 'tools/test/make_severed_test.py'
+      - 'tools/research/ds2/**'
+      - 'tools/research/native/**'
+      - '.github/workflows/build-app.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: PyInstaller
+        run: python -m pip install pyinstaller==6.11.1
+
+      - name: ffmpeg (LGPL build from BtbN/FFmpeg-Builds)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $rel = gh release view latest --repo BtbN/FFmpeg-Builds --json assets | ConvertFrom-Json
+          $a = $rel.assets | Where-Object { $_.name -match '^ffmpeg-n7\.1-latest-win64-lgpl-7\.1\.zip$' } | Select-Object -First 1
+          if (-not $a) { $a = $rel.assets | Where-Object { $_.name -match '^ffmpeg-master-latest-win64-lgpl\.zip$' } | Select-Object -First 1 }
+          if (-not $a) { throw 'no LGPL win64 ffmpeg build found' }
+          gh release download latest --repo BtbN/FFmpeg-Builds --pattern $a.name --dir ffdl
+          Expand-Archive "ffdl/$($a.name)" ffx
+          $root = Get-ChildItem ffx -Directory | Select-Object -First 1
+          New-Item -ItemType Directory tools/app/ffmpeg -Force | Out-Null
+          Copy-Item "$($root.FullName)/bin/ffmpeg.exe" tools/app/ffmpeg/
+          Copy-Item "$($root.FullName)/LICENSE.txt" tools/app/ffmpeg/
+          $h = (Get-FileHash "ffdl/$($a.name)" -Algorithm SHA256).Hash
+          "ffmpeg: $($a.name) (release 'latest' of https://github.com/BtbN/FFmpeg-Builds), SHA-256 $h.`nLicence: LGPL, see LICENSE.txt. Source code: https://github.com/FFmpeg/FFmpeg and the build scripts at https://github.com/BtbN/FFmpeg-Builds." | Out-File -Encoding utf8 tools/app/ffmpeg/SOURCE.txt
+          Get-Content tools/app/ffmpeg/SOURCE.txt
+
+      - name: Build
+        shell: cmd
+        run: cd tools\app && build_app.bat nopause
+
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $p = Start-Process tools/app/dist/DS2SeveredPC/DS2SeveredPC.exe -ArgumentList '--selftest' -Wait -PassThru
+          Get-Content tools/app/dist/DS2SeveredPC/selftest.txt
+          if ($p.ExitCode -ne 0) { exit 1 }
+          Remove-Item tools/app/dist/DS2SeveredPC/selftest.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DS2SeveredPC-app
+          path: tools/app/dist/DS2SeveredPC

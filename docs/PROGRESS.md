@@ -205,13 +205,19 @@ intro terminal, the alt-tab hang, the gunship hull textures.
   self-unpacking exe, which antivirus tools flag more often. Built on a
   GitHub Actions Windows runner from the repo code alone (no game files).
 
-  First version: `tools/app/severed_installer.py` (the window: add-on,
-  game folder, ffmpeg.exe, Install and Remove, the converter's log), built
-  by `tools/app/build_app.bat` into `dist\DS2SeveredPC\` (37 MB on Linux).
-  Checked on Linux: the built app's `--selftest` loads every model and the
-  native library, Remove runs through the window, the window draws. Still
-  to do: a Windows build and a real conversion through it, ffmpeg bundled,
-  game folder found from the Steam library list, the GitHub Actions build.
+  Now a classic setup wizard (`tools/app/severed_installer.py`): Welcome
+  (install or remove), Before you start (ownership checkbox), Locations
+  (add-on file or folder, game folder, working folder, ffmpeg only when not
+  bundled; free space shown), Ready, Installing (progress, current step and
+  the converter's log in a terminal box), Finish. The game folder is found
+  from Steam's library list (app 47780), the EA/Origin registry keys or the
+  usual folders (`gamefind.py`). ffmpeg: an LGPL build is downloaded and
+  bundled by the GitHub Actions workflow (`.github/workflows/build-app.yml`,
+  Windows runner, PyInstaller), which also runs the app's `--selftest`
+  (data files, native library, ffmpeg's xma2 decoder) and uploads the app
+  as the run's artifact. Checked on Linux: the build, the self-test, every
+  wizard page. Still to do: a real conversion through it on Windows.
+
 - **Check the user's add-on before converting.** People's copies can have
   any file name, so the app identifies the add-on by its contents, not its
   name:
