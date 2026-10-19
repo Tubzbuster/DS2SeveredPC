@@ -15,6 +15,11 @@
  *   - writes a short log, with a crash report, to severed_probe.log next
  *     to deadspace2.exe.
  *
+ * Built twice (build.sh): bin/dinput8.dll, the proxy, and bin/SeveredPC.asi,
+ * the same hook as a plugin for an ASI loader (Marker Patch loads .asi files
+ * from the game's plugins folder), for players who keep Marker Patch's
+ * dinput8.dll.
+ *
  * The research probe this grew from (file and archive logging, message
  * and sequence traces, Direct3D checks) is in the history up to probe 55
  * (tools/probe/README.md).
@@ -29,7 +34,9 @@
 
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_cs;
+#ifndef SEVERED_ASI
 static HMODULE g_real;
+#endif
 static DWORD g_tick0;
 static LONG g_lines;
 #define MAX_LINES 20000
@@ -633,6 +640,7 @@ static void start(void)
     AddVectoredExceptionHandler(1, crash_handler);
 }
 
+#ifndef SEVERED_ASI
 /* ---- dinput8 forwarding ----------------------------------------------- */
 
 static FARPROC real(const char *name)
@@ -681,6 +689,9 @@ HRESULT WINAPI DllUnregisterServer(void)
     fn_t f = (fn_t)real("DllUnregisterServer");
     return f ? f() : E_FAIL;
 }
+
+#endif /* SEVERED_ASI: the plugin build (SeveredPC.asi) is loaded by an ASI
+          loader such as Marker Patch's and needs no dinput8 exports */
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {

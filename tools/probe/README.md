@@ -248,3 +248,19 @@ main menu. Probe 55 skips the base game's end-of-game popup ("save for New
 Game+"), its completion record and the unlocks (New Unlocks screen) in the
 Severed level. The log shows `END OF GAME: Severed - no New Game+ popup or
 unlocks, back to the main menu`.
+
+## Marker Patch: the plugin build (SeveredPC.asi)
+
+`build.sh` also builds `bin/SeveredPC.asi`: the same hook as an ASI plugin,
+without the dinput8 pass-through. For players who use Marker Patch (its own
+`dinput8.dll`, with `LoadASIPlugins = 1` in `MarkerPatch.ini`), or Ultimate
+ASI Loader:
+1. keep Marker Patch's `dinput8.dll` in the game folder (do not install
+   ours; if the converter app installed it, Marker Patch's was moved to
+   `dinput8.dll.other`: rename it back);
+2. put `SeveredPC.asi` in the `plugins` folder next to `deadspace2.exe`.
+
+The log is still `severed_probe.log` next to the game. Untested so far:
+check that it shows `episode list: ... hooked`, `level messages: ...
+hooked` and `end of game: ... hooked`. If Marker Patch has already patched
+one of those places, that line says 0 matches and that feature is missing.

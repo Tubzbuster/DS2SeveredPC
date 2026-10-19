@@ -36,6 +36,12 @@ I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 fi
 
 Unfortunately at this stage it isn't compatible with anything else that requires dinput8.dll which includes Marker Patch
 
+**Marker Patch users:** a plugin version of the hook, `SeveredPC.asi`, is
+available on the releases page (experimental). Keep Marker Patch's
+`dinput8.dll`, make sure `LoadASIPlugins = 1` in `MarkerPatch.ini`, and put
+`SeveredPC.asi` in a `plugins` folder next to `deadspace2.exe` instead of
+installing our `dinput8.dll`. See `tools/probe/README.md`.
+
 ```text
 ================================================================================
                                  STATUS
