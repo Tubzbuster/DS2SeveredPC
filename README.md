@@ -84,7 +84,7 @@ installing our `dinput8.dll`. See `tools/probe/README.md`.
 ================================================================================
 ```
 
-**v0.8.5 (2026-10-18)**: first full release. Severed is fully playable
+**v1.0.5 (2026-10-18)**: first full release. Severed is fully playable
 on PC from start to finish: the opening in the mines, all of chapter 1 and
 chapter 2, the final fight, the last stand, the ending video, the end
 screens and the credits, then back to the main menu. Changes since v0.8.2:
