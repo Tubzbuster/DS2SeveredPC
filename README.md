@@ -458,7 +458,7 @@ These were used to map the formats. You don't need them to try Severed.
   out of the reports.
 - **`tools/export/`**, **`tools/samples/`**, **`tools/index/`**: export
   matched PC/360 asset pairs for training and checking the converters.
-  These are EA data, so they stay on your machine and are git-ignored.
+  
 - **`tools/probe/`**: the diagnostic and hook `dinput8.dll` (see its
   README).
 
