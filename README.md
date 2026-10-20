@@ -34,7 +34,6 @@ Use Ctrl+F with the codes below to jump to a section.
 
 I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 files work. I heavily vibecoded this project with Claude which helped me decode the files and map them to the PC version. From there it was built from the ground up through testing and logging, checking how the textures look in the PC version, comparing against numerous let's plays of the console version to see what's missing and what isn't rendering, and going through countless crash dumps to make the thing I wanted
 
-Unfortunately at this stage it isn't compatible with anything else that requires dinput8.dll which includes Marker Patch
 
 **Marker Patch users:** a plugin version of the hook, `SeveredPC.asi`, is
 available on the releases page (experimental). Keep Marker Patch's
