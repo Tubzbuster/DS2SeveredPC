@@ -22,9 +22,8 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed 
   Platform ..... Windows (PC)
-  Version ...... 0.8.5 (fully playable, start to finish)
+  Version ...... 1.1.2
   Author ....... tubzbuster
-  Updated ...... 2026-10-18
 ================================================================================
 Use Ctrl+F with the codes below to jump to a section.
 ```
