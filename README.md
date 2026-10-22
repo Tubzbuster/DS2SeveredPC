@@ -35,8 +35,7 @@ I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 fi
 
 
 **Update 1.2.5:** adds support for Marker Patch and other ASI loader mods
-(the hook as a plugin, `SeveredPC.asi`), and checkpoint patches (the quarry
-terminal stays usable after a checkpoint is loaded).
+(the hook as a plugin, `SeveredPC.asi`), and checkpoint patches.
 
 **Marker Patch users:** a plugin version of the hook, `SeveredPC.asi`, is
 available on the releases page (experimental). Keep Marker Patch's
@@ -95,9 +94,7 @@ New in this update:
   `SeveredPC.asi`. Keep Marker Patch's `dinput8.dll` (or your ASI loader)
   and put `SeveredPC.asi` in the `plugins` folder next to `deadspace2.exe`
   (experimental, see `tools/probe/README.md`)
-- **checkpoint patches:** after dying in the quarry, its checkpoint now
-  enables the terminal again (it stayed locked). Existing conversions:
-  run the converter again and only this step is redone
+- **Various checkpoint patches:**
 - Hardcore is available as a choice for Severed (Hardcore's rules apply)
 - a slim hook: Severed in the episode select, Gabe's Pulse Rifle upgrades,
   the ending, and F7 for test messages; `severed_probe.log` holds a short
