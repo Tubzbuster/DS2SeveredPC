@@ -44,6 +44,12 @@ What is left are minor issues, listed under Open bugs; none blocks the game.
    going straight back to the main menu with no New Game+ popup or New
    Unlocks screen (log: `end of game: Severed - back to the main menu`).
 
+**Reported by a player:**
+- the quarry terminal stayed locked after dying in the quarry and loading
+  the "Quarry" checkpoint: fix pending (the checkpoint now enables it,
+  FINDINGS 66); the NPC's scene not replaying after the reload is not
+  changed
+
 **Reported in the replay (new game):**
 - ~~Gabe floats above the gunship after the docking transition (again,
   from the dock checkpoint)~~ fixed and confirmed: the landing waits for

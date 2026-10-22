@@ -2100,3 +2100,19 @@ base game's end-of-game sequence ran instead (retail 0xA92A80, state at
 
 Probe 55 hooks the dispatch and, in the Severed level, turns state 0xA into
 0xE: no popup, no completion record, no unlocks.
+
+## 66. The quarry terminal after a death
+
+The quarry's terminal (SimplePressAndHoldSwitch D8719AF6, quarry_z01)
+starts disabled; a TriggerAuto (D13CFBBE, Options 1) sends
+`enable_quarry_switch` when quarry_z01 loads. A player who died in the
+quarry and reloaded the "Quarry" checkpoint (squadmate_ledge, Checkpoint
+0E0CEEAC) found the terminal locked. The checkpoint's stream set (05FC072B,
+quarry_z01 and quarry_z02 included) ends with MultiManager 4B5F383F; its
+last target, `trig_box_drill_room_combat_wave_02`, goes to no object in
+Severed, so it now sends `enable_quarry_switch` (simgroup.FIELD_RETARGET;
+converter step `quarry_switch.ok`). The next checkpoint ("Quarry 2") is
+only set once the terminal is used, so it never re-enables a used terminal.
+The same report says the NPC's scene did not play again after the reload;
+not changed here. The mining camp puzzle's TriggerAuto (85239AE0,
+`enable_mining_camp_puzzle`) has the same Options 1.

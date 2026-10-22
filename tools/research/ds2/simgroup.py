@@ -131,7 +131,16 @@ DELAYS = {
 # killed the gunship after the log ended). Their prime now comes with
 # pdlc1_at_01_12_start, the next radio log, which always starts 5 s after
 # both the death and the end of at_01_11.
+# The quarry's terminal (SimplePressAndHoldSwitch D8719AF6) starts disabled
+# and is enabled by a one-shot TriggerAuto (enable_quarry_switch) when
+# quarry_z01 loads. After a death, the "Quarry" checkpoint
+# (squadmate_ledge) restored the terminal disabled without that trigger
+# firing again: the terminal stayed locked. That checkpoint's restore step
+# (MultiManager 4B5F383F, sent when its stream set has loaded, quarry_z01
+# included) now enables it: its last target,
+# trig_box_drill_room_combat_wave_02, goes to no object in Severed.
 FIELD_RETARGET = {
+    0x4B5F383F: [(228, b'trig_box_drill_room_combat_wave_02', b'enable_quarry_switch')],    # Quarry checkpoint restore
     0xE5EF38AC: [(244, b'prime_01_05_coming_for_you', b'pdlc1_at_01_12_start')],   # ses_player_igc_01_05
     0xA997200F: [(28, b'prime_01_05_coming_for_you', b'pdlc1_at_01_12_start')],    # its PlayAudioStream
 }
