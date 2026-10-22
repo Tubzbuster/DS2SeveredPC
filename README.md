@@ -22,7 +22,7 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed 
   Platform ..... Windows (PC)
-  Version ...... 1.1.2
+  Version ...... 1.2.5
   Author ....... tubzbuster
 ================================================================================
 Use Ctrl+F with the codes below to jump to a section.
@@ -33,6 +33,10 @@ Use Ctrl+F with the codes below to jump to a section.
 
 I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 files work. I heavily vibecoded this project with Claude which helped me decode the files and map them to the PC version. From there it was built from the ground up through testing and logging, checking how the textures look in the PC version, comparing against numerous let's plays of the console version to see what's missing and what isn't rendering, and going through countless crash dumps to make the thing I wanted
 
+
+**Update 1.2.5:** adds support for Marker Patch and other ASI loader mods
+(the hook as a plugin, `SeveredPC.asi`), and checkpoint patches (the quarry
+terminal stays usable after a checkpoint is loaded).
 
 **Marker Patch users:** a plugin version of the hook, `SeveredPC.asi`, is
 available on the releases page (experimental). Keep Marker Patch's
@@ -82,23 +86,22 @@ installing our `dinput8.dll`. See `tools/probe/README.md`.
 ================================================================================
 ```
 
-**v1.0.5 (2026-10-18)**: first full release. Severed is fully playable
-on PC from start to finish: the opening in the mines, all of chapter 1 and
-chapter 2, the final fight, the last stand, the ending video, the end
-screens and the credits, then back to the main menu. Changes since v0.8.2:
-- the ending returns straight to the main menu, as on the console: no
-  "save for New Game+" popup and no New Unlocks screen (Severed has no
-  New Game+)
-- the ending's end screens and its fade to black confirmed fixed
-- Hardcore stays available as a choice for Severed (the console did not
-  offer it; Hardcore's rules apply)
-- the hook DLL is slimmed down to what the game needs: Severed in the
-  episode select, Gabe's Pulse Rifle upgrades, the ending, and F7 for
-  test messages. The research logging is gone (no more file-by-file log,
-  less work while playing); `severed_probe.log` now holds a short status
-  log and crash reports
-- a ready-made F7 test file (`tools/probe/severed_send.txt`): invincibility
-  and the door to the final fight
+**v1.2.5 (2026-10-22)**: Severed is fully playable on PC from start to
+finish: the opening in the mines, all of chapter 1 and chapter 2, the final
+fight, the last stand, the ending video, the end screens and the credits,
+then back to the main menu as on the console (Severed has no New Game+).
+New in this update:
+- **Marker Patch and other ASI loaders:** the hook also comes as a plugin,
+  `SeveredPC.asi`. Keep Marker Patch's `dinput8.dll` (or your ASI loader)
+  and put `SeveredPC.asi` in the `plugins` folder next to `deadspace2.exe`
+  (experimental, see `tools/probe/README.md`)
+- **checkpoint patches:** after dying in the quarry, its checkpoint now
+  enables the terminal again (it stayed locked). Existing conversions:
+  run the converter again and only this step is redone
+- Hardcore is available as a choice for Severed (Hardcore's rules apply)
+- a slim hook: Severed in the episode select, Gabe's Pulse Rifle upgrades,
+  the ending, and F7 for test messages; `severed_probe.log` holds a short
+  status log and crash reports
 
 Note: **saves use the base game's save icons and chapter titles**, so
 Severed saves look like Dead Space 2 saves in the load menu. They load
@@ -107,42 +110,7 @@ Severed as normal.
 Still to fix (minor, none blocks the game): a pale see-through sheet under
 the Oracle corpses (perhaps as on the console); the save station can lock
 up if used again while it closes; frame drops near some lights in the drill
-tunnel. See `docs/PROGRESS.md`.
-
-<details><summary>Not a bug (spoiler)</summary>
-
-Gabe's legs come back for the last few seconds after the four airlock
-fuses: the console version shows the same.
-
-</details>
-
-**v0.8.2 (2026-10-18)**: Severed is fully playable on PC, from the
-opening in the mines to the end credits. Every area of chapter 1 and
-chapter 2 plays: the security room, the chase hall, the landing bay battle,
-the final cutscene, the Infectors and Oracle Twitchers fight, the final
-hack, the last stand with the four airlock fuses, the ending video, the end
-screens and the credits. Fixes in this round:
-- the black slabs, stretched black shapes and flat beige windows in the
-  hospital (vertex positions left half-converted in 17 level meshes)
-- the landing bay's final cutscene camera pointed at the sky (its
-  animation tracks kept the wrong types)
-- the crash when the Oracle Twitchers appeared (their PC meshes named a
-  material that was not loaded; PC meshes now take Severed's materials)
-- the final fight could not end (no dialogue, the hacking panel stayed
-  locked): the Oracle corpses were thrown about where the Infectors could
-  not reach them; they now hold their pose, and are built from the PC
-  game's Oracle mesh
-- the end screens showing all their texts at once, and the room showing
-  after the ending video instead of black (timed steps in the finale's
-  effects left unconverted)
-- the installer app: installs the hook DLL itself, shows the conversion
-  file by file without console windows, has its own icon, and the build is
-  named DS2SeveredPC-Converter with a "keep all files together" note
-
-Still to fix (minor, none blocks the game): a pale see-through sheet under
-the Oracle corpses (perhaps as on the console); the save station can lock
-up if used again while it closes; frame drops near some lights in the drill
-tunnel; saves show the base game's chapter titles and pictures. See
+tunnel; after dying in the quarry, the NPC's scene does not play again. See
 `docs/PROGRESS.md`.
 
 <details><summary>Not a bug (spoiler)</summary>
@@ -151,81 +119,6 @@ Gabe's legs come back for the last few seconds after the four airlock
 fuses: the console version shows the same.
 
 </details>
-
-**v0.4.0 (2026-10-17)**: About 75% of chapter 2 plays (11 of its 15
-checkpoints). From the crash landing through the decompression room, the
-gift shop, the morgue, the hospital lobby, the upper corridors, the surgery
-ward, the recreation rooms and the observation deck, the psych ward scene
-with Lexine, the Oracle and the captain, up to the saferoom by the chase
-hall. Still to play: the security room, the chase hall and the landing bay
-finale. Fixes in this round:
-- the crash entering the decompression room (looping sounds that start
-  mid-sample are split for the PC's decoder)
-- the gift shop's strobing lights calmed (comfort change)
-- the converter writes its window text to `tools\test\make_severed_test.log`
-
-Known problems: black surfaces and stretched black shapes in the hospital
-(lightmap-shader materials drawn black; found in the zero-oxygen hallway,
-fix in progress), flat beige windows in that hallway, sideways reflections
-in the clinic overlook room, Gabe floating above the gunship after the
-docking transition (fix pending a test), Gabe does not drop to the floor
-after the hanging fight (fix pending a test), the Pulse Rifle sits oddly in
-Gabe's hands (future release). See `docs/PROGRESS.md`.
-
-**v0.3.0 (2026-10-17)**: All of chapter 1 plays, and chapter 2 starts.
-From the mining camp through the elevator fall and the hanging fight, the
-docking station and the gunship fight, then the crash landing at the
-hospital with its scene, dialogue and the "Chapter 2" title, the Tormentor
-fight and the zero-oxygen hallway. Fixes in this round:
-- Gabe has his upgraded Pulse Rifle (the probe buys the DLC's upgrade
-  nodes at level start)
-- the quarry door that drew solid black (lightmap meshes get the PC's
-  20-byte texture coordinates)
-- the suit packs are out of Severed's stores (choosing one crashed)
-- the crash on reaching the docking station (gunship meshes: an unswapped
-  vertex buffer index)
-- the black screen after the gunship scene (an animation blend value left
-  unswapped kept chapter 2's opening from starting)
-- the gunship hull is now built from the PC game's own mesh (its textures
-  were smeared)
-
-Known problems: a black shape and flat windows in the zero-oxygen hallway,
-Gabe does not drop to the floor after the hanging fight, a thump in the
-opening scene, the Pulse Rifle sits oddly in Gabe's hands (future release).
-See `docs/PROGRESS.md`.
-
-**v0.2.0 (2026-10-16)**: Chapter 1 plays from the opening through the
-drill tunnel, saferoom, grinder, the quarry and its door encounter, the
-cargo lift, and on into the mining camp's quarantine lockdown. Fixes in this
-round:
-- Necromorphs move and chase (navmesh checksums recomputed)
-- the quarry no longer crashes or goes black: Severed's colour-grading LUTs
-  are now converted to the PC's 3D form
-- the quarry's scripted chain (Price, the override terminal, the door
-  encounter) runs as on console
-- video audio, animation banks and rig files converted more accurately
-- saving and loading work
-
-Known problems: Gabe's upgraded Pulse Rifle is missing (makes the fights
-hard), one quarry door draws solid black, Twitchers can stunlock Gabe,
-stomping during the tentacle grab puts Gabe in the ceiling, saves show as
-"Chapter 1". See `docs/PROGRESS.md`.
-
-**v0.1.0 (2026-10-16)**: First playable test. Severed is in the episode
-select (main menu > single player). The intro terminal cutscene plays with
-subtitles. You load into the drill tunnel as Gabe Weller in his security
-suit, with working level geometry, lighting, collision and HUD. Fixes in
-this round:
-- level collision (Havok `hkpStorageExtendedMeshShape`) is converted from the
-  game's own Havok class descriptions
-- level meshes: Xbox 360 triangle strips are rebuilt for Direct3D 9 (no
-  more spikes and stretched walls)
-- audio streams go where the PC looks for them (untested)
-
-**v0.0.x (2026-10)**: Research phase. File format scans of both platforms,
-then converters for every asset type Severed uses (see [SV05]). The first
-in-game tests started from chapter 1. Later builds started from the episode
-select.
 
 ```text
 ================================================================================
