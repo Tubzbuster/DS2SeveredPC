@@ -12,6 +12,8 @@
  *   - ends Severed the console way: back to the main menu after the
  *     credits, without the base game's New Game+ popup and unlocks;
  *   - F7 sends the level messages listed in severed_send.txt (testing);
+ *   - with severed_trace.on in the game folder, logs level messages and
+ *     stream requests (for bug reports);
  *   - writes a short log, with a crash report, to severed_probe.log next
  *     to deadspace2.exe.
  *
@@ -30,7 +32,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#define HOOK_VERSION "56"
+#define HOOK_VERSION "57"
 
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_cs;
@@ -40,6 +42,8 @@ static HMODULE g_real;
 static DWORD g_tick0;
 static LONG g_lines;
 #define MAX_LINES 20000
+#define MAX_LINES_TRACE 400000
+static int g_trace;                    /* severed_trace.on in the game folder */
 
 /* ---- logging ---------------------------------------------------------- */
 
@@ -50,7 +54,7 @@ static void log_line(const char *fmt, ...)
     int n, m;
     DWORD w;
 
-    if (g_log == INVALID_HANDLE_VALUE || InterlockedIncrement(&g_lines) > MAX_LINES) return;
+    if (g_log == INVALID_HANDLE_VALUE || InterlockedIncrement(&g_lines) > (g_trace ? MAX_LINES_TRACE : MAX_LINES)) return;
     n = _snprintf(buf, sizeof buf, "%8lu [%5lu] ", GetTickCount() - g_tick0, GetCurrentThreadId());
     if (n < 0) n = 0;
     va_start(ap, fmt);
@@ -425,10 +429,35 @@ static const char SIG_MSGSEND[] =
     "51 8B 54 24 08 8B 0A 56 8B F1 57 8B 3D ?? ?? ?? ?? 81 E6 FF 0F 00 00 8B 34 B7 32 C0 85 F6";
 static DWORD g_equip_hash;
 
+/* Trace (severed_trace.on): each message hash is logged on its first 3
+ * sends, counted again from zero after each player spawn (a checkpoint
+ * restore), with whether anything listens. Names are matched afterwards
+ * from the SimGroups' message fields. */
+static DWORD **g_msg_table;
+static BYTE g_msg_count[1 << 16];
+static DWORD g_spawn_hash;
+
+static void trace_msg(DWORD h)
+{
+    DWORD *node;
+    int listeners = -1;
+    BYTE *c = &g_msg_count[h & 0xFFFF];
+    if (h == g_spawn_hash) { memset(g_msg_count, 0, sizeof g_msg_count); log_line("TRACE player spawned: counts reset"); }
+    if (*c >= 3) return;
+    (*c)++;
+    node = g_msg_table && *g_msg_table ? (DWORD *)(*g_msg_table)[h & 0xFFF] : NULL;
+    while (node && mem_ok(node, 0x14)) {
+        if (node[4] == h) { listeners = node[1] ? 1 : 0; break; }
+        node = (DWORD *)node[0];
+    }
+    log_line("MSG %08lx%s", h, listeners == 0 ? " (no listeners - dropped)" : "");
+}
+
 static void __cdecl note_msgsend(const void *arg)
 {
     const DWORD *msg = (const DWORD *)arg;
     if (!msg || !mem_ok(msg, 4)) return;
+    if (g_trace) trace_msg(msg[0]);
     if (msg[0] == g_equip_hash && g_severed_level) upgrade_schedule("equip_player_upgrade_nodes");
     if (g_upg_due && (LONG)(GetTickCount() - g_upg_due) >= 0 && GetCurrentThreadId() == g_game_thread)
         upgrade_rifle();
@@ -529,6 +558,19 @@ static void __cdecl note_eog_state(void *o)
     }
 }
 
+/* ---- trace: stream requests -------------------------------------------
+ * The level loader asks for each stream through one function (retail exe
+ * 0x0074BDD0; first stack argument = stream path). Logged with the trace
+ * on, to see which areas load again on a checkpoint restore. */
+static const char SIG_STREAMREQ[] =
+    "81 EC 24 01 00 00 53 55 8B E9 8B ?? ?? ?? ?? 00 00 56 33 C0 57 85 C9 0F 84 ?? ?? ?? ?? 38 01 0F 84 ?? ?? ?? ?? "
+    "51 8D 4C 24 14 E8 ?? ?? ?? ?? 8B ?? ?? ?? ?? 00 00 8B C7 8D 74 24 10 E8 ?? ?? ?? ?? 6A 01 8B CE E8";
+
+static void __cdecl note_stream_request(const void *path)
+{
+    log_line("STREAM %s", path && mem_ok(path, 1) ? (const char *)path : "(null)");
+}
+
 /* ---- installing the game hooks -----------------------------------------
  * The Steam wrapper decrypts the code shortly after start, some parts later
  * than others: each pattern is retried for up to a minute. */
@@ -538,6 +580,7 @@ static DWORD WINAPI hook_thread(LPVOID p)
     int na = 0, nc = 0, nl = 0, nm = 0, ne = 0, ns = 0, tries, episodes = 0, level = 0, msgs = 0, ending = 0;
     (void)p;
     g_equip_hash = sdbm_lower("equip_player_upgrade_nodes");
+    g_spawn_hash = sdbm_lower("iMsgPlayerSpawned");
     for (tries = 0; tries < 6000 && !(add && ctor); tries++) {
         add = find_sig(SIG_ADD, &na);
         ctor = find_sig(SIG_CTOR, &nc);
@@ -556,6 +599,7 @@ static DWORD WINAPI hook_thread(LPVOID p)
         Sleep(200);
     }
     level = ls && hook_call_reg(ls, 6, on_level_start, 0x51);
+    if (ms) g_msg_table = *(DWORD ***)(ms + 0xD);
     msgs = ms && hook_call_arg(ms, 5, note_msgsend, 4);
     ending = eog && hook_call_reg(eog, 7, note_eog_state, 0x56);
     log_line("level start: %d match(es) at exe+0x%lx%s", nl, exe_off(ls), level ? ", hooked" : "");
@@ -563,6 +607,11 @@ static DWORD WINAPI hook_thread(LPVOID p)
     log_line("end of game: %d match(es) at exe+0x%lx%s", ne, exe_off(eog), ending ? ", hooked" : "");
     log_line("message send (F7): %d match(es) at exe+0x%lx", ns, exe_off(g_sendmsg));
     log_line("upgrade manager: %s", g_upgmgr ? "found" : "not found (no Pulse Rifle upgrades)");
+    if (g_trace) {
+        int nr = 0;
+        BYTE *sr = find_sig(SIG_STREAMREQ, &nr);
+        log_line("trace: stream requests %d match(es)%s", nr, sr && hook_call_arg(sr, 6, note_stream_request, 4) ? ", hooked" : "");
+    }
     return 0;
 }
 
@@ -629,7 +678,9 @@ static void start(void)
     g_tick0 = GetTickCount();
     game_file(path, "severed_probe.log");
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    log_line("severed hook " HOOK_VERSION);
+    game_file(path, "severed_trace.on");
+    g_trace = GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+    log_line("severed hook " HOOK_VERSION "%s", g_trace ? " (trace on: severed_trace.on)" : "");
     vi.dwOSVersionInfoSize = sizeof vi;
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);

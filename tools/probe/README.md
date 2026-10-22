@@ -264,3 +264,12 @@ The log is still `severed_probe.log` next to the game. Untested so far:
 check that it shows `episode list: ... hooked`, `level messages: ...
 hooked` and `end of game: ... hooked`. If Marker Patch has already patched
 one of those places, that line says 0 matches and that feature is missing.
+
+## Trace for bug reports (hook 57)
+
+An empty file named `severed_trace.on` next to `deadspace2.exe` turns on a
+trace in `severed_probe.log`: level messages (each name hash on its first 3
+sends, counted again after every player spawn, so a checkpoint restore
+shows what fires again) and every stream request. Off without the file.
+Message names are matched afterwards from the SimGroups (scratchpad tool
+`msgnames.py`).
