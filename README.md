@@ -104,18 +104,11 @@ Note: **saves use the base game's save icons and chapter titles**, so
 Severed saves look like Dead Space 2 saves in the load menu. They load
 Severed as normal.
 
-Still to fix (minor, none blocks the game): a pale see-through sheet under
-the Oracle corpses (perhaps as on the console); the save station can lock
-up if used again while it closes; frame drops near some lights in the drill
-tunnel; after dying in the quarry, the NPC's scene does not play again. See
+Still to fix (minor): a pale see-through sheet under
+the Oracle corpses ; the save station can lock
+up if used again too quickly while it closes; frame drops near some lights in the drill
+tunnel. See
 `docs/PROGRESS.md`.
-
-<details><summary>Not a bug (spoiler)</summary>
-
-Gabe's legs come back for the last few seconds after the four airlock
-fuses: the console version shows the same.
-
-</details>
 
 ```text
 ================================================================================
