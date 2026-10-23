@@ -31,8 +31,9 @@ Use Ctrl+F with the codes below to jump to a section.
 
 
 
-I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 files work. I heavily vibecoded this project with Claude which helped me decode the files and map them to the PC version. From there it was built from the ground up through testing and logging, checking how the textures look in the PC version, comparing against numerous let's plays of the console version to see what's missing and what isn't rendering, and going through countless crash dumps to make the thing I wanted
+I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 files work. I heavily vibecoded this project with Claude which helped me decode the files and map them to the PC version using asset pairing. From there it was just a manner of working on converting the files in different ways over and over, reiterating through testing and logging, checking how the textures look in the PC version, comparing against numerous let's plays of the console version to see what's missing and what isn't rendering, and going through countless crash dumps to make the thing I wanted
 
+This is now just a conversion tool that knows how to convert the files into a playable state and patch them into your existing Dead Space 2 .dat files.
 
 **Update 1.2.5:** adds support for Marker Patch and other ASI loader mods
 (the hook as a plugin, `SeveredPC.asi`), and checkpoint patches.
@@ -41,7 +42,11 @@ I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 fi
 available on the releases page (experimental). Keep Marker Patch's
 `dinput8.dll`, make sure `LoadASIPlugins = 1` in `MarkerPatch.ini`, and put
 `SeveredPC.asi` in a `plugins` folder next to `deadspace2.exe` instead of
-installing our `dinput8.dll`. See `tools/probe/README.md`.
+installing our `dinput8.dll`. 
+
+If there is no plugins folder (all lowercase) please make it yourself.
+
+See `tools/probe/README.md`.
 
 ```text
 ================================================================================
