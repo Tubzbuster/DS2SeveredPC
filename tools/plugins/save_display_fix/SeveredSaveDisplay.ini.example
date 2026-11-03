@@ -1,0 +1,7 @@
+; Disabled by default; rename to SeveredSaveDisplay.ini next to the ASI.
+[SaveDisplay]
+TitleFix=0
+IconFix=0
+TraceRows=0
+[Localization]
+SimplifiedChinese=0
