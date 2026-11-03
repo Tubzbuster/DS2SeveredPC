@@ -30,24 +30,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#ifdef SEVERED_NODE_FIX
-#define HOOK_VERSION "56+optional-Severed-node"
-#ifdef __cplusplus
-extern "C" {
-#endif
-void ds2fix_campaign(int active);
-void ds2fix_install(int level_hook_ready);
-#ifdef __cplusplus
-}
-#endif
-#else
 #define HOOK_VERSION "56"
-#endif
-#ifdef _MSC_VER
-#define DS2_THISCALL __thiscall
-#else
-#define DS2_THISCALL __attribute__((thiscall))
-#endif
 
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_cs;
@@ -287,21 +270,14 @@ static const char SIG_CTOR[] =
     "53 55 56 8B F1 89 35 ?? ?? ?? ?? C7 46 04 ?? ?? ?? ?? 33 DB 89 5E 0C 57 8D 7E 04 BD 01 00 00 00 89 6F 04 "
     "C7 06 ?? ?? ?? ?? C7 07 ?? ?? ?? ?? 89 5E 30 89 5E 38 8D 4E 48 89 5E 3C 89 5E 40 89 5E 44";
 
-typedef void (DS2_THISCALL *add_episode_fn)(void *self, const char *name, const char *desc,
+typedef void (__attribute__((thiscall)) *add_episode_fn)(void *self, const char *name, const char *desc,
         const char *folder, const char *streams, const char *checkpoint, int flags, int unlock, const char *extra);
-typedef void *(DS2_THISCALL *ctor_fn)(void *self);
+typedef void *(__attribute__((thiscall)) *ctor_fn)(void *self);
 static ctor_fn g_ctor_tramp;
 static add_episode_fn g_add;
 
-#ifdef _MSC_VER
-static void *__fastcall hook_frontend_ctor(void *self, void *unused_edx)
-#else
-static void *DS2_THISCALL hook_frontend_ctor(void *self)
-#endif
+static void *__attribute__((thiscall)) hook_frontend_ctor(void *self)
 {
-#ifdef _MSC_VER
-    (void)unused_edx;
-#endif
     void *r = g_ctor_tramp(self);
     g_add(self, "Dead Space 2: Severed", "Gabe Weller's story",
           "pdlc1_ch01_mng", "pdlc1_ch01_mng.str", "XONTREALPR_CB22182_E50854D_v3", 0, 0, NULL);
@@ -338,9 +314,6 @@ static void upgrade_schedule(const char *why);
 
 static void __cdecl on_level_start(void *self)
 {
-#ifdef SEVERED_NODE_FIX
-    ds2fix_campaign(0);
-#endif
     const char *folder = self && mem_ok((BYTE *)self + 0x28, 4) ? *(const char **)((BYTE *)self + 0x28) : NULL;
     char name[128];
     int n;
@@ -351,9 +324,6 @@ static void __cdecl on_level_start(void *self)
     n = lstrlenA(name);
     while (n && (name[n - 1] == '\\' || name[n - 1] == '/')) name[--n] = 0;
     g_severed_level = !lstrcmpiA(name, "pdlc1_ch01_mng");
-#ifdef SEVERED_NODE_FIX
-    ds2fix_campaign(g_severed_level);
-#endif
     if (g_severed_level) upgrade_schedule("Severed level start");
 }
 
@@ -593,9 +563,6 @@ static DWORD WINAPI hook_thread(LPVOID p)
     log_line("end of game: %d match(es) at exe+0x%lx%s", ne, exe_off(eog), ending ? ", hooked" : "");
     log_line("message send (F7): %d match(es) at exe+0x%lx", ns, exe_off(g_sendmsg));
     log_line("upgrade manager: %s", g_upgmgr ? "found" : "not found (no Pulse Rifle upgrades)");
-#ifdef SEVERED_NODE_FIX
-    ds2fix_install(level);
-#endif
     return 0;
 }
 
@@ -664,9 +631,7 @@ static void start(void)
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     log_line("severed hook " HOOK_VERSION);
     vi.dwOSVersionInfoSize = sizeof vi;
-#ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
     if (GetVersionExA(&vi)) log_line("windows %lu.%lu build %lu", vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
     install("PeekMessageA", (void *)h_PeekMessageA, (void **)&o_PeekMessageA);
     install("PeekMessageW", (void *)h_PeekMessageW, (void **)&o_PeekMessageW);
@@ -737,17 +702,3 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     }
     return TRUE;
 }
-
-#ifdef DS2FIX_CORE_TEST
-#ifdef __cplusplus
-extern "C"
-#endif
-void* ds2fix_core_ctor_test(void* self,void* ctor,void* add) {
-    g_ctor_tramp=(ctor_fn)ctor;g_add=(add_episode_fn)add;
-#ifdef _MSC_VER
-    return hook_frontend_ctor(self,NULL);
-#else
-    return hook_frontend_ctor(self);
-#endif
-}
-#endif

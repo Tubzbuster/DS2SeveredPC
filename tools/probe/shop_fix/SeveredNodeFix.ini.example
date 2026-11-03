@@ -1,4 +1,0 @@
-[Shop]
-; Optional node shop integration. Requires known MarkerPatch hooks.
-; 0 (default) = disabled, 1 = enabled.
-EnablePowerNodeShopFix=0

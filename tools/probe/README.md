@@ -264,7 +264,3 @@ The log is still `severed_probe.log` next to the game. Untested so far:
 check that it shows `episode list: ... hooked`, `level messages: ...
 hooked` and `end of game: ... hooked`. If Marker Patch has already patched
 one of those places, that line says 0 matches and that feature is missing.
-
-## Optional Power Node shop candidate
-
-An isolated, opt-in Windows x86 MSVC build is in [shop_fix](shop_fix/README.md). It targets only the Power Node item in Severed store lists and defaults to disabled. Its current dependency on MarkerPatch Hacker hooks also enables Hacker equipment when that Marker option is used. The normal Zig build script remains unchanged. Gameplay validation of this candidate is pending; see the module README for scope, attribution and isolated checks.
