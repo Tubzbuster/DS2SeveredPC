@@ -9,6 +9,7 @@ namespace severed_saves {
 constexpr size_t kPrefixLimit=65536,kMaximumName=31;
 struct Snapshot { uintptr_t owner=0;unsigned kinds[20]{}; };
 inline thread_local Snapshot current{};
+inline thread_local Snapshot in_game{};
 inline wchar_t directory[MAX_PATH]{};
 inline DWORD dword(const BYTE* p){DWORD value;memcpy(&value,p,4);return value;}
 // Known RGMH v1 -> NMSD v1 -> one MC02 container. Only read metadata;
@@ -49,18 +50,20 @@ inline unsigned read_slot(unsigned slot) {
  }
  CloseHandle(file);return result;
 }
-inline void refresh(uintptr_t owner) {
+inline void refresh(Snapshot& snapshot,uintptr_t owner) {
  Snapshot next{};next.owner=owner;
  for(unsigned slot=1;slot<=20;++slot)next.kinds[slot-1]=read_slot(slot);
- current=next;
+ snapshot=next;
 }
-inline unsigned match(const BYTE* row,size_t bytes,unsigned slot) {
- if(!row||bytes<2*kMaximumName||slot<1||slot>20||!current.owner)return 0;
+inline void refresh(uintptr_t owner){refresh(current,owner);}
+inline unsigned match(const Snapshot& snapshot,const BYTE* row,size_t bytes,unsigned slot) {
+ if(!row||bytes<2*kMaximumName||slot<1||slot>20||!snapshot.owner)return 0;
  uintptr_t offset=0x64A00-0x448+(slot-1)*0x470;
- if(current.owner>UINTPTR_MAX-offset||reinterpret_cast<uintptr_t>(row)!=current.owner+offset)return 0;
+ if(snapshot.owner>UINTPTR_MAX-offset||reinterpret_cast<uintptr_t>(row)!=snapshot.owner+offset)return 0;
  wchar_t expected[kMaximumName]{};_snwprintf_s(expected,kMaximumName,_TRUNCATE,L"ds_slot_%02u.deadspace2saved",slot);
  wchar_t filename[kMaximumName]{};memcpy(filename,row,sizeof(filename));
  if(wcsnlen_s(filename,kMaximumName)==kMaximumName||_wcsicmp(filename,expected))return 0;
- return current.kinds[slot-1];
+ return snapshot.kinds[slot-1];
 }
+inline unsigned match(const BYTE* row,size_t bytes,unsigned slot){return match(current,row,bytes,slot);}
 }

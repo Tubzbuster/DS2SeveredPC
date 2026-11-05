@@ -19,6 +19,9 @@ extern "C" void save_catalog_directory_test(const wchar_t*);
 extern "C" unsigned save_classify_file_test(const BYTE*,size_t,uint64_t);
 extern "C" bool save_verify_archive_test(const wchar_t*);
 extern "C" void save_invoke_test(safetyhook::Context&);
+extern "C" void save_ingame_invoke_test(safetyhook::Context&);
+extern "C" void save_ingame_refresh_test(uintptr_t);
+extern "C" void save_native_icons_test(bool);
 static void check(bool v,const char* s){printf("%s %s\n",v?"PASS":"FAIL",s);if(!v)ExitProcess(1);++checks;}
 static void put(BYTE* p,DWORD v){memcpy(p,&v,4);}static DWORD get(const BYTE* p){DWORD v;memcpy(&v,p,4);return v;}
 static std::vector<BYTE> fixture(const char* level){std::vector<BYTE>b(128+2060+28+368+16);memcpy(b.data(),"RGMH",4);put(b.data()+4,1);put(b.data()+8,128);memcpy(b.data()+128,"NMSD",4);put(b.data()+132,1);put(b.data()+136,2060);BYTE*h=b.data()+2188;memcpy(h,"20CM",4);put(h+4,DWORD(b.size()-2188));put(h+8,368);put(h+12,16);put(h+28,8);strcpy_s(reinterpret_cast<char*>(h+36),128,level);return b;}
@@ -72,4 +75,21 @@ int main(int argc,char**argv){
  save_options_test(false,true,false);prepare();populate(self,nullptr);run();check(!memcmp(before,output,sizeof(output)),"disabled feature passes through");
  safetyhook::Context c{};save_options_test(true,true,false);save_invoke_test(c);check(true,"invalid stack safely ignored");
  MultiByteToWideChar(CP_UTF8,0,argv[2],-1,archive,MAX_PATH);check(save_verify_archive_test(archive),"real APX archive SHA256 accepted");check(!save_verify_archive_test(L"Z:\\missing"),"missing archive rejected");
- save_reset_test();printf("ALL APX SAVE DISPLAY CHECKS PASSED %u\n",checks);return 0;}
+ // Separate in-game serializer: its buffers and file bindings differ from
+ // SP11SaveSlot. Keep both snapshots live so nested UI use cannot mix them.
+ write(dlc);auto controller=std::vector<BYTE>(0x64A00+20*0x470);BYTE* native=controller.data()+0x64A00;
+ wcscpy_s(reinterpret_cast<wchar_t*>(native-0x448),31,L"ds_slot_01.deadspace2saved");put(native,1);
+ BYTE scratch[0x140],original[sizeof(scratch)];
+ auto nativePrepare=[&](){memset(scratch,0x5A,sizeof(scratch));scratch[0x40]=1;strcpy_s((char*)scratch+0x50,100,"original native title");memcpy(original,scratch,sizeof(scratch));};
+ c={};c.esp=(DWORD)(uintptr_t)scratch;c.edi=(DWORD)(uintptr_t)native;c.ebp=1;save_options_test(true,false,false);save_native_icons_test(true);save_ingame_refresh_test((uintptr_t)controller.data());
+ auto frozen=controller;
+ for(unsigned chapter=1;chapter<=2;++chapter){put(native,chapter);nativePrepare();save_ingame_invoke_test(c);check(!strcmp((char*)scratch+0x50,chapter==1?"Severed, chapter 1":"Severed, chapter 2"),"in-game serializer receives correct DLC chapter title");check(memcmp(scratch+0x30,original+0x30,16)!=0,"in-game serializer receives independent native VFX GUID");memcpy(original+0x30,scratch+0x30,16);memcpy(original+0x50,scratch+0x50,100);check(!memcmp(original,scratch,sizeof(scratch)),"only temporary native title and picture GUID change");}
+ put(native,1);check(controller==frozen,"in-game controller and actual save metadata never changed");
+ save_options_test(true,true,false);nativePrepare();save_ingame_invoke_test(c);check(strstr((char*)scratch+0x50,"\xe9\x98\xbb\xe6\x96\xad")!=nullptr,"in-game Chinese DLC label uses UTF8");
+ save_native_icons_test(false);nativePrepare();save_ingame_invoke_test(c);check(!memcmp(scratch+0x30,original+0x30,16),"native pictures retained if matching resource is unavailable");
+ save_native_icons_test(true);c.ebp=2;nativePrepare();save_ingame_invoke_test(c);check(!memcmp(scratch,original,sizeof(scratch)),"wrong in-game slot cannot borrow DLC classification");c.ebp=1;
+ nativePrepare();scratch[0x40]=0;memcpy(original,scratch,sizeof(scratch));save_ingame_invoke_test(c);check(!memcmp(scratch,original,sizeof(scratch)),"empty native slot preserved");
+ write(base);save_ingame_refresh_test((uintptr_t)controller.data());nativePrepare();save_ingame_invoke_test(c);check(!memcmp(scratch,original,sizeof(scratch)),"base-game native slot preserved");
+ DeleteFileW(path);save_ingame_refresh_test((uintptr_t)controller.data());nativePrepare();save_ingame_invoke_test(c);check(!memcmp(scratch,original,sizeof(scratch)),"deleted native slot preserved");
+ c.esp=0;save_ingame_invoke_test(c);check(true,"invalid native stack safely refused");
+ save_reset_test();printf("ALL SAVE DISPLAY CHECKS PASSED %u\n",checks);return 0;}
