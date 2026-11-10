@@ -1,0 +1,7 @@
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <cstdio>
+typedef int(__cdecl* Enter)(DWORD,DWORD);typedef int(__cdecl* Active)();
+struct Work{Enter enter;int result;};static DWORD WINAPI Run(void* p){auto* w=static_cast<Work*>(p);w->result=w->enter(1000,400);return 0;}
+static int count;static void Check(bool ok,const char* why){if(!ok){printf("FAIL %s\n",why);ExitProcess(1);}++count;printf("PASS %s\n",why);}
+int main(int n,char**a){Check(n==3,"two separate hook-library copies supplied");auto first=LoadLibraryA(a[1]),second=LoadLibraryA(a[2]);Check(first&&second&&first!=second,"independent DLL copies loaded");auto enterA=reinterpret_cast<Enter>(GetProcAddress(first,"TryGuard"));auto enterB=reinterpret_cast<Enter>(GetProcAddress(second,"TryGuard"));auto activeA=reinterpret_cast<Active>(GetProcAddress(first,"IsActive"));Check(enterA&&enterB&&activeA,"guard test entry points found");Work work{enterA,0};HANDLE thread=CreateThread(nullptr,0,Run,&work,0,nullptr);Check(thread!=nullptr,"first copy acquires guard on a worker");for(unsigned i=0;i<200&&!activeA();++i)Sleep(1);Check(activeA()!=0,"first copy holding process guard");Check(enterB(0,0)==0,"second DLL cannot attach concurrently");Check(WaitForSingleObject(thread,5000)==WAIT_OBJECT_0&&work.result==1,"first DLL completes and releases guard");CloseHandle(thread);Check(enterB(1000,0)==1,"second DLL acquires guard after release");printf("ALL CROSS-DLL PATCH GUARD CHECKS PASSED %d\n",count);return 0;}
