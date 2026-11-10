@@ -37,8 +37,7 @@ This is now just a conversion tool that knows how to convert the files into a pl
 
 **Update 1.3.0 (bumper pack bug fixes):** the mining camp and quarry
 terminals no longer soft-lock the game after a death and checkpoint reload
-(issue #7). Already converted? Run the new converter again: only the fixes
-are redone.
+(issue #7).
 
 **Update 1.2.5:** adds support for Marker Patch and other ASI loader mods
 (the hook as a plugin, `SeveredPC.asi`), and checkpoint patches.
@@ -101,7 +100,6 @@ See `tools/probe/README.md`.
   auto-triggers now fire again on every load (each terminal still has to
   be used once). Thanks to the reporter and to SomJsA for pinning down the
   trigger
-- existing conversions: run the converter again; only this step is redone
 
 **v1.2.5 (2026-10-22)**: Severed is fully playable on PC from start to
 finish: the opening in the mines, all of chapter 1 and chapter 2, the final
