@@ -22,7 +22,7 @@ ______ _____  ___ ______   ___________  ___  _____  _____   _____
   Game ......... Dead Space 2 (PC, Steam / Origin retail)
   DLC .......... Dead Space 2: Severed 
   Platform ..... Windows (PC)
-  Version ...... 1.2.5
+  Version ...... 1.3.0
   Author ....... tubzbuster
 ================================================================================
 Use Ctrl+F with the codes below to jump to a section.
@@ -34,6 +34,11 @@ Use Ctrl+F with the codes below to jump to a section.
 I'm not going to sugarcoat it I don't know the first thing about how Xbox 360 files work. I heavily vibecoded this project with Claude which helped me decode the files and map them to the PC version using asset pairing. From there it was just a manner of working on converting the files in different ways over and over, reiterating through testing and logging, checking how the textures look in the PC version, comparing against numerous let's plays of the console version to see what's missing and what isn't rendering, and going through countless crash dumps to make the thing I wanted
 
 This is now just a conversion tool that knows how to convert the files into a playable state and patch them into your existing Dead Space 2 .dat files.
+
+**Update 1.3.0 (bumper pack bug fixes):** the mining camp and quarry
+terminals no longer soft-lock the game after a death and checkpoint reload
+(issue #7). Already converted? Run the new converter again: only the fixes
+are redone.
 
 **Update 1.2.5:** adds support for Marker Patch and other ASI loader mods
 (the hook as a plugin, `SeveredPC.asi`), and checkpoint patches.
@@ -89,6 +94,14 @@ See `tools/probe/README.md`.
 [SV00]                         VERSION HISTORY
 ================================================================================
 ```
+
+**v1.3.0 (2026-11-10)**: bumper pack bug fixes.
+- the mining camp terminals and the quarry terminal stayed locked after a
+  death and checkpoint reload, soft-locking the game (issue #7). Their
+  auto-triggers now fire again on every load (each terminal still has to
+  be used once). Thanks to the reporter and to SomJsA for pinning down the
+  trigger
+- existing conversions: run the converter again; only this step is redone
 
 **v1.2.5 (2026-10-22)**: Severed is fully playable on PC from start to
 finish: the opening in the mines, all of chapter 1 and chapter 2, the final

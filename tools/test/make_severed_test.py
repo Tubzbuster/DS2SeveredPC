@@ -728,7 +728,7 @@ CATCH_UP = (
     'hang_drop2.ok', 'hang_console.ok', 'corpse_freeze.ok', 'hang_gravity.ok', 'hang_place.ok',
     'hang_console2.ok', 'hang_gravity2.ok', 'hang_door.ok', 'hang_door2.ok', 'corpse_freeze2.ok',
     'gunship_audio.ok', 'mesh_positions.ok', 'anim_tracks.ok', 'oracle_corpses.ok', 'vfx_headers.ok',
-    'quarry_switch.ok',
+    'quarry_switch.ok', 'auto_options.ok',
 )
 
 
@@ -983,6 +983,10 @@ def main():
         log('Quarry: the terminal is enabled again when its checkpoint is loaded after a death (it stayed locked)')
         refresh_simgroups(root, dst, 0x6DF50074)       # MultiManager (simgroup.FIELD_RETARGET)
         open(os.path.join(work, 'quarry_switch.ok'), 'w').write('ok')
+    if not os.path.exists(os.path.join(work, 'auto_options.ok')):
+        log('Mining camp and quarry: their terminals work again after a death and checkpoint reload (soft-lock, issue #7)')
+        refresh_simgroups(root, dst, 0xACBDFE47)       # TriggerAuto (simgroup.AUTO_OPTIONS)
+        open(os.path.join(work, 'auto_options.ok'), 'w').write('ok')
     log('Checking the video audio against the PC game\'s own videos')
     refresh_videos(a.game, dst)
     log('Preparing the test entries')

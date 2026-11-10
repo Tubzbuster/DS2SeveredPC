@@ -2116,3 +2116,15 @@ only set once the terminal is used, so it never re-enables a used terminal.
 The same report says the NPC's scene did not play again after the reload;
 not changed here. The mining camp puzzle's TriggerAuto (85239AE0,
 `enable_mining_camp_puzzle`) has the same Options 1.
+
+## 67. TriggerAuto Options and the mining camp soft-lock (issue #7)
+
+Severed has two TriggerAutos with Options 1, both enabling a switch the
+player must use: the quarry terminal (D13CFBBE, `enable_quarry_switch`) and
+the mining camp terminals (85239AE0, `enable_mining_camp_puzzle`). After a
+death and checkpoint reload in the mining camp the terminals were locked and
+the game soft-locked (issue #7, video). The issue's contributor (SomJsA)
+tested Options 0 on the mining camp trigger: the terminals worked again
+after the reload, each still needed once, and the next checkpoint was
+reached. The converter now writes Options 0 for both (simgroup.AUTO_OPTIONS,
+step `auto_options.ok`); the quarry's restore step from FINDINGS 66 stays.

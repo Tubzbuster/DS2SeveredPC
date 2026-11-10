@@ -131,6 +131,20 @@ DELAYS = {
 # killed the gunship after the log ended). Their prime now comes with
 # pdlc1_at_01_12_start, the next radio log, which always starts 5 s after
 # both the death and the end of at_01_11.
+# TriggerAuto Options: Severed's only two TriggerAutos with Options 1 enable
+# a switch the player must use: the quarry terminal (D13CFBBE,
+# enable_quarry_switch) and the mining camp terminals (85239AE0,
+# enable_mining_camp_puzzle). On PC, Options 1 keeps the trigger from firing
+# again when a checkpoint is restored, so after a death the terminals came
+# back disabled and the game soft-locked (GitHub issue #7). With Options 0
+# they fire again on each load and the terminals are usable; each terminal
+# still has to be used (tested by the reporter of #7). Form: {object hash:
+# (old, new)}.
+AUTO_OPTIONS = {
+    0x85239AE0: (1, 0),     # mining camp: enable_mining_camp_puzzle
+    0xD13CFBBE: (1, 0),     # quarry: enable_quarry_switch
+}
+
 # The quarry's terminal (SimplePressAndHoldSwitch D8719AF6) starts disabled
 # and is enabled by a one-shot TriggerAuto (enable_quarry_switch) when
 # quarry_z01 loads. After a death, the "Quarry" checkpoint
@@ -448,6 +462,11 @@ def convert(x, stats=None):
             _field_retarget(out, x, B + ro, ln, oh, stats)
         if oh in DELAYS:
             _delay(out, x, B + ro, oh, stats)
+        if oh in AUTO_OPTIONS and cls is not None and cls['name'] == 'TriggerAuto' and ln >= 20:
+            was, now = AUTO_OPTIONS[oh]
+            if struct.unpack_from('>I', x, B + ro + 16)[0] == was:
+                struct.pack_into('<I', out, B + ro + 16, now)
+                stats['auto_options'] = stats.get('auto_options', 0) + 1
         if oh in ragdoll and cls is not None and cls['name'] == 'RagdollComponent' and ln >= 20:
             struct.pack_into('<I', out, B + ro + 16, ragdoll[oh])
             stats['ragdoll_flags'] = stats.get('ragdoll_flags', 0) + 1
