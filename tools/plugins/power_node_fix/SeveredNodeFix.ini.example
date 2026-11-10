@@ -1,0 +1,3 @@
+; Disabled by default; place next to SeveredPowerNodeFix.asi and rename to SeveredNodeFix.ini.
+[Shop]
+EnablePowerNodeShopFix=0
