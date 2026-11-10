@@ -125,7 +125,9 @@ Severed as normal.
 Still to fix (minor): a pale see-through sheet under
 the Oracle corpses ; the save station can lock
 up if used again too quickly while it closes; frame drops near some lights in the drill
-tunnel. See
+tunnel; keyboard players see controller prompts on the episode select
+(#12); a lighting glitch before the chapter 2 elevator (#6); saves show
+the base game's chapter titles and pictures (#10). See
 `docs/PROGRESS.md`.
 
 ```text
