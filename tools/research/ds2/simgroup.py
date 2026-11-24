@@ -1,4 +1,4 @@
-"""SimGroup (level objects) in Severed's packed format, block 011795D9.
+"""SimGroup (level objects), packed 011795D9 or property-tree 91C8773C.
 
 Layout: file header (Gibbed.Visceral SimGroup/FileHeader), object hash
 list, 0x44-byte object records, matrices, groups (hash, count, member
@@ -403,6 +403,9 @@ def convert(x, stats=None):
     hsz, o8, oC, o10 = struct.unpack_from('>IIII', x, 4)
     n14, n16, n18 = struct.unpack_from('>HHH', x, 0x14)
     B = (hsz + 15) // 16 * 16
+    if B + 0x20 <= len(x) and struct.unpack_from('>I', x, B)[0] == OLD_BLOCK:
+        from . import simgroup_old
+        return simgroup_old.convert(x, stats)
     if B + 0x18 > len(x) or struct.unpack_from('>I', x, B)[0] != BLOCK:
         return None
     out = bytearray(x)

@@ -438,7 +438,7 @@ class Wizard:
             self.root.destroy()
 
     def pick_addon(self):
-        p = filedialog.askopenfilename(title='The Severed add-on file (29E2FCC0...), or any file in its unpacked folder')
+        p = filedialog.askopenfilename(title='The Xbox 360 Severed add-on file, or any file in its unpacked folder')
         if p:
             self.addon.set(addon_root(os.path.normpath(p)))
 
