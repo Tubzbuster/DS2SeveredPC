@@ -780,7 +780,7 @@ def main():
         root = os.path.join(root, os.listdir(root)[0])          # the package's own top folder
 
     if not os.path.exists(os.path.join(work, 'addon_checked.ok')):
-        log('Checking the add-on\'s 421 files against the expected list')
+        log('Checking the add-on\'s 421 files against the supported versions')
         problems = addoncheck.check(root, progress=lambda i, n: log('  %d of %d' % (i, n)))
         if problems:
             for p in problems[:30]:
@@ -788,12 +788,12 @@ def main():
             if len(problems) > 30:
                 log('  ... and %d more' % (len(problems) - 30))
             if not a.skip_check:
-                raise SystemExit('This copy of the Severed add-on is not the expected one (%d problem(s) above): '
+                raise SystemExit('This copy of the Severed add-on does not match a supported version (%d problem(s) above): '
                                  'nothing was converted. Re-copy it from the console, or run with --skip-check '
                                  'to convert it anyway.' % len(problems))
             log('  --skip-check: converting anyway')
         else:
-            log('  all files as expected')
+            log('  all files match a supported version')
             open(os.path.join(work, 'addon_checked.ok'), 'w').write('ok')
 
     left_out = {}

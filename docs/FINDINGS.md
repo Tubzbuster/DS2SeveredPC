@@ -433,6 +433,23 @@ the member type-name hashes in native byte order, so they differ between
 PC and 360 and can be recomputed. The hashes of nodes holding a type-12
 reference also differ per platform; their formula is not found yet.
 
+The supplied Xbox 360 package `1B7ECDF80282FF1C61F83A1423FD91B4A3C8827E45`
+also uses this self-describing format: all 161 of its SimGroups have block
+`91C8773C`. Its 421 file paths and sizes match the reference package, but
+164 hashes differ. Stored SHA1 hashes of all 373,197 file data blocks were
+checked locally without failures; this is a serialization variant, not
+just a differently named package. `ds2/simgroup_old.py` now converts its
+property trees directly, preserving enum strings and implicit defaults.
+Zero relative offsets are null/default values (not pool references), and
+shared property rows, child lists and value pools must not be swapped or
+edited twice. Gameplay fixes clone edited properties and append values,
+then relocate the property table, so sharing does not change other nodes.
+The targeted objects have different content hashes in the two formats;
+`OBJECT_HASHES` maps those used by the existing fixes. Header GUIDs remain
+unchanged. All 161 converted trees passed an independent BE/LE semantic
+comparison, allowing only the intended gameplay/property changes. In-game
+verification of this package version is still pending.
+
 Severed (all 160 SimGroups), block `011795D9`: never used by the base game
 on either platform. Type-name table of (name hash, class version); per
 object a packed record of the class's fields, e.g. LuaAudioScript =

@@ -189,13 +189,22 @@ How it works:
 **What you need:**
 - **Dead Space 2 for PC** (Steam or retail), installed and working.
 - **Your own Severed add-on** from your Xbox 360: either the package file
-  named `29E2FCC04BEF1D2532C48269EC42EF2E3DBFC45845`, or a folder it has
+  named `29E2FCC04BEF1D2532C48269EC42EF2E3DBFC45845` or
+  `1B7ECDF80282FF1C61F83A1423FD91B4A3C8827E45`, or a folder it has
   been fully extracted to (for example with xdvdfs). **Nothing from the game
   or the DLC is in this repo, and none ever will be.**
 - **The DS2SeveredPC app.** It carries its own Python and ffmpeg, so you
   don't need to install anything else.
 - **Free space:** about **10 GB** where you run the app (for temporary
   files) and **3.5 GB** in the game folder.
+
+The `1B7ECDF8...` version uses self-describing level objects rather than
+packed records. It now has its own conversion path and full-file-set
+validation. Conversion has been checked locally; **in-game verification
+of this version is still pending**. Existing release executables do not
+include this change: run the updated source or rebuild the app.
+Use a fresh `severed_work` folder if an older converter was run with
+`--skip-check`; those cached streams may have their level objects missing.
 
 **Steps:**
 
@@ -330,6 +339,14 @@ if you like.
 next to `DS2SeveredPC.exe`. Please attach it to your bug report. Running the
 app again picks up where it stopped.
 
+**"Does not match a supported version"**: both package versions listed
+above are accepted, including extracted copies. Validation checks the
+complete set of required files, not the package filename. Unknown or
+damaged copies still stop before conversion; do not bypass the check just
+because some files match. When switching to a different copy of the add-on,
+use a fresh `severed_work` folder so old extracted or converted files are
+not reused.
+
 **"Not enough" free space**: the temporary files need about 10 GB on the
 drive the app runs from. Move the app folder to a drive with more space.
 
@@ -395,6 +412,12 @@ These were used to map the formats. You don't need them to try Severed.
 - `deadspace2.exe` is never modified on disk, and its DRM is never touched.
 - The probe only reads memory, and its logs contain addresses and values,
   not code.
+
+Converter regression tests use synthetic data only:
+
+```powershell
+python -m unittest discover -s tools/test -p "test_*.py"
+```
 
 
 ```text
